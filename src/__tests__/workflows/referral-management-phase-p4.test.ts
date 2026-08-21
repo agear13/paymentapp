@@ -2,6 +2,7 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import { executeCommercialParticipantAction } from '@/lib/participants/coordinate-commercial-participant.server';
 import {
   addReferralManagementPromoter,
+  lookupReferralPromoterByEmail,
   ReferralManagementError,
   runReferralManagementAction,
   updateReferralManagementPromoterServices,
@@ -167,7 +168,46 @@ describe('P4 — Referral Management workflow', () => {
         role: 'Promoter',
         compensation: { kind: 'revenue_share', percentage: 20, serviceId: SERVICE },
       })
-    ).rejects.toMatchObject({ status: 409, name: 'ReferralManagementError' });
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'CONFLICT',
+      details: {
+        existing: expect.objectContaining({
+          email: 'apex@example.com',
+          name: 'Apex Promotions',
+          participantId: created.participant.id,
+          manageUrl: `/workspace/workflows/referral-management?participant=${created.participant.id}`,
+        }),
+      },
+    });
+  });
+
+  it('looks up an existing promoter by email before save', async () => {
+    const existing = promoter({
+      name: 'Jenny',
+      email: 'alishajayne13@gmail.com',
+      role: 'Promoter',
+    });
+    getPilotSnapshotForUser.mockResolvedValue({ deals: [], participants: [existing] });
+    prisma.organization_services.findMany.mockResolvedValue([
+      { id: SERVICE, name: 'Summer Launch Party' },
+    ]);
+    await expect(
+      lookupReferralPromoterByEmail({
+        organizationId: ORG,
+        workflowId: WF,
+        userId: USER,
+        email: '  AlishaJayne13@gmail.com ',
+      })
+    ).resolves.toEqual({
+      existing: expect.objectContaining({
+        participantId: 'p-apex',
+        name: 'Jenny',
+        email: 'alishajayne13@gmail.com',
+        role: 'Promoter',
+        manageUrl: '/workspace/workflows/referral-management?participant=p-apex',
+      }),
+    });
   });
 
   it('E: import reuses an existing compensated participant by exact email', async () => {

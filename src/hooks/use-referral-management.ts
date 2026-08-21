@@ -5,6 +5,7 @@ import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import type { ParticipantCoordinationAction } from '@/lib/workflows/agreement-intelligence/participant-coordination';
 import type { ReferralManagementContext } from '@/lib/workflows/referral-management/hub.server';
 import type { ReferralImportPreview } from '@/lib/workflows/referral-management/import-from-extraction';
+import type { ExistingPromoterRelationship } from '@/lib/workflows/referral-management/promoter-duplicate';
 
 export type AddPromoterInput = {
   name: string;
@@ -21,6 +22,7 @@ export type AddPromoterResult = {
   ok: boolean;
   participantId?: string;
   reused?: boolean;
+  existing?: ExistingPromoterRelationship | null;
 };
 
 export function useReferralManagement(workflowId: string | null) {
@@ -69,12 +71,18 @@ export function useReferralManagement(workflowId: string | null) {
         const payload = (await res.json().catch(() => null)) as
           | {
               error?: string;
+              code?: string;
               context?: ReferralManagementContext;
               participant?: { id?: string };
               reused?: boolean;
+              details?: { existing?: ExistingPromoterRelationship };
             }
           | null;
         if (!res.ok) {
+          const existing = payload?.details?.existing ?? null;
+          if (res.status === 409 && existing) {
+            return { ok: false, existing };
+          }
           setError(payload?.error ?? 'Could not add promoter');
           return { ok: false };
         }
@@ -89,6 +97,28 @@ export function useReferralManagement(workflowId: string | null) {
         return { ok: false };
       } finally {
         setBusy(false);
+      }
+    },
+    [workflowId]
+  );
+
+  const lookupPromoterEmail = useCallback(
+    async (email: string): Promise<ExistingPromoterRelationship | null> => {
+      if (!workflowId) return null;
+      const trimmed = email.trim();
+      if (!trimmed) return null;
+      try {
+        const res = await csrfAwareFetch(
+          `/api/workflows/${workflowId}/referrals/promoters?email=${encodeURIComponent(trimmed)}`,
+          { credentials: 'include' }
+        );
+        const payload = (await res.json().catch(() => null)) as
+          | { existing?: ExistingPromoterRelationship | null }
+          | null;
+        if (!res.ok) return null;
+        return payload?.existing ?? null;
+      } catch {
+        return null;
       }
     },
     [workflowId]
@@ -217,6 +247,7 @@ export function useReferralManagement(workflowId: string | null) {
     busy,
     refresh,
     addPromoter,
+    lookupPromoterEmail,
     extractReferralRelationships,
     coordinatePromoter,
     updateEligibleServices,

@@ -32,12 +32,19 @@ import {
   type ReferralPromoterRole,
 } from '@/lib/workflows/referral-management/constants';
 import { getReferralManagementContext } from '@/lib/workflows/referral-management/hub.server';
+import {
+  buildExistingPromoterRelationship,
+  DUPLICATE_PROMOTER_MESSAGE,
+  isCompensatedPromoterEmailMatch,
+  type ExistingPromoterRelationship,
+} from '@/lib/workflows/referral-management/promoter-duplicate';
 
 export class ReferralManagementError extends Error {
   constructor(
     message: string,
     readonly code: string,
-    readonly status: number = 400
+    readonly status: number = 400,
+    readonly details?: unknown
   ) {
     super(message);
     this.name = 'ReferralManagementError';
@@ -94,6 +101,25 @@ async function requireReferralManagementWorkflow(input: {
   return { workflow: row, snapshot, participant };
 }
 
+export async function lookupReferralPromoterByEmail(input: {
+  organizationId: string;
+  workflowId: string;
+  userId: string;
+  email: string;
+}): Promise<{ existing: ExistingPromoterRelationship | null }> {
+  const scoped = await requireReferralManagementWorkflow(input);
+  const match = scoped.snapshot.participants.find((item) =>
+    isCompensatedPromoterEmailMatch(item, input.email, Boolean(compensationKindOf(item)))
+  );
+  if (!match) return { existing: null };
+
+  const catalog = await prisma.organization_services.findMany({
+    where: { organization_id: input.organizationId, active: true },
+    select: { id: true, name: true },
+  });
+  return { existing: buildExistingPromoterRelationship(match, catalog) };
+}
+
 export async function addReferralManagementPromoter(input: {
   organizationId: string;
   workflowId: string;
@@ -136,10 +162,8 @@ export async function addReferralManagementPromoter(input: {
     );
   }
 
-  const duplicate = scoped.snapshot.participants.find(
-    (item) =>
-      item.email.trim().toLowerCase() === input.email.trim().toLowerCase() &&
-      Boolean(compensationKindOf(item))
+  const duplicate = scoped.snapshot.participants.find((item) =>
+    isCompensatedPromoterEmailMatch(item, input.email, Boolean(compensationKindOf(item)))
   );
   if (duplicate) {
     if (input.reuseExisting) {
@@ -150,11 +174,13 @@ export async function addReferralManagementPromoter(input: {
       });
       return { context, participant: duplicate, created: false, reused: true };
     }
-    throw new ReferralManagementError(
-      'A promoter with this email already exists. Open the existing relationship instead of creating a duplicate.',
-      'CONFLICT',
-      409
-    );
+    const catalog = await prisma.organization_services.findMany({
+      where: { organization_id: input.organizationId, active: true },
+      select: { id: true, name: true },
+    });
+    throw new ReferralManagementError(DUPLICATE_PROMOTER_MESSAGE, 'CONFLICT', 409, {
+      existing: buildExistingPromoterRelationship(duplicate, catalog),
+    });
   }
 
   const base = buildOnboardingParticipant({

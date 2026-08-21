@@ -79,6 +79,8 @@ export async function POST(
     supabaseRedirectAllowlistMustInclude: supabaseAuthRedirectAllowlistHints(origin),
   });
 
+  // Supabase Auth sends this email. Body/subject live in supabase/templates, not here.
+  // Keep emailRedirectTo on /auth/callback so ConfirmationURL preserves PKCE/session.
   const { error } = await supabase.auth.signInWithOtp({
     email: invitedEmail,
     options: {

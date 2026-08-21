@@ -1,0 +1,15 @@
+{
+  "confirmation": "Confirm your Provvypay account",
+  "magic_link": "Sign in to Provvypay",
+  "invite": "You are invited to Provvypay",
+  "recovery": "Reset your Provvypay password",
+  "email_change": "Confirm your new Provvypay email",
+  "reauthentication": "{{ .Token }} is your Provvypay verification code",
+  "password_changed_notification": "Your Provvypay password was changed",
+  "email_changed_notification": "Your Provvypay email address was changed",
+  "phone_changed_notification": "Your Provvypay phone number was changed",
+  "identity_linked_notification": "A sign-in method was added to your Provvypay account",
+  "identity_unlinked_notification": "A sign-in method was removed from your Provvypay account",
+  "mfa_factor_enrolled_notification": "A verification method was added to your Provvypay account",
+  "mfa_factor_unenrolled_notification": "A verification method was removed from your Provvypay account"
+}

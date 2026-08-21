@@ -1,11 +1,8 @@
 import 'server-only';
 
+import { brandedAuthFromAddress } from '@/lib/auth/production-auth-branding';
 import { sendEmail } from '@/lib/email/client';
 import { log } from '@/lib/logger';
-
-function fromAddress(): string {
-  return process.env.RESEND_FROM_EMAIL || 'Provvypay <onboarding@resend.dev>';
-}
 
 /**
  * Best-effort notification after high-risk account or payment-config changes.
@@ -22,7 +19,7 @@ export async function notifyAccountSecurityEvent(input: {
   try {
     await sendEmail({
       to,
-      from: fromAddress(),
+      from: brandedAuthFromAddress(),
       subject: input.subject,
       text: input.text,
       html: `<p>${input.text.replace(/\n/g, '<br/>')}</p>`,

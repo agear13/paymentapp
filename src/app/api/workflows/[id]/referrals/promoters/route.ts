@@ -5,6 +5,7 @@ import { requireWorkflowOrganizationAccess } from '@/lib/workflows/require-workf
 import { requireReferralManagementEntitlement } from '@/lib/entitlements/gate-referral-admin.server';
 import {
   addReferralManagementPromoter,
+  lookupReferralPromoterByEmail,
   ReferralManagementError,
 } from '@/lib/workflows/referral-management/promoter.server';
 
@@ -37,33 +38,68 @@ const bodySchema = z.object({
   reuseExisting: z.boolean().optional(),
 });
 
-export async function POST(
-  request: NextRequest,
-  context: { params: Promise<{ id: string }> }
-) {
+async function requirePromoterAccess(request: NextRequest) {
   const access = await requireWorkflowOrganizationAccess(request);
-  if (!access.ok) return access.response;
-
+  if (!access.ok) return { ok: false as const, response: access.response };
   const entitlement = await requireReferralManagementEntitlement({
     organizationId: access.organizationId,
     userId: access.userId,
     userEmail: access.userEmail,
   });
-  if (entitlement) return entitlement;
+  if (entitlement) return { ok: false as const, response: entitlement };
+  return { ok: true as const, access };
+}
+
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const scoped = await requirePromoterAccess(request);
+  if (!scoped.ok) return scoped.response;
+
+  const email = request.nextUrl.searchParams.get('email') ?? '';
+  const parsed = z.string().trim().email().safeParse(email);
+  if (!parsed.success) {
+    return apiResponse({ existing: null });
+  }
+
+  const { id } = await context.params;
+  try {
+    const result = await lookupReferralPromoterByEmail({
+      organizationId: scoped.access.organizationId,
+      workflowId: id,
+      userId: scoped.access.userId,
+      email: parsed.data,
+    });
+    return apiResponse(result);
+  } catch (error) {
+    if (error instanceof ReferralManagementError) {
+      return apiError(error.message, error.status, error.code, error.details);
+    }
+    throw error;
+  }
+}
+
+export async function POST(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const scoped = await requirePromoterAccess(request);
+  if (!scoped.ok) return scoped.response;
 
   const { id } = await context.params;
   try {
     const body = bodySchema.parse(await request.json());
     const result = await addReferralManagementPromoter({
-      organizationId: access.organizationId,
+      organizationId: scoped.access.organizationId,
       workflowId: id,
-      userId: access.userId,
+      userId: scoped.access.userId,
       ...body,
     });
     return apiResponse(result);
   } catch (error) {
     if (error instanceof ReferralManagementError) {
-      return apiError(error.message, error.status, error.code);
+      return apiError(error.message, error.status, error.code, error.details);
     }
     if (error instanceof z.ZodError) {
       return apiError('Invalid request', 400, 'INVALID_INPUT');

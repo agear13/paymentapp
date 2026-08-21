@@ -22,6 +22,8 @@ import { ReferralImportReview } from '@/components/journey/lovable/referral-impo
 import { candidateToPromoterInput } from '@/lib/workflows/referral-management/import-from-extraction';
 import type { ReferralImportPreview } from '@/lib/workflows/referral-management/import-from-extraction';
 import type { AddPromoterInput, AddPromoterResult } from '@/hooks/use-referral-management';
+import { ExistingPromoterDuplicateCard } from '@/components/journey/lovable/existing-promoter-duplicate-card';
+import type { ExistingPromoterRelationship } from '@/lib/workflows/referral-management/promoter-duplicate';
 import { AgreementIntelligenceParticipantDetail } from '@/components/journey/lovable/agreement-intelligence-participant-detail';
 import { ParticipantCoordinationSummary } from '@/components/journey/lovable/agreement-intelligence-participant-status';
 import { ReferralEligibleServicesPicker, PromoterEligibleServicesEditor } from '@/components/journey/lovable/referral-management-eligible-services';
@@ -48,17 +50,23 @@ function AddPromoterForm({
   busy,
   error,
   onSubmit,
+  onLookupEmail,
   onExtract,
   onImported,
   onManageServices,
+  onOpenExisting,
+  onSearchPromoters,
 }: {
   catalog: ReferralManagementContext['catalog'];
   busy: boolean;
   error: string | null;
   onSubmit: (body: AddPromoterInput) => Promise<AddPromoterResult>;
+  onLookupEmail: (email: string) => Promise<ExistingPromoterRelationship | null>;
   onExtract: ReturnType<typeof useReferralManagement>['extractReferralRelationships'];
   onImported: (participantId?: string) => void;
   onManageServices: () => void;
+  onOpenExisting: (existing: ExistingPromoterRelationship) => void;
+  onSearchPromoters: () => void;
 }) {
   const [open, setOpen] = React.useState(false);
   const [mode, setMode] = React.useState<'choose' | 'manual' | 'import'>('choose');
@@ -66,6 +74,9 @@ function AddPromoterForm({
   const [importOpen, setImportOpen] = React.useState(false);
   const [preview, setPreview] = React.useState<ReferralImportPreview | null>(null);
   const [importError, setImportError] = React.useState<string | null>(null);
+  const [email, setEmail] = React.useState('');
+  const [duplicate, setDuplicate] = React.useState<ExistingPromoterRelationship | null>(null);
+  const [lookingUp, setLookingUp] = React.useState(false);
   const [serviceIds, setServiceIds] = React.useState<string[]>(() =>
     catalog[0] ? [catalog[0].id] : []
   );
@@ -82,6 +93,24 @@ function AddPromoterForm({
     setPreview(null);
     setImportError(null);
     setImportOpen(false);
+    setEmail('');
+    setDuplicate(null);
+    setLookingUp(false);
+  };
+
+  const lookupEmail = async (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed || !trimmed.includes('@')) {
+      setDuplicate(null);
+      return;
+    }
+    setLookingUp(true);
+    try {
+      const existing = await onLookupEmail(trimmed);
+      setDuplicate(existing);
+    } finally {
+      setLookingUp(false);
+    }
   };
 
   if (!open) {
@@ -218,11 +247,12 @@ function AddPromoterForm({
           toast.error('Select at least one eligible service.');
           return;
         }
+        if (duplicate) return;
         const result = await onSubmit(
           kind === 'revenue_share'
             ? {
                 name: String(data.get('name') ?? ''),
-                email: String(data.get('email') ?? ''),
+                email,
                 phone: String(data.get('phone') ?? '') || undefined,
                 role: (String(data.get('role') ?? 'Promoter') || 'Promoter') as
                   | 'Promoter'
@@ -237,7 +267,7 @@ function AddPromoterForm({
               }
             : {
                 name: String(data.get('name') ?? ''),
-                email: String(data.get('email') ?? ''),
+                email,
                 phone: String(data.get('phone') ?? '') || undefined,
                 role: (String(data.get('role') ?? 'Promoter') || 'Promoter') as
                   | 'Promoter'
@@ -252,6 +282,10 @@ function AddPromoterForm({
                 },
               }
         );
+        if (result.existing) {
+          setDuplicate(result.existing);
+          return;
+        }
         if (result.ok) {
           toast.success('Promoter added');
           reset();
@@ -262,7 +296,18 @@ function AddPromoterForm({
     >
       <p className="text-[13px] font-semibold">Add promoter</p>
       <Input name="name" required placeholder="Name / business name" />
-      <Input name="email" type="email" required placeholder="Email" />
+      <Input
+        name="email"
+        type="email"
+        required
+        placeholder="Email"
+        value={email}
+        onChange={(event) => {
+          setEmail(event.target.value);
+          if (duplicate) setDuplicate(null);
+        }}
+        onBlur={() => void lookupEmail(email)}
+      />
       <Input name="phone" placeholder="Phone (optional)" />
       <select
         name="role"
@@ -293,8 +338,25 @@ function AddPromoterForm({
       ) : (
         <Input name="amount" type="number" min={0.01} step="0.01" required placeholder="Fixed amount" />
       )}
+      {lookingUp ? (
+        <p className="text-[13px] text-ink-soft">Checking for an existing relationship…</p>
+      ) : null}
+      {duplicate ? (
+        <ExistingPromoterDuplicateCard
+          existing={duplicate}
+          onOpenExisting={() => {
+            const existing = duplicate;
+            reset();
+            onOpenExisting(existing);
+          }}
+          onSearchPromoters={() => {
+            reset();
+            onSearchPromoters();
+          }}
+        />
+      ) : null}
       <div className="flex gap-2">
-        <Button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy || Boolean(duplicate) || lookingUp}>
           {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Save promoter
         </Button>
@@ -310,7 +372,7 @@ export function ReferralManagementHubScreen() {
   const { getBySlug, loading: workflowsLoading, refresh: refreshWorkflows } = useDeployedWorkflows();
   const template = getWorkflowBySlug('referral-management');
   const installed = getBySlug('referral-management');
-  const { context, loading, error, busy, addPromoter, extractReferralRelationships, coordinatePromoter, updateEligibleServices, refresh } =
+  const { context, loading, error, busy, addPromoter, lookupPromoterEmail, extractReferralRelationships, coordinatePromoter, updateEligibleServices, refresh } =
     useReferralManagement(installed?.id ?? null);
   const [selectedParticipantId, setSelectedParticipantId] = React.useState<string | null>(null);
   const [hubView, setHubView] = React.useState<'overview' | 'services'>('overview');
@@ -459,11 +521,16 @@ export function ReferralManagementHubScreen() {
               busy={busy}
               error={error}
               onSubmit={addPromoter}
+              onLookupEmail={lookupPromoterEmail}
               onExtract={extractReferralRelationships}
               onImported={(participantId) => {
                 if (participantId) selectParticipant(participantId);
               }}
               onManageServices={() => selectView('services')}
+              onOpenExisting={(existing) => {
+                selectParticipant(existing.participantId);
+              }}
+              onSearchPromoters={() => focusPromoterFilter('all')}
             />
           ) : null}
         </div>
