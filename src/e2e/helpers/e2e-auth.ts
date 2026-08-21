@@ -63,7 +63,11 @@ export async function signInViaUi(page: Page, email: string, password: string): 
   await signInViaBrowserFetch(page, email, password);
 }
 
-export async function signInViaMagicLink(page: Page, email: string): Promise<boolean> {
+export async function signInViaMagicLink(
+  page: Page,
+  email: string,
+  returnPath?: string
+): Promise<boolean> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey || !(serviceKey.startsWith('eyJ') || serviceKey.startsWith('sb_secret_')))
@@ -78,9 +82,16 @@ export async function signInViaMagicLink(page: Page, email: string): Promise<boo
     email_confirm: true,
   });
 
+  const appOrigin = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const redirectTo =
+    returnPath && returnPath.startsWith('/') && !returnPath.startsWith('//')
+      ? `${appOrigin}/auth/callback?redirectedFrom=${encodeURIComponent(returnPath)}`
+      : undefined;
+
   const { data, error } = await admin.auth.admin.generateLink({
     type: 'magiclink',
     email,
+    options: redirectTo ? { redirectTo } : undefined,
   });
   if (error || !data.properties?.action_link) return false;
 
@@ -89,9 +100,13 @@ export async function signInViaMagicLink(page: Page, email: string): Promise<boo
   return true;
 }
 
-export async function signInInvitedParticipant(page: Page, email: string): Promise<void> {
+export async function signInInvitedParticipant(
+  page: Page,
+  email: string,
+  returnPath?: string
+): Promise<void> {
   await page.context().clearCookies();
-  const ok = await signInViaMagicLink(page, email);
+  const ok = await signInViaMagicLink(page, email, returnPath);
   if (!ok) {
     throw new Error(
       `Could not authenticate invited participant ${email}. Provide SUPABASE_SERVICE_ROLE_KEY for magic-link auth.`

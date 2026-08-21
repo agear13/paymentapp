@@ -352,6 +352,7 @@ export async function runReferralManagementAction(input: {
   origin?: string;
   missingFields?: string[];
   requestedChanges?: string;
+  sendInvitationEmail?: boolean;
 }) {
   const scoped = await requireReferralManagementWorkflow(input);
   if (!scoped.participant) {
@@ -368,6 +369,7 @@ export async function runReferralManagementAction(input: {
       origin: input.origin,
       missingFields: input.missingFields,
       requestedChanges: input.requestedChanges,
+      sendInvitationEmail: input.sendInvitationEmail,
     });
   } catch (error) {
     if (error instanceof CommercialCoordinationError) {

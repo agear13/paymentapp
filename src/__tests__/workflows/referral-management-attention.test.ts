@@ -39,6 +39,7 @@ function promoter(
     },
     eligibleServiceIds: ['svc-1'],
     workspaceUrl: null,
+    email: 'agency@example.com',
     payoutReview: null,
     ...overrides,
   };

@@ -15,6 +15,21 @@ import {
   participantRowToDemo,
   updatePilotParticipantPayload,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
+import {
+  isAuthorisedParticipantWorkspaceIdentity,
+  normalizeParticipantEmail,
+} from '@/lib/participant-portal/participant-access';
+import { participantWorkspacePath } from '@/lib/participant-portal/participant-portal-url';
+import {
+  isSafeParticipantReturnPath,
+  resolveAuthorizedParticipantDestination,
+  type ParticipantAuthDestination,
+} from '@/lib/participant-portal/participant-auth-return';
+import { deriveParticipantWorkspaceOnboarding } from '@/lib/participant-portal/participant-workspace-onboarding';
+import {
+  participantWorkspaceChoiceCopy,
+  type ParticipantWorkspaceChoice,
+} from '@/lib/participant-portal/participant-workspace-choice';
 
 export function createParticipantPortalToken(): string {
   return uuidv4();
@@ -138,4 +153,72 @@ export async function markParticipantPortalOpened(token: string): Promise<void> 
       participant_payload: next as unknown as Prisma.InputJsonValue,
     },
   });
+}
+
+/**
+ * Restore invitation context after magic-link auth when redirectedFrom was dropped.
+ * Unique destination only. Multiple authorised workspaces must go to the chooser.
+ */
+export async function resolveParticipantAuthDestinationForUser(user: {
+  email?: string | null;
+  id: string;
+}): Promise<ParticipantAuthDestination> {
+  const workspaces = await listAuthorisedParticipantWorkspacesForUser(user);
+  return resolveAuthorizedParticipantDestination(workspaces.map((row) => row.path));
+}
+
+export async function listAuthorisedParticipantWorkspacesForUser(user: {
+  email?: string | null;
+  id: string;
+}): Promise<ParticipantWorkspaceChoice[]> {
+  const email = normalizeParticipantEmail(user.email);
+  if (!email && !user.id) return [];
+
+  const rows = await prisma.deal_network_pilot_participants.findMany({
+    where: {
+      OR: [
+        ...(email ? [{ email: { equals: email, mode: 'insensitive' as const } }] : []),
+        { authenticated_user_id: user.id },
+      ],
+    },
+    include: { deal: true },
+    orderBy: { updated_at: 'desc' },
+  });
+
+  const byToken = new Map<string, ParticipantWorkspaceChoice>();
+  for (const row of rows) {
+    if (!row.deal) continue;
+    const participant = participantRowToDemo(row);
+    const token = participant.participantPortalToken?.trim();
+    if (!token) continue;
+    const path = participantWorkspacePath(token);
+    if (!isSafeParticipantReturnPath(path)) continue;
+
+    if (
+      !isAuthorisedParticipantWorkspaceIdentity({
+        user,
+        participantEmail: row.email?.trim() || participant.email,
+        authenticatedUserId: row.authenticated_user_id,
+        dealOwnerUserId: row.deal.user_id,
+      })
+    ) {
+      continue;
+    }
+
+    if (byToken.has(token)) continue;
+
+    const deal = dealRowToRecentDeal(row.deal);
+    const onboarding = deriveParticipantWorkspaceOnboarding(participant);
+    const copy = participantWorkspaceChoiceCopy(onboarding);
+    byToken.set(token, {
+      portalToken: token,
+      path,
+      projectName: deal.dealName?.trim() || 'Participant workspace',
+      operatorName: deal.partner?.trim() || 'Organiser',
+      nextRequiredAction: copy.nextRequiredAction,
+      statusLabel: copy.statusLabel,
+    });
+  }
+
+  return [...byToken.values()];
 }

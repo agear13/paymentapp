@@ -144,14 +144,14 @@ export function AgreementIntelligenceHubScreen() {
 
   const runCoordination = async (
     action: ParticipantCoordinationAction,
-    extra?: { missingFields?: string[]; requestedChanges?: string }
+    extra?: { missingFields?: string[]; requestedChanges?: string; sendInvitationEmail?: boolean }
   ) => {
-    if (!selectedParticipant?.id) return false;
-    const ok = await coordinateParticipant(selectedParticipant.id, action, extra);
-    if (ok) {
+    if (!selectedParticipant?.id) return { ok: false };
+    const result = await coordinateParticipant(selectedParticipant.id, action, extra);
+    if (result.ok && extra?.sendInvitationEmail !== true) {
       toast.success('Participant coordination updated');
     }
-    return ok;
+    return result;
   };
   const isLocked =
     lifecycleStatus === 'APPROVED' ||

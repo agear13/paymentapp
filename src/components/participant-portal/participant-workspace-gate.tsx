@@ -217,18 +217,26 @@ export function ParticipantWorkspaceGate({
           currentStep="agreement_review"
           nextRequiredAction={onboarding.nextRequiredAction}
         >
-          <div className="flex justify-center">
-            <ProjectParticipantAgreementPanel
-              token={bootstrap.inviteToken}
-              deal={invitePayload.deal}
-              participant={invitePayload.participant}
-              dealParticipants={invitePayload.dealParticipants ?? []}
-              initialApproved={invitePayload.participant.approvalStatus === 'Approved'}
-              initialReferralIssuance={null}
-              initialScopedServiceRows={invitePayload.scopedServiceRows ?? []}
-              mode={previewMode ? 'preview' : 'approval'}
-              onApproved={handleStepComplete}
-            />
+          <div className="space-y-4">
+            <div>
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Referral Management
+              </p>
+              <h2 className="text-xl font-semibold mt-1">Hi {invitePayload.participant.name}</h2>
+            </div>
+            <div className="flex justify-center">
+              <ProjectParticipantAgreementPanel
+                token={bootstrap.inviteToken}
+                deal={invitePayload.deal}
+                participant={invitePayload.participant}
+                dealParticipants={invitePayload.dealParticipants ?? []}
+                initialApproved={invitePayload.participant.approvalStatus === 'Approved'}
+                initialReferralIssuance={null}
+                initialScopedServiceRows={invitePayload.scopedServiceRows ?? []}
+                mode={previewMode ? 'preview' : 'approval'}
+                onApproved={handleStepComplete}
+              />
+            </div>
           </div>
         </ParticipantWorkspaceOnboardingProgress>
       </WorkspaceShell>

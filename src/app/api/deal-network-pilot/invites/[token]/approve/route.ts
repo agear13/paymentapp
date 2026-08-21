@@ -15,12 +15,7 @@ import { referralTrace } from '@/lib/referrals/referral-trace';
 import { hydrateAgreementEligibleServices } from '@/lib/operations/hydration/hydrate-agreement-eligible-services.server';
 import { dispatchCommercialNotification } from '@/lib/commercial/dispatch-commercial-notification.server';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
-import { persistDraftInvoice } from '@/lib/commercial/payment-setup.server';
-import { buildSupplierOnboardingInput } from '@/lib/commercial/build-supplier-onboarding-input';
-import { generateDraftInvoice } from '@/lib/commercial/supplier-onboarding';
-import { buildPersistedDraftInvoiceProjection } from '@/lib/commercial/supplier-invoice-projection';
-import { v4 as uuidv4 } from 'uuid';
-import type { PersistedDraftInvoice } from '@/lib/commercial/payment-setup-types';
+import { generatePaymentRequestForParticipant } from '@/lib/commercial/payment-request.server';
 import {
   authorizeParticipantRelationship,
   participantAuthDeniedResponse,
@@ -124,48 +119,16 @@ export async function POST(
         });
       }
 
-      // Persist draft invoice only — operator sends payment request explicitly.
-      void (async () => {
-        try {
-          const deal = result.deal;
-          const dealName = deal.dealName ?? 'Your project';
-
-          const input = buildSupplierOnboardingInput(result.participant, {
-            id: deal.id,
-            name: dealName,
-          });
-          const derived = generateDraftInvoice(input);
-          const createdAt = new Date().toISOString();
-          const persistedInvoice: PersistedDraftInvoice = buildPersistedDraftInvoiceProjection({
-            derived,
-            id: uuidv4(),
-            createdAt,
-            status: 'DRAFT',
-            supplier: result.participant.name,
-            participantId: result.participant.id,
-            agreementReference: null,
-            projectName: dealName,
-          });
-          await persistDraftInvoice(result.participant.id, persistedInvoice);
-
-          const org = await getOrganizationForAuthenticatedUser(owner.user_id);
-          if (org) {
-            void dispatchCommercialNotification({
-              organizationId: org.id,
-              eventKind: 'supplier_invoice_generated',
-              projectId: deal.id,
-              participantId: result.participant.id,
-              participantName: result.participant.name,
-              emailDispatched: false,
-            });
-          }
-        } catch (err) {
-          log.error('post-approval draft invoice failed', undefined, {
-            participantId: result.participant.id,
-            error: err instanceof Error ? err.message : String(err),
-          });
-        }
-      })();
+      try {
+        await generatePaymentRequestForParticipant(result.participant.id, owner.user_id, {
+          sendEmail: false,
+        });
+      } catch (err) {
+        log.error('post-approval payout setup failed', undefined, {
+          participantId: result.participant.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
     referralTrace('api.approveInvite.response', {
       inviteToken: token,

@@ -1,4 +1,5 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import { participantWorkspaceChoiceCopy } from '@/lib/participant-portal/participant-workspace-choice';
 import {
   deriveAgreementOrganiserStatus,
   deriveParticipantWorkspaceOnboarding,
@@ -96,5 +97,31 @@ describe('deriveParticipantWorkspaceOnboarding', () => {
     expect(onboarding.step).toBe('payout_submitted');
     expect(derivePayoutDetailsOrganiserStatus(participant)).toBe('Submitted');
     expect(deriveAgreementOrganiserStatus(participant)).toBe('Approved');
+  });
+});
+
+describe('participantWorkspaceChoiceCopy', () => {
+  it('surfaces agreement and payout next actions without guessing a workspace', () => {
+    expect(
+      participantWorkspaceChoiceCopy({
+        step: 'agreement_review',
+        agreementStatus: 'Pending',
+        payoutDetailsStatus: 'Pending',
+        nextRequiredAction: 'Review and approve your agreement',
+        onboardingComplete: false,
+      })
+    ).toMatchObject({
+      statusLabel: 'Agreement pending',
+      nextRequiredAction: 'Review and approve your agreement',
+    });
+    expect(
+      participantWorkspaceChoiceCopy({
+        step: 'complete',
+        agreementStatus: 'Approved',
+        payoutDetailsStatus: 'Verified',
+        nextRequiredAction: null,
+        onboardingComplete: true,
+      }).statusLabel
+    ).toBe('Active');
   });
 });

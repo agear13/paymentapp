@@ -69,7 +69,7 @@ export function ParticipantWorkspaceOnboardingProgress({ currentStep, nextRequir
           </p>
         ) : currentStep === 'payout_submitted' || currentStep === 'complete' ? (
           <p className="text-sm text-emerald-700 dark:text-emerald-300">
-            No further action required right now. Track your commercial relationship below.
+            Onboarding complete — you are now active.
           </p>
         ) : null}
       </div>

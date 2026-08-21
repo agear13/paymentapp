@@ -41,6 +41,7 @@ export type ParticipantCoordinationView = {
   referral: WorkflowOperationalReferralSummary | null;
   eligibleServiceIds: string[];
   workspaceUrl: string | null;
+  email: string | null;
   payoutReview: {
     preferredMethod: string | null;
     abn: string | null;
@@ -227,7 +228,10 @@ export function nextCoordinationAction(input: {
   operatorApprovalRequired: boolean;
 }): { kind: WorkflowCoordinationNextActionKind; label: string | null } {
   if (input.operatorApprovalRequired && input.agreementStatus !== 'approved') {
-    return { kind: 'request_approval', label: 'Request approval' };
+    if (input.agreementStatus === 'requested' || input.agreementStatus === 'viewed') {
+      return { kind: 'request_approval', label: 'Awaiting participant approval' };
+    }
+    return { kind: 'request_approval', label: 'Send approval request' };
   }
   if (input.payoutSetupStatus === 'required' || input.payoutSetupStatus === 'requested') {
     return {
@@ -309,6 +313,7 @@ export function buildParticipantCoordinationView(
       participant.referralCommerce?.enabledServiceIds ??
       [],
     workspaceUrl: participantWorkspacePathFromParticipant(participant),
+    email: participant.email?.trim() || null,
     payoutReview:
       payoutSetupStatus === 'not_applicable'
         ? null
@@ -341,6 +346,7 @@ export function emptyContractualCoordination(): {
   referral: null;
   eligibleServiceIds: [];
   workspaceUrl: null;
+  email: null;
   payoutReview: null;
 } {
   return {
@@ -356,6 +362,7 @@ export function emptyContractualCoordination(): {
     referral: null,
     eligibleServiceIds: [],
     workspaceUrl: null,
+    email: null,
     payoutReview: null,
   };
 }

@@ -43,3 +43,20 @@ export function evaluateParticipantAccess(input: {
 
   return { status: 'denied', role: null };
 }
+
+/**
+ * Chooser / identity-fallback cards require the authenticated person to be the
+ * invited participant. Deal-owner preview is never sufficient.
+ */
+export function isAuthorisedParticipantWorkspaceIdentity(input: {
+  user: { id: string; email?: string | null } | null;
+  participantEmail?: string | null;
+  authenticatedUserId?: string | null;
+  dealOwnerUserId: string;
+}): boolean {
+  const decision = evaluateParticipantAccess({
+    ...input,
+    action: 'mutate',
+  });
+  return decision.status === 'ok' && decision.role === 'participant';
+}

@@ -18,6 +18,7 @@ const bodySchema = z.object({
   ]),
   missingFields: z.array(z.string().min(1).max(80)).max(20).optional(),
   requestedChanges: z.string().max(2000).optional(),
+  sendInvitationEmail: z.boolean().optional(),
 });
 
 function mapAgreementError(error: unknown) {
@@ -46,6 +47,7 @@ export async function POST(
       origin: request.nextUrl.origin,
       missingFields: body.missingFields,
       requestedChanges: body.requestedChanges,
+      sendInvitationEmail: body.sendInvitationEmail,
     });
     return apiResponse(result);
   } catch (error) {

@@ -511,8 +511,8 @@ export function buildOperationalActions(input: {
     if (input.operatorApprovalRequired && participant.approvalStatus === 'Pending approval') {
       actions.push({
         id: `invite-${participant.id}`,
-        label: `Request approval for ${participant.name}`,
-        detail: 'Share the participation agreement for approval.',
+        label: `Send approval request for ${participant.name}`,
+        detail: 'Send a secure invitation so they can review and approve the agreement.',
         disposition: 'REQUIRES_APPROVAL',
         participantId: participant.id,
         kind: 'request_approval',

@@ -139,9 +139,9 @@ export function useReferralManagement(workflowId: string | null) {
     async (
       participantId: string,
       action: ParticipantCoordinationAction,
-      extra?: { missingFields?: string[]; requestedChanges?: string }
+      extra?: { missingFields?: string[]; requestedChanges?: string; sendInvitationEmail?: boolean }
     ) => {
-      if (!workflowId) return false;
+      if (!workflowId) return { ok: false };
       setBusy(true);
       setError(null);
       try {
@@ -155,17 +155,20 @@ export function useReferralManagement(workflowId: string | null) {
           }
         );
         const payload = (await res.json().catch(() => null)) as
-          | (ReferralManagementContext & { error?: string })
+          | (ReferralManagementContext & {
+              error?: string;
+              coordination?: { invitationEmailSent?: boolean };
+            })
           | null;
         if (!res.ok) {
           setError(payload?.error ?? 'Promoter coordination failed');
-          return false;
+          return { ok: false };
         }
         setContext(payload as ReferralManagementContext);
-        return true;
+        return { ok: true, invitationEmailSent: payload?.coordination?.invitationEmailSent };
       } catch {
         setError('Promoter coordination failed');
-        return false;
+        return { ok: false };
       } finally {
         setBusy(false);
       }

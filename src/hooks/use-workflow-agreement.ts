@@ -208,9 +208,9 @@ export function useWorkflowAgreement(workflowId: string | null) {
     async (
       participantId: string,
       action: ParticipantCoordinationAction,
-      extra?: { missingFields?: string[]; requestedChanges?: string }
+      extra?: { missingFields?: string[]; requestedChanges?: string; sendInvitationEmail?: boolean }
     ) => {
-      if (!workflowId) return false;
+      if (!workflowId) return { ok: false };
       setCoordinating(true);
       setError(null);
       try {
@@ -223,17 +223,21 @@ export function useWorkflowAgreement(workflowId: string | null) {
             body: JSON.stringify({ action, ...extra }),
           }
         );
+        const payload = (await res.json().catch(() => null)) as
+          | (WorkflowAgreementContext & {
+              error?: string;
+              coordination?: { invitationEmailSent?: boolean };
+            })
+          | null;
         if (!res.ok) {
-          const payload = (await res.json().catch(() => null)) as { error?: string } | null;
           setError(payload?.error ?? 'Participant coordination failed');
-          return false;
+          return { ok: false };
         }
-        const data = (await res.json()) as WorkflowAgreementContext;
-        setContext(data);
-        return true;
+        setContext(payload as WorkflowAgreementContext);
+        return { ok: true, invitationEmailSent: payload?.coordination?.invitationEmailSent };
       } catch {
         setError('Participant coordination failed');
-        return false;
+        return { ok: false };
       } finally {
         setCoordinating(false);
       }

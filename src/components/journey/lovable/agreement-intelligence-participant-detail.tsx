@@ -1,6 +1,7 @@
 'use client';
 
-import { ArrowLeft, Copy, Download, Loader2 } from 'lucide-react';
+import * as React from 'react';
+import { ArrowLeft, Copy, Download, ExternalLink, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -9,6 +10,7 @@ import {
   PayoutStatusLine,
   ReferralStatusLine,
 } from '@/components/journey/lovable/agreement-intelligence-participant-status';
+import { ParticipantApprovalInviteDialog } from '@/components/journey/lovable/participant-approval-invite-dialog';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { useDeployedWorkflows } from '@/hooks/use-deployed-workflows';
 import type { WorkflowActivityItem, WorkflowOperationalParticipant } from '@/lib/workflows/agreement-intelligence/types';
@@ -23,8 +25,8 @@ type Props = {
   onBack: () => void;
   onAction: (
     action: ParticipantCoordinationAction,
-    extra?: { missingFields?: string[]; requestedChanges?: string }
-  ) => Promise<boolean>;
+    extra?: { missingFields?: string[]; requestedChanges?: string; sendInvitationEmail?: boolean }
+  ) => Promise<{ ok: boolean; invitationEmailSent?: boolean } | boolean>;
 };
 
 function copyText(value: string, success: string) {
@@ -55,6 +57,21 @@ export function AgreementIntelligenceParticipantDetail({
     showReferralManagementHandoff &&
     participant.partyKind === 'compensated_participant' &&
     participant.compensationKind !== 'fixed';
+  const [inviteOpen, setInviteOpen] = React.useState(false);
+  const invitationSent =
+    participant.agreementStatus === 'requested' || participant.agreementStatus === 'viewed';
+  const agreementApproved = participant.agreementStatus === 'approved';
+  const payoutLocked = !agreementApproved;
+  const workspaceReady =
+    agreementApproved &&
+    (participant.payoutSetupStatus === 'complete' || participant.payoutSetupStatus === 'not_applicable');
+  const previewHref = participant.workspaceUrl
+    ? `${participant.workspaceUrl}${participant.workspaceUrl.includes('?') ? '&' : '?'}mode=preview`
+    : null;
+
+  const copyApprovalLink = () => {
+    setInviteOpen(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -84,31 +101,56 @@ export function AgreementIntelligenceParticipantDetail({
         </div>
       ) : (
         <>
-          <div className="rounded-xl border border-border bg-secondary/10 p-4 space-y-3">
-            <div>
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">Agreement</p>
-              <div className="mt-2">
-                <AgreementStatusLine participant={participant} />
+          <div className="rounded-xl border border-border bg-secondary/10 p-4 space-y-4">
+            <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+              Participant onboarding
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <p className="text-[13px] font-medium">1. Agreement</p>
+                <div className="mt-1">
+                  <AgreementStatusLine participant={participant} />
+                </div>
               </div>
+              {canAct && !agreementApproved ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" disabled={busy} onClick={() => setInviteOpen(true)}>
+                    {invitationSent ? 'Resend invitation' : 'Send approval request'}
+                  </Button>
+                  <Button type="button" variant="outline" disabled={busy} onClick={copyApprovalLink}>
+                    <Copy className="mr-2 h-3.5 w-3.5" />
+                    Copy approval link
+                  </Button>
+                </div>
+              ) : null}
             </div>
-            {canAct && participant.nextActionKind === 'request_approval' ? (
-              <Button type="button" disabled={busy} onClick={() => void onAction('request_approval')}>
-                {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Request approval
-              </Button>
-            ) : null}
-            {participant.workspaceUrl ? (
-              <p className="text-[12px] text-ink-soft">
-                Participant workspace:{' '}
-                <button
-                  type="button"
-                  className="font-medium text-primary hover:underline"
-                  onClick={() => copyText(window.location.origin + participant.workspaceUrl, 'Workspace link copied')}
-                >
-                  Copy link
-                </button>
+
+            <div className="space-y-1 border-t border-border pt-3">
+              <p className="text-[13px] font-medium">2. Payout details</p>
+              {payoutLocked ? (
+                <p className="text-[13px] text-ink-soft">Locked until agreement approval</p>
+              ) : (
+                <PayoutStatusLine participant={participant} />
+              )}
+            </div>
+
+            <div className="space-y-2 border-t border-border pt-3">
+              <p className="text-[13px] font-medium">3. Workspace</p>
+              <p className="text-[13px] text-ink-soft">
+                {workspaceReady
+                  ? 'Available — participant can use the full commercial workspace'
+                  : 'Available after onboarding'}
               </p>
-            ) : null}
+              {previewHref ? (
+                <Button type="button" variant="outline" size="sm" asChild>
+                  <a href={previewHref} target="_blank" rel="noreferrer">
+                    <ExternalLink className="mr-2 h-3.5 w-3.5" />
+                    Preview participant workspace
+                  </a>
+                </Button>
+              ) : null}
+            </div>
           </div>
 
           <div className="rounded-xl border border-border bg-secondary/10 p-4 space-y-3">
@@ -274,6 +316,17 @@ export function AgreementIntelligenceParticipantDetail({
             ))}
           </ul>
         </div>
+      ) : null}
+      {participant.id ? (
+        <ParticipantApprovalInviteDialog
+          open={inviteOpen}
+          onOpenChange={setInviteOpen}
+          participantId={participant.id}
+          participantName={participant.name}
+          participantEmail={participant.email}
+          busy={busy}
+          onAction={onAction}
+        />
       ) : null}
     </div>
   );

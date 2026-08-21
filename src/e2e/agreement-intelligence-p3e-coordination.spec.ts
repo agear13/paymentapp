@@ -322,7 +322,8 @@ test.describe('P3-E Agreement Intelligence participant coordination', () => {
     evidence.pass('2-4. Manage opens participant detail inside Commercial OS', page.url());
     await evidence.screenshot(page, 'p3e-02-participant-detail');
 
-    await page.getByRole('button', { name: 'Request approval' }).click();
+    await page.getByRole('button', { name: 'Send approval request' }).click();
+    await page.getByRole('button', { name: 'Copy secure approval link' }).click();
     await expect
       .poll(async () => {
         const latest = await loadContext(page, workflowId);

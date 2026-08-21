@@ -90,7 +90,7 @@ export function deriveParticipantWorkspaceOnboarding(
       step: 'agreement_review',
       agreementStatus,
       payoutDetailsStatus,
-      nextRequiredAction: 'Review and approve your commercial agreement.',
+      nextRequiredAction: 'Review and approve your agreement',
       onboardingComplete: false,
     };
   }
@@ -101,7 +101,7 @@ export function deriveParticipantWorkspaceOnboarding(
         step: 'agreement_review',
         agreementStatus,
         payoutDetailsStatus,
-        nextRequiredAction: 'Review and approve your commercial agreement.',
+        nextRequiredAction: 'Review and approve your agreement',
         onboardingComplete: false,
       };
     }
@@ -140,7 +140,7 @@ export function deriveParticipantWorkspaceOnboarding(
       step: 'payout_details',
       agreementStatus,
       payoutDetailsStatus,
-      nextRequiredAction: 'Complete your payout and tax details.',
+      nextRequiredAction: 'Add payout details',
       onboardingComplete: false,
     };
   }

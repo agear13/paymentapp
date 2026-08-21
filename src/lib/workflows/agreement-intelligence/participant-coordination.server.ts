@@ -107,6 +107,7 @@ export async function runParticipantCoordinationAction(input: {
   origin?: string;
   missingFields?: string[];
   requestedChanges?: string;
+  sendInvitationEmail?: boolean;
 }) {
   const scoped = await requireOperationalWorkflow(input);
 
@@ -120,6 +121,7 @@ export async function runParticipantCoordinationAction(input: {
       origin: input.origin,
       missingFields: input.missingFields,
       requestedChanges: input.requestedChanges,
+      sendInvitationEmail: input.sendInvitationEmail,
     });
   } catch (error) {
     mapCommercialError(error);

@@ -318,7 +318,7 @@ describe('Agreement Intelligence P3-D activation and participant setup', () => {
       operatorApprovalRequired: true,
     });
 
-    expect(actions.some((row) => row.label.includes('Request approval for Apex Promotions'))).toBe(true);
+    expect(actions.some((row) => row.label.includes('Send approval request for Apex Promotions'))).toBe(true);
     expect(actions.every((row) => row.disposition !== 'READY' || !/payment|payout|invoice/i.test(row.label))).toBe(
       true
     );

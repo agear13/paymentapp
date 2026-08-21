@@ -1,5 +1,6 @@
 import {
   evaluateParticipantAccess,
+  isAuthorisedParticipantWorkspaceIdentity,
   normalizeParticipantEmail,
 } from '@/lib/participant-portal/participant-access';
 
@@ -115,5 +116,51 @@ describe('participant access evaluation', () => {
         action: 'read',
       })
     ).toEqual({ status: 'denied', role: null });
+  });
+});
+
+describe('isAuthorisedParticipantWorkspaceIdentity', () => {
+  it('allows only the invited participant identity', () => {
+    expect(
+      isAuthorisedParticipantWorkspaceIdentity({
+        user: { id: PARTICIPANT, email: 'betty@email.com' },
+        participantEmail: 'betty@email.com',
+        authenticatedUserId: null,
+        dealOwnerUserId: OWNER,
+      })
+    ).toBe(true);
+  });
+
+  it('excludes deal-owner operator preview from the chooser', () => {
+    expect(
+      isAuthorisedParticipantWorkspaceIdentity({
+        user: { id: OWNER, email: 'owner@example.com' },
+        participantEmail: 'betty@email.com',
+        authenticatedUserId: null,
+        dealOwnerUserId: OWNER,
+      })
+    ).toBe(false);
+  });
+
+  it('ignores a client-supplied email that does not match the session user', () => {
+    expect(
+      isAuthorisedParticipantWorkspaceIdentity({
+        user: { id: OTHER, email: 'attacker@example.com' },
+        participantEmail: 'betty@email.com',
+        authenticatedUserId: null,
+        dealOwnerUserId: OWNER,
+      })
+    ).toBe(false);
+  });
+
+  it('does not treat a portal token holder as authorised without identity match', () => {
+    expect(
+      isAuthorisedParticipantWorkspaceIdentity({
+        user: { id: OTHER, email: 'forwarded@example.com' },
+        participantEmail: 'betty@email.com',
+        authenticatedUserId: PARTICIPANT,
+        dealOwnerUserId: OWNER,
+      })
+    ).toBe(false);
   });
 });

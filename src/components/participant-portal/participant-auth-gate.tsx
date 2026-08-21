@@ -48,14 +48,14 @@ export function ParticipantAuthGate({
       <Card className="w-full max-w-lg">
         <CardHeader>
           <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-            You&apos;re invited
+            Referral Management invitation
           </p>
           <CardTitle className="text-xl">
             {invitation.hostLabel} has invited you to participate
             {invitation.projectName ? ` in ${invitation.projectName}` : ''}.
           </CardTitle>
           <CardDescription>
-            Sign in with the email address associated with your invitation to continue. Opening this
+            Sign in with the invited email to continue to this agreement and workspace. Opening this
             link does not grant access by itself.
           </CardDescription>
         </CardHeader>

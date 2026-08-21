@@ -4,7 +4,12 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { enforceCsrfForRequest } from '@/lib/security/csrf';
 import { findParticipantByPortalToken } from '@/lib/participant-portal/participant-portal.server';
 import { normalizeParticipantEmail } from '@/lib/participant-portal/participant-access';
-import { getPublicAppUrl } from '@/lib/runtime/customer-facing-url';
+import { resolveRequestOrigin } from '@/lib/runtime/customer-facing-url';
+import {
+  PARTICIPANT_AUTH_RETURN_COOKIE,
+  participantAuthReturnCookieOptions,
+  participantWorkspaceReturnPath,
+} from '@/lib/participant-portal/participant-auth-return';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,8 +40,9 @@ export async function POST(
     );
   }
 
-  const origin = getPublicAppUrl(request.nextUrl.origin) || request.nextUrl.origin;
-  const redirectTo = `${origin}/auth/callback?redirectedFrom=${encodeURIComponent(`/participant/${encodeURIComponent(token)}`)}`;
+  const returnPath = participantWorkspaceReturnPath(token);
+  const origin = resolveRequestOrigin(request) || request.nextUrl.origin;
+  const redirectTo = `${origin}/auth/callback?redirectedFrom=${encodeURIComponent(returnPath)}`;
 
   const supabase = await createClient();
   const { error } = await supabase.auth.signInWithOtp({
@@ -54,5 +60,11 @@ export async function POST(
     );
   }
 
-  return NextResponse.json({ ok: true });
+  const response = NextResponse.json({ ok: true });
+  response.cookies.set(
+    PARTICIPANT_AUTH_RETURN_COOKIE,
+    returnPath,
+    participantAuthReturnCookieOptions()
+  );
+  return response;
 }

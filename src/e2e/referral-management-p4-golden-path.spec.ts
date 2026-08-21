@@ -249,14 +249,16 @@ test.describe('P4 Referral Management golden path', () => {
     expect(page.url()).toContain('/workspace/workflows/referral-management');
     evidence.pass('Promoter detail stays in Commercial OS');
 
-    await page.getByRole('button', { name: 'Request approval' }).click();
+    await page.getByRole('button', { name: 'Send approval request' }).click();
+    await page.getByRole('button', { name: 'Copy secure approval link' }).click();
     const first = await coordinate(page, workflowId, apex!.id!, 'request_approval');
     expect(first.ok, first.data.error).toBeTruthy();
     const workspaceUrl = first.data.coordination?.workspaceUrl;
     expect(workspaceUrl).toBeTruthy();
     evidence.pass('Request approval issued', workspaceUrl ?? '');
 
-    await signInInvitedParticipant(page, apexEmail);
+    const workspacePath = new URL(workspaceUrl!, 'http://localhost').pathname;
+    await signInInvitedParticipant(page, apexEmail, workspacePath);
     await page.goto(workspaceUrl!, { waitUntil: 'domcontentloaded' });
     await ensureCookieBannerDismissed(page);
     await expect(page.getByRole('button', { name: 'Approve participation' })).toBeVisible({

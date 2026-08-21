@@ -5,6 +5,9 @@ import { prisma } from '@/lib/server/prisma';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { generatePaymentRequestForParticipant } from '@/lib/commercial/payment-request.server';
 import { dispatchCommercialNotification } from '@/lib/commercial/dispatch-commercial-notification.server';
+import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
+import { sendEmail } from '@/lib/email/client';
+import { buildParticipantAgreementInviteEmail } from '@/lib/email/templates/participant-agreement-invite';
 import {
   appendOnboardingEvent,
   buildSupplierVerification,
@@ -60,18 +63,59 @@ export type CommercialCoordinationResult = {
   destinationLabel?: string | null;
   requestedChanges?: string;
   missingFields?: string[];
+  invitationEmailSent?: boolean;
 };
+
+async function deliverAgreementInvitation(input: {
+  participant: DemoParticipant;
+  userId: string;
+  workspaceUrl: string;
+}): Promise<boolean> {
+  const to = input.participant.email?.trim();
+  if (!to) return false;
+
+  const row = await prisma.deal_network_pilot_participants.findUnique({
+    where: { id: input.participant.id },
+    include: { deal: true },
+  });
+  const dealPayload = row?.deal?.deal_payload as { dealName?: string } | null;
+  const projectName = dealPayload?.dealName?.trim() || row?.deal?.name?.trim() || 'Referral Management';
+  const org = await getOrganizationForAuthenticatedUser(input.userId);
+  const content = buildParticipantAgreementInviteEmail({
+    participantName: input.participant.name,
+    operatorName: org?.name ?? 'Your organiser',
+    projectName,
+    workspaceUrl: input.workspaceUrl,
+  });
+  const sent = await sendEmail({
+    to,
+    subject: content.subject,
+    html: content.html,
+    text: content.text,
+    tags: [
+      { name: 'category', value: 'participant-agreement-invite' },
+      { name: 'participant_id', value: input.participant.id },
+    ],
+  });
+  return sent.success;
+}
 
 async function requestApproval(input: {
   participant: DemoParticipant;
   userId: string;
   origin?: string;
+  sendInvitationEmail?: boolean;
 }): Promise<CommercialCoordinationResult> {
   if (input.participant.approvalStatus === 'Approved' && input.participant.participantPortalToken) {
+    const workspaceUrl = buildParticipantWorkspaceUrl(
+      input.participant.participantPortalToken,
+      input.origin
+    );
     return {
       created: false,
       participant: input.participant,
-      workspaceUrl: buildParticipantWorkspaceUrl(input.participant.participantPortalToken, input.origin),
+      workspaceUrl,
+      invitationEmailSent: false,
     };
   }
 
@@ -82,29 +126,37 @@ async function requestApproval(input: {
     next = applyParticipantAgreementGenerated(next, path);
   }
 
-  if (next.agreementSharedAt) {
-    return {
-      created: false,
-      participant: next,
-      workspaceUrl: buildParticipantWorkspaceUrl(portal.token, input.origin),
-    };
+  let created = false;
+  if (!next.agreementSharedAt) {
+    next = applyParticipantAgreementShared(next);
+    created = true;
+    const persisted = await updatePilotParticipantPayload(input.participant.id, input.userId, {
+      agreementUrl: next.agreementUrl,
+      agreementSharedAt: next.agreementSharedAt,
+      inviteSentAt: next.inviteSentAt,
+      inviteStatus: next.inviteStatus,
+      agreementLifecycle: next.agreementLifecycle,
+      participantLifecycle: next.participantLifecycle,
+      participantPortalToken: portal.token,
+    });
+    next = persisted ?? next;
   }
 
-  next = applyParticipantAgreementShared(next);
-  const persisted = await updatePilotParticipantPayload(input.participant.id, input.userId, {
-    agreementUrl: next.agreementUrl,
-    agreementSharedAt: next.agreementSharedAt,
-    inviteSentAt: next.inviteSentAt,
-    inviteStatus: next.inviteStatus,
-    agreementLifecycle: next.agreementLifecycle,
-    participantLifecycle: next.participantLifecycle,
-    participantPortalToken: portal.token,
-  });
+  const workspaceUrl = buildParticipantWorkspaceUrl(portal.token, input.origin);
+  let invitationEmailSent = false;
+  if (input.sendInvitationEmail) {
+    invitationEmailSent = await deliverAgreementInvitation({
+      participant: next,
+      userId: input.userId,
+      workspaceUrl,
+    });
+  }
 
   return {
-    created: true,
-    participant: persisted ?? next,
-    workspaceUrl: buildParticipantWorkspaceUrl(portal.token, input.origin),
+    created,
+    participant: next,
+    workspaceUrl,
+    invitationEmailSent,
   };
 }
 
@@ -441,6 +493,7 @@ export async function executeCommercialParticipantAction(input: {
   origin?: string;
   missingFields?: string[];
   requestedChanges?: string;
+  sendInvitationEmail?: boolean;
 }): Promise<CommercialCoordinationResult> {
   switch (input.action) {
     case 'request_approval':

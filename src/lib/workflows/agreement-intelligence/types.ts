@@ -124,6 +124,7 @@ export type WorkflowOperationalParticipant = {
   referral: WorkflowOperationalReferralSummary | null;
   eligibleServiceIds: string[];
   workspaceUrl: string | null;
+  email: string | null;
   payoutReview: {
     preferredMethod: string | null;
     abn: string | null;

@@ -65,8 +65,8 @@ export function AgreementStatusLine({ participant }: { participant: WorkflowOper
     participant.agreementStatus === 'approved'
       ? 'Approved'
       : participant.agreementStatus === 'requested' || participant.agreementStatus === 'viewed'
-        ? 'Approval requested'
-        : 'Approval required';
+        ? 'Invitation sent — awaiting participant approval'
+        : 'Awaiting participant approval';
   return <StatusMark tone={agreementTone(participant)} label={label} />;
 }
 
