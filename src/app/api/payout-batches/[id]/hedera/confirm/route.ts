@@ -144,6 +144,13 @@ export async function POST(
 
     const paidAt = new Date();
     const externalRef = `hedera:${normalizedTxId}`;
+    const includedPayouts = await prisma.payouts.findMany({
+      where: { id: { in: includedPayoutIds } },
+      select: { user_id: true },
+    });
+    const participantIds = [
+      ...new Set(includedPayouts.map((payout) => payout.user_id).filter(Boolean)),
+    ];
     // Only mark payouts that were actually included in the on-chain tx (deterministic linkage).
     await prisma.$transaction(async (tx) => {
       await tx.payouts.updateMany({
@@ -159,6 +166,12 @@ export async function POST(
         await txAny.commission_obligation_items.updateMany({
           where: { payout_id: { in: includedPayoutIds } },
           data: { status: 'PAID', paid_at: paidAt },
+        });
+      }
+      if (participantIds.length > 0) {
+        await tx.deal_network_pilot_obligations.updateMany({
+          where: { participant_id: { in: participantIds } },
+          data: { status: 'PAID' },
         });
       }
     });

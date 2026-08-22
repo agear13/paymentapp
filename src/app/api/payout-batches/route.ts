@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
       orderBy: { created_at: 'desc' },
       take: limit,
       include: {
-        payouts: { select: { id: true, status: true } },
+        payouts: { select: { id: true, status: true, user_id: true } },
       },
     });
 
@@ -72,6 +72,11 @@ export async function GET(request: NextRequest) {
         createdAt: b.created_at,
         submittedAt: b.submitted_at,
         completedAt: b.completed_at,
+        payouts: b.payouts.map((payout) => ({
+          id: payout.id,
+          status: payout.status,
+          participantId: payout.user_id,
+        })),
       })),
     });
   } catch (error: unknown) {

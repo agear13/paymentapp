@@ -13,6 +13,7 @@ import {
   Plug,
   Sparkles,
   Settings,
+  Landmark,
 } from 'lucide-react';
 import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark';
 import { WorkspaceAccountMenu } from '@/components/commercial-os/workspace-account-menu';
@@ -40,6 +41,11 @@ const NAV: NavItem[] = [
     label: 'Workflow Library',
     icon: Workflow,
     isActive: isWorkflowLibraryPath,
+  },
+  {
+    to: '/workspace/settlement',
+    label: 'Settlement',
+    icon: Landmark,
   },
   { to: '/workspace/timeline', label: 'Timeline', icon: Activity },
   { to: '/workspace/connected', label: 'Connected Systems', icon: Plug },

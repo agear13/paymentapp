@@ -37,6 +37,12 @@ jest.mock('@/lib/server/prisma', () => ({
     commission_obligation_items: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    deal_network_pilot_obligations: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    payouts: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   },
 }));
 

@@ -223,7 +223,12 @@ function obligationEvents(obligations: WorkspaceTimelineInput['obligations'], ct
         projectName,
         participantId: row.participant?.id ?? null,
         participantName,
-        sourceEntity: { kind: 'obligation', id: row.id, label: row.obligation_type, href: '/dashboard/payouts/obligations' },
+        sourceEntity: {
+          kind: 'obligation',
+          id: row.id,
+          label: row.obligation_type,
+          href: `/workspace/settlement/obligations/${encodeURIComponent(row.id)}`,
+        },
         status,
         importance: 'high',
         layer,
@@ -249,7 +254,7 @@ function obligationEvents(obligations: WorkspaceTimelineInput['obligations'], ct
           ...(participantName ? [{ kind: 'participant', id: row.participant?.id ?? row.id, label: participantName }] : []),
         ],
         actions: [
-          { label: 'View obligations', href: '/dashboard/payouts/obligations' },
+          { label: 'View obligations', href: '/workspace/settlement/obligations' },
           ...(projectId && row.participant?.id
             ? [{ label: 'View participant', href: projectParticipantsPath(projectId) }]
             : []),

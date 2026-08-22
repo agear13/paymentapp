@@ -22,6 +22,35 @@ export function SettlementExplanationCard({ settlement, className }: Props) {
         <CardTitle className="text-lg">Settlement</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        {settlement.earnedLabel || settlement.availableLabel || settlement.pendingLabel ? (
+          <div className="grid gap-3 sm:grid-cols-3">
+            {settlement.earnedLabel ? (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Earned
+                </p>
+                <p className="text-sm font-semibold mt-1">{settlement.earnedLabel}</p>
+              </div>
+            ) : null}
+            {settlement.availableLabel ? (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Available for payout
+                </p>
+                <p className="text-sm font-semibold mt-1">{settlement.availableLabel}</p>
+              </div>
+            ) : null}
+            {settlement.pendingLabel ? (
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Pending
+                </p>
+                <p className="text-sm font-semibold mt-1">{settlement.pendingLabel}</p>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Current status

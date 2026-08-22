@@ -41,8 +41,23 @@ export async function derivePilotReleaseBatchLines(
   const effectiveEligibility = scoped.ok ? scoped.scopedEligibility : eligibility;
 
   const lines: PilotReleaseBatchLine[] = [];
+  const eligibleIds = effectiveEligibility.eligibleParticipants
+    .map((row) => row.participantId)
+    .filter(Boolean);
+  const inFlightPayouts =
+    eligibleIds.length > 0
+      ? await prisma.payouts.findMany({
+          where: {
+            user_id: { in: eligibleIds },
+            status: { in: ['DRAFT', 'SUBMITTED'] },
+          },
+          select: { user_id: true },
+        })
+      : [];
+  const inFlightParticipants = new Set(inFlightPayouts.map((row) => row.user_id));
 
   for (const eligible of effectiveEligibility.eligibleParticipants) {
+    if (inFlightParticipants.has(eligible.participantId)) continue;
     const obligations = await prisma.deal_network_pilot_obligations.findMany({
       where: {
         user_id: input.userId,
@@ -149,12 +164,6 @@ export async function createPilotReleaseBatch(input: {
           net_amount: group.amount,
           status: 'DRAFT',
         },
-      });
-
-      const obligationIds = group.lines.map((l) => l.obligationId);
-      await tx.deal_network_pilot_obligations.updateMany({
-        where: { id: { in: obligationIds } },
-        data: { status: DealNetworkPilotObligationStatus.PENDING_APPROVAL },
       });
     }
 

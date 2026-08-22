@@ -53,6 +53,10 @@ describe('Workspace information architecture', () => {
     );
     expect(COMMERCIAL_OS_ROUTES.commercialWorkspace).toBe('/workspace/commercial');
     expect(COMMERCIAL_OS_ROUTES.workspace).toBe('/workspace');
+    expect(COMMERCIAL_OS_ROUTES.settlement).toBe('/workspace/settlement');
+    expect(COMMERCIAL_OS_ROUTES.settlementObligations).toBe('/workspace/settlement/obligations');
+    expect(COMMERCIAL_OS_ROUTES.settlementEarnings).toBe('/workspace/settlement/earnings');
+    expect(COMMERCIAL_OS_ROUTES.settlementReleases).toBe('/workspace/settlement/releases');
   });
 
   it('does not show installed workflow actions before deployment', () => {

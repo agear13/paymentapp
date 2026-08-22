@@ -7,6 +7,11 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import { deriveParticipantOperationalWorkflow } from '@/lib/commercial/participant-commercial-lifecycle';
 import { deriveParticipantSettlementWorkflowState } from '@/lib/commercial/workflows/derive-settlement-state';
 import { hasApprovedAgreement } from '@/lib/operations/primitives/participant-earnings-primitives';
+import {
+  effectiveOnboardingStatus,
+  isOnboardingComplete,
+} from '@/lib/deal-network-demo/participant-onboarding';
+import { formatCurrency } from '@/lib/formatters/format-currency';
 import type {
   PortalObligationSnapshot,
   SettlementExplanation,
@@ -109,10 +114,44 @@ export function deriveParticipantSettlementExplanation(
     }
   }
 
+  const currency = obligations[0]?.currency ?? 'AUD';
+  const earned = obligations
+    .filter((row) => row.status.toUpperCase() !== 'REVERSED')
+    .reduce((sum, row) => sum + row.amountOwed, 0);
+  const available = obligations
+    .filter((row) => row.status.toUpperCase() === 'AVAILABLE_FOR_PAYOUT')
+    .reduce((sum, row) => sum + row.amountOwed, 0);
+  const paid = obligations
+    .filter((row) => row.status.toUpperCase() === 'PAID')
+    .reduce((sum, row) => sum + row.amountOwed, 0);
+  const pending = Math.max(0, earned - available - paid);
+  const onboardingComplete = isOnboardingComplete(
+    effectiveOnboardingStatus({
+      id: participant.id,
+      onboardingStatus: participant.onboardingStatus,
+    })
+  );
+  const payoutDetailsRequired =
+    hasApprovedAgreement(participant) &&
+    !onboardingComplete &&
+    participant.payoutVerificationConfirmed !== true &&
+    earned > 0;
+
+  if (payoutDetailsRequired) {
+    blockingReason =
+      'Your payout information is required before eligible commissions can be released.';
+    isBlocked = true;
+    nextStep = 'Complete your payout details so eligible commissions can be released.';
+  }
+
   return {
     statusLabel,
     blockingReason,
     nextStep,
     isBlocked,
+    earnedLabel: earned > 0 ? formatCurrency(earned, currency) : null,
+    availableLabel: available > 0 ? formatCurrency(available, currency) : null,
+    pendingLabel: pending > 0 ? formatCurrency(pending, currency) : null,
+    payoutDetailsRequired,
   };
 }

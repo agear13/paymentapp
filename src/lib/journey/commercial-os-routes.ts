@@ -53,11 +53,84 @@ export const COMMERCIAL_OS_ROUTES = {
   accountSecurity: '/workspace/settings/security',
   payments: '/workspace/payments',
   treasury: '/workspace/treasury',
+  settlement: '/workspace/settlement',
+  settlementObligations: '/workspace/settlement/obligations',
+  settlementEarnings: '/workspace/settlement/earnings',
+  settlementReleases: '/workspace/settlement/releases',
+  settlementObligation: (id: string) =>
+    `/workspace/settlement/obligations/${encodeURIComponent(id)}`,
   assessment: '/journey/assessment',
   provisioning: '/journey/provisioning',
   /** Journey onboarding continues here after inline auth or OAuth. */
   journeyPostAuth: '/journey/provisioning?build=1',
 } as const;
+
+export type SettlementWorkspaceQuery = {
+  source?: string;
+  status?: string;
+  participant?: string;
+};
+
+export type SettlementWorkspaceSection = 'overview' | 'obligations' | 'earnings' | 'releases';
+
+function withSettlementQuery(pathname: string, query?: SettlementWorkspaceQuery): string {
+  const params = new URLSearchParams();
+  if (query?.source?.trim() && query.source !== 'all') {
+    params.set('source', query.source.trim());
+  }
+  if (query?.status?.trim() && query.status !== 'all') {
+    params.set('status', query.status.trim());
+  }
+  if (query?.participant?.trim()) {
+    params.set('participant', query.participant.trim());
+  }
+  const qs = params.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
+}
+
+/** Scope that should persist across Settlement tabs (not obligation status). */
+export function settlementScopeQuery(
+  query?: SettlementWorkspaceQuery | null
+): SettlementWorkspaceQuery {
+  return {
+    source: query?.source,
+    participant: query?.participant,
+  };
+}
+
+export function settlementSectionHref(
+  section: SettlementWorkspaceSection,
+  query?: SettlementWorkspaceQuery
+): string {
+  const path =
+    section === 'overview'
+      ? COMMERCIAL_OS_ROUTES.settlement
+      : section === 'obligations'
+        ? COMMERCIAL_OS_ROUTES.settlementObligations
+        : section === 'earnings'
+          ? COMMERCIAL_OS_ROUTES.settlementEarnings
+          : COMMERCIAL_OS_ROUTES.settlementReleases;
+  return withSettlementQuery(path, query);
+}
+
+/** Settlement obligations queue, optionally scoped to a commercial source. */
+export function settlementObligationsHref(query?: SettlementWorkspaceQuery): string {
+  return withSettlementQuery(COMMERCIAL_OS_ROUTES.settlementObligations, query);
+}
+
+/** Settlement earnings, optionally scoped to a commercial source or participant. */
+export function settlementEarningsHref(query?: SettlementWorkspaceQuery): string {
+  return withSettlementQuery(COMMERCIAL_OS_ROUTES.settlementEarnings, query);
+}
+
+/** Settlement overview, optionally scoped to a commercial source. */
+export function settlementOverviewHref(query?: SettlementWorkspaceQuery): string {
+  return withSettlementQuery(COMMERCIAL_OS_ROUTES.settlement, query);
+}
+
+export function settlementReleasesHref(query?: SettlementWorkspaceQuery): string {
+  return withSettlementQuery(COMMERCIAL_OS_ROUTES.settlementReleases, query);
+}
 
 /** Default destination immediately after a successful sign-in. */
 export function postLoginDestination(): string {

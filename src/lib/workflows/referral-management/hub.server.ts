@@ -5,8 +5,22 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import { listAttributionEarningsForOrganization } from '@/lib/commissions/attribution-earnings.server';
 import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { deriveAuditTimelineFromParticipants } from '@/lib/operations/audit/derive-audit-timeline-from-state';
-import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
-import { PAYOUTS_COMMISSIONS_HREF, PAYOUTS_OBLIGATIONS_HREF } from '@/lib/navigation/operator-nav';
+import {
+  COMMERCIAL_OS_ROUTES,
+  settlementEarningsHref,
+  settlementObligationsHref,
+  settlementOverviewHref,
+} from '@/lib/journey/commercial-os-routes';
+import {
+  buildSettlementObligationRows,
+  filterSettlementObligations,
+  type PilotObligationApiRow,
+  type SettlementPayoutReceipt,
+} from '@/lib/settlement/workspace-settlement';
+import {
+  deriveReferralParticipantSettlementSummary,
+  deriveReferralWorkflowSettlementSummary,
+} from '@/lib/workflows/referral-management/settlement-summary';
 import {
   buildParticipantCoordinationView,
   compensationKindOf,
@@ -17,7 +31,10 @@ import type {
   WorkflowOperationalParticipant,
 } from '@/lib/workflows/agreement-intelligence/types';
 import { isOperationalCoordinationBlocked } from '@/lib/workflows/agreement-intelligence/operational-hub-coordination.server';
-import { REFERRAL_MANAGEMENT_SLUG } from '@/lib/workflows/referral-management/constants';
+import {
+  REFERRAL_MANAGEMENT_SLUG,
+  referralManagementDealId,
+} from '@/lib/workflows/referral-management/constants';
 import { ensureReferralManagementDeal } from '@/lib/workflows/referral-management/ensure-program-deal.server';
 import { buildReferralAttentionItems } from '@/lib/workflows/referral-management/attention';
 
@@ -129,9 +146,60 @@ export async function getReferralManagementContext(input: {
     });
   }
 
-  const earnings = await listAttributionEarningsForOrganization(input.organizationId);
-  const promoterIds = new Set(promoters.map((row) => row.id).filter(Boolean));
-  const matchingEarnings = earnings.filter((row) => promoterIds.has(row.participantId));
+  const dealId = referralManagementDealId(row.id);
+  const promoterIds = [...new Set(promoters.map((row) => row.id).filter(Boolean))];
+  const [earnings, pilotObligationRows, payoutRows] = await Promise.all([
+    listAttributionEarningsForOrganization(input.organizationId),
+    prisma.deal_network_pilot_obligations.findMany({
+      where: { user_id: input.userId, deal_id: dealId },
+      include: {
+        deal: { select: { id: true, name: true, partner: true } },
+        participant: {
+          select: { id: true, name: true, participant_payload: true },
+        },
+      },
+    }),
+    promoterIds.length > 0
+      ? prisma.payouts.findMany({
+          where: { user_id: { in: promoterIds } },
+          select: { user_id: true, status: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const promoterIdSet = new Set(promoterIds);
+  const matchingEarnings = earnings.filter((row) => promoterIdSet.has(row.participantId));
+  const payoutReceipts: SettlementPayoutReceipt[] = payoutRows.map((row) => ({
+    participantId: row.user_id,
+    status: row.status,
+  }));
+  const mappedPilot: PilotObligationApiRow[] = pilotObligationRows.map((obligation) => {
+    const payload = obligation.participant?.participant_payload as
+      | { approvalStatus?: string; onboardingStatus?: string }
+      | null
+      | undefined;
+    return {
+      id: obligation.id,
+      deal_id: obligation.deal_id,
+      participant_id: obligation.participant_id,
+      obligation_type: obligation.obligation_type,
+      status: obligation.status,
+      amount_owed: Number(obligation.amount_owed),
+      currency: obligation.currency,
+      deal: obligation.deal,
+      participant: obligation.participant
+        ? {
+            id: obligation.participant.id,
+            name: obligation.participant.name,
+            approvalStatus: payload?.approvalStatus ?? null,
+            onboardingStatus: payload?.onboardingStatus ?? null,
+          }
+        : null,
+    };
+  });
+  const settlementRows = filterSettlementObligations(
+    buildSettlementObligationRows(mappedPilot, matchingEarnings, payoutReceipts),
+    { source: 'referral-management' }
+  );
   const commissionEarned = matchingEarnings.reduce(
     (sum, row) => sum + row.paidAmount + row.outstandingAmount,
     0
@@ -147,13 +215,17 @@ export async function getReferralManagementContext(input: {
       const code = promoter.referral?.code ?? '';
       const referred = code ? revenueByCode.get(code) : undefined;
       const earned = matchingEarnings.find((row) => row.participantId === promoter.id);
+      const paidAmount = earned?.paidAmount ?? 0;
+      const outstandingAmount = earned?.outstandingAmount ?? 0;
       return [
         promoter.id ?? '',
         {
           revenueReferred: referred?.amount ?? 0,
           revenueLabel: money(referred?.amount ?? 0, referred?.currency),
-          commissionEarned: (earned?.paidAmount ?? 0) + (earned?.outstandingAmount ?? 0),
-          commissionLabel: money((earned?.paidAmount ?? 0) + (earned?.outstandingAmount ?? 0)),
+          commissionEarned: paidAmount + outstandingAmount,
+          commissionLabel: money(paidAmount + outstandingAmount),
+          paidAmount,
+          outstandingAmount,
           conversions: referred?.conversions ?? 0,
           destinationLabel: promoter.referral?.destinationLabel ?? null,
         },
@@ -166,6 +238,8 @@ export async function getReferralManagementContext(input: {
       revenueLabel: string;
       commissionEarned: number;
       commissionLabel: string;
+      paidAmount: number;
+      outstandingAmount: number;
       conversions: number;
       destinationLabel: string | null;
     }
@@ -214,10 +288,21 @@ export async function getReferralManagementContext(input: {
       price: Number(item.price) || 0,
       currency: item.currency,
     })),
+    settlement: deriveReferralWorkflowSettlementSummary(settlementRows, commissionEarned),
+    participantSettlements: Object.fromEntries(
+      promoters.map((promoter) => [
+        promoter.id ?? '',
+        deriveReferralParticipantSettlementSummary(
+          settlementRows.filter((row) => row.participantId === promoter.id),
+          performance[promoter.id ?? '']?.commissionEarned ?? 0
+        ),
+      ])
+    ),
     handoff: {
       revenueSharingPreviewUrl: COMMERCIAL_OS_ROUTES.workflowDetail('revenue-sharing'),
-      obligationsUrl: PAYOUTS_OBLIGATIONS_HREF,
-      commissionsUrl: PAYOUTS_COMMISSIONS_HREF,
+      obligationsUrl: settlementObligationsHref({ source: 'referral-management' }),
+      commissionsUrl: settlementEarningsHref({ source: 'referral-management' }),
+      settlementUrl: settlementOverviewHref({ source: 'referral-management' }),
     },
     agreementIntelligenceInstalled: Boolean(
       await prisma.organization_workflows.findUnique({

@@ -30,7 +30,6 @@ import {
   normalizeReleaseParticipantIds,
   scopeReleaseBatchToParticipants,
 } from '@/lib/operations/payouts/scope-release-batch-participants';
-import { markScopedPilotParticipantsPaid } from '@/lib/deal-network-demo/pilot-settlement-release.server';
 import { syncCantonSettlementReady } from '@/lib/commercial-network/server/canton-workflow-sync.server';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
@@ -191,8 +190,6 @@ export async function POST(request: NextRequest) {
           });
         }
       }
-
-      await markScopedPilotParticipantsPaid(scopedParticipantIds);
 
       const operationalSync = await orchestrateOperationalMutation({
         userId: user.id,
@@ -379,8 +376,6 @@ export async function POST(request: NextRequest) {
         });
       }
     }
-
-    await markScopedPilotParticipantsPaid(scopedParticipantIds);
 
     const operationalSync = await orchestrateOperationalMutation({
       userId: user.id,

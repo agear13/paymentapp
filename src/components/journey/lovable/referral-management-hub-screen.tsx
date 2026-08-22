@@ -9,7 +9,10 @@ import {
   Share2,
   Package,
 } from 'lucide-react';
-import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
+import {
+  COMMERCIAL_OS_ROUTES,
+  settlementOverviewHref,
+} from '@/lib/journey/commercial-os-routes';
 import { getWorkflowBySlug } from '@/lib/journey/workflow-library-catalog';
 import { useDeployedWorkflows } from '@/hooks/use-deployed-workflows';
 import { useReferralManagement } from '@/hooks/use-referral-management';
@@ -668,6 +671,15 @@ export function ReferralManagementHubScreen() {
     ? [highlighted, ...visiblePromoters.filter((row) => row.id !== highlighted.id)]
     : visiblePromoters;
   const attentionCount = promoterCounts.attention;
+  const selectedSettlement = selected?.id
+    ? context.participantSettlements[selected.id]
+    : null;
+  const selectedSettlementHref = selected?.id
+    ? settlementOverviewHref({
+        source: 'referral-management',
+        participant: selected.id,
+      })
+    : context.handoff.settlementUrl;
 
   const filterChips: Array<{ id: ReferralPromoterFilter; label: string }> = [
     { id: 'all', label: `All ${promoterCounts.all}` },
@@ -761,10 +773,45 @@ export function ReferralManagementHubScreen() {
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <MetricCard label="Revenue generated" value={context.metrics.revenueGeneratedLabel} />
-            <MetricCard label="Commission earned" value={context.metrics.commissionEarnedLabel} />
-            <MetricCard label="Active promoters" value={context.metrics.activePromoters} />
-            <MetricCard label="Pending payouts" value={context.metrics.pendingPayouts} />
+            <MetricCard label="Participants" value={context.promoters.length} />
+            <MetricCard label="Active referrals" value={context.metrics.activePromoters} />
+            <MetricCard label="Revenue referred" value={context.metrics.revenueGeneratedLabel} />
+            <MetricCard label="Commissions earned" value={context.metrics.commissionEarnedLabel} />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+            <div className="flex flex-wrap gap-6">
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-ink-soft">
+                  Commissions earned
+                </p>
+                <p className="mt-1 text-[15px] font-semibold">{context.settlement.earnedLabel}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-ink-soft">Owed</p>
+                <p className="mt-1 text-[15px] font-semibold">{context.settlement.owedLabel}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-ink-soft">
+                  Ready for payout
+                </p>
+                <p className="mt-1 text-[15px] font-semibold">{context.settlement.readyLabel}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-ink-soft">
+                  Requires action
+                </p>
+                <p className="mt-1 text-[15px] font-semibold">
+                  {context.settlement.requiresActionLabel}
+                </p>
+              </div>
+            </div>
+            <Link
+              href={context.handoff.settlementUrl}
+              className="inline-flex rounded-xl bg-gradient-purple px-4 py-2 text-[13px] font-semibold text-primary-foreground"
+            >
+              View settlement
+            </Link>
           </div>
 
           {context.catalog.length === 0 ? (
@@ -816,12 +863,32 @@ export function ReferralManagementHubScreen() {
                   </p>
                 </div>
               ) : null}
-              <Link
-                href={context.handoff.obligationsUrl}
-                className="inline-flex text-[13px] font-medium text-primary"
-              >
-                View in Revenue Sharing
-              </Link>
+              {selectedSettlement ? (
+                <div className="rounded-xl border border-border bg-card p-4">
+                  <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+                    Settlement
+                  </p>
+                  <p className="mt-3 text-[14px]">
+                    Commissions earned{' '}
+                    <span className="font-semibold">{selectedSettlement.earnedLabel}</span>
+                  </p>
+                  <p className="text-[14px]">
+                    Settlement status{' '}
+                    <span className="font-semibold">{selectedSettlement.statusLabel}</span>
+                  </p>
+                  {selectedSettlement.nextAction ? (
+                    <p className="mt-1 text-[14px] text-ink-soft">
+                      Next action {selectedSettlement.nextAction}
+                    </p>
+                  ) : null}
+                  <Link
+                    href={selectedSettlementHref}
+                    className="mt-3 inline-flex text-[13px] font-medium text-primary"
+                  >
+                    View in Settlement
+                  </Link>
+                </div>
+              ) : null}
             </div>
           ) : (
             <>

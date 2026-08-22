@@ -203,4 +203,31 @@ describe('deriveParticipantSettlementExplanation', () => {
     expect(explanation.isBlocked).toBe(true);
     expect(explanation.blockingReason).toMatch(/agreement/i);
   });
+
+  it('asks for payout information when commissions cannot yet be released', () => {
+    const p = buildProjectParticipant({
+      name: 'Alex',
+      role: 'Promoter',
+      project: deal,
+      participationModel: 'customer_attribution',
+      commissionKind: 'pct_deal_value',
+      commissionValue: 10,
+      enableCustomerAttribution: true,
+    });
+    p.approvalStatus = 'Approved';
+    p.onboardingStatus = 'INCOMPLETE';
+    const explanation = deriveParticipantSettlementExplanation(p, [
+      {
+        id: 'ob-1',
+        status: 'APPROVED',
+        amountOwed: 300,
+        currency: 'AUD',
+        dueDate: null,
+        explanation: 'Referral commission',
+      },
+    ]);
+    expect(explanation.earnedLabel).toMatch(/300/);
+    expect(explanation.payoutDetailsRequired).toBe(true);
+    expect(explanation.blockingReason).toMatch(/payout information is required/i);
+  });
 });

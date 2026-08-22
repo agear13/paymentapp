@@ -4,7 +4,11 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import { prisma } from '@/lib/server/prisma';
 import type { Prisma } from '@prisma/client';
 
-/** Persists participant payout completion — same mutation used after production batch creation. */
+/**
+ * Persists participant payout completion. Production create/submit must not call
+ * this — Paid is confirmed only after the payout receipt is PAID. Hackathon
+ * demo release remains a shortcut that skips the payout batch.
+ */
 export async function markScopedPilotParticipantsPaid(
   participantIds?: string[] | null,
 ): Promise<void> {

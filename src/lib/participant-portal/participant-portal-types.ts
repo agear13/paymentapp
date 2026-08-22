@@ -49,6 +49,10 @@ export type SettlementExplanation = {
   blockingReason: string | null;
   nextStep: string;
   isBlocked: boolean;
+  earnedLabel?: string | null;
+  availableLabel?: string | null;
+  pendingLabel?: string | null;
+  payoutDetailsRequired?: boolean;
 };
 
 export type PortalObligationSnapshot = {
