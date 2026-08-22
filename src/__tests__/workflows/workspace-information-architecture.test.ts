@@ -1,4 +1,7 @@
-import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
+import {
+  COMMERCIAL_OS_ROUTES,
+  referralParticipantSettlementHref,
+} from '@/lib/journey/commercial-os-routes';
 import {
   buildInstalledWorkspaceActions,
   buildWorkspaceAttentionItems,
@@ -57,6 +60,9 @@ describe('Workspace information architecture', () => {
     expect(COMMERCIAL_OS_ROUTES.settlementObligations).toBe('/workspace/settlement/obligations');
     expect(COMMERCIAL_OS_ROUTES.settlementEarnings).toBe('/workspace/settlement/earnings');
     expect(COMMERCIAL_OS_ROUTES.settlementReleases).toBe('/workspace/settlement/releases');
+    expect(referralParticipantSettlementHref('p1')).toBe(
+      '/workspace/settlement?source=referral-management&participant=p1'
+    );
   });
 
   it('does not show installed workflow actions before deployment', () => {

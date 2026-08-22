@@ -65,7 +65,7 @@ const REFERRAL_MANAGEMENT_PREVIEW_CAPABILITIES = [
   'Issue referral links and QR codes',
   'Coordinate promoter approval and payout details',
   'Attribute referred checkout revenue',
-  'Hand off commission to Revenue Sharing',
+  'Hand off commission to Settlement',
 ] as const;
 
 const AGREEMENT_INTELLIGENCE_PREVIEW_CAPABILITIES = [
@@ -226,10 +226,10 @@ export const WORKFLOW_LIBRARY: WorkflowLibraryEntry[] = [
       'Issue existing referral links and QR codes',
       'Coordinate approval and payout details',
       'Attribute referred checkout revenue',
-      'Hand off settlement to Revenue Sharing',
+      'Open Settlement for owed commissions',
     ],
     reasoning: [
-      'Referral Management acquires and attributes. Revenue Sharing calculates and settles.',
+      'Referral Management acquires and attributes. Settlement shows what is owed and paid.',
       'Agreement Intelligence can optionally enrich the same participant identity.',
     ],
     saved: 'Uses existing referral infrastructure',

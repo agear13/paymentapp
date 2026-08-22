@@ -6,7 +6,6 @@ import { listAttributionEarningsForOrganization } from '@/lib/commissions/attrib
 import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { deriveAuditTimelineFromParticipants } from '@/lib/operations/audit/derive-audit-timeline-from-state';
 import {
-  COMMERCIAL_OS_ROUTES,
   settlementEarningsHref,
   settlementObligationsHref,
   settlementOverviewHref,
@@ -299,7 +298,6 @@ export async function getReferralManagementContext(input: {
       ])
     ),
     handoff: {
-      revenueSharingPreviewUrl: COMMERCIAL_OS_ROUTES.workflowDetail('revenue-sharing'),
       obligationsUrl: settlementObligationsHref({ source: 'referral-management' }),
       commissionsUrl: settlementEarningsHref({ source: 'referral-management' }),
       settlementUrl: settlementOverviewHref({ source: 'referral-management' }),

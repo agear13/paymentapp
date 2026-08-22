@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import {
   COMMERCIAL_OS_ROUTES,
-  settlementOverviewHref,
+  referralParticipantSettlementHref,
 } from '@/lib/journey/commercial-os-routes';
 import { getWorkflowBySlug } from '@/lib/journey/workflow-library-catalog';
 import { useDeployedWorkflows } from '@/hooks/use-deployed-workflows';
@@ -675,10 +675,7 @@ export function ReferralManagementHubScreen() {
     ? context.participantSettlements[selected.id]
     : null;
   const selectedSettlementHref = selected?.id
-    ? settlementOverviewHref({
-        source: 'referral-management',
-        participant: selected.id,
-      })
+    ? referralParticipantSettlementHref(selected.id)
     : context.handoff.settlementUrl;
 
   const filterChips: Array<{ id: ReferralPromoterFilter; label: string }> = [
@@ -863,32 +860,38 @@ export function ReferralManagementHubScreen() {
                   </p>
                 </div>
               ) : null}
-              {selectedSettlement ? (
-                <div className="rounded-xl border border-border bg-card p-4">
-                  <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
-                    Settlement
-                  </p>
-                  <p className="mt-3 text-[14px]">
-                    Commissions earned{' '}
-                    <span className="font-semibold">{selectedSettlement.earnedLabel}</span>
-                  </p>
-                  <p className="text-[14px]">
-                    Settlement status{' '}
-                    <span className="font-semibold">{selectedSettlement.statusLabel}</span>
-                  </p>
-                  {selectedSettlement.nextAction ? (
-                    <p className="mt-1 text-[14px] text-ink-soft">
-                      Next action {selectedSettlement.nextAction}
+              <div className="rounded-xl border border-border bg-card p-4">
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+                  Settlement
+                </p>
+                {selectedSettlement ? (
+                  <>
+                    <p className="mt-3 text-[14px]">
+                      Commissions earned{' '}
+                      <span className="font-semibold">{selectedSettlement.earnedLabel}</span>
                     </p>
-                  ) : null}
-                  <Link
-                    href={selectedSettlementHref}
-                    className="mt-3 inline-flex text-[13px] font-medium text-primary"
-                  >
-                    View in Settlement
-                  </Link>
-                </div>
-              ) : null}
+                    <p className="text-[14px]">
+                      Settlement status{' '}
+                      <span className="font-semibold">{selectedSettlement.statusLabel}</span>
+                    </p>
+                    {selectedSettlement.nextAction ? (
+                      <p className="mt-1 text-[14px] text-ink-soft">
+                        Next action {selectedSettlement.nextAction}
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="mt-3 text-[14px] text-ink-soft">
+                    Open Settlement to see this participant&apos;s owed, ready and paid amounts.
+                  </p>
+                )}
+                <Link
+                  href={selectedSettlementHref}
+                  className="mt-3 inline-flex text-[13px] font-medium text-primary"
+                >
+                  View in Settlement
+                </Link>
+              </div>
             </div>
           ) : (
             <>

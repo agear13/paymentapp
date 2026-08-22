@@ -16,6 +16,7 @@ import {
   settlementObligationsHref,
   settlementOverviewHref,
   settlementSectionHref,
+  referralParticipantSettlementHref,
   COMMERCIAL_OS_ROUTES,
 } from '@/lib/journey/commercial-os-routes';
 import {
@@ -484,6 +485,10 @@ describe('settlement workspace hrefs', () => {
     expect(settlementEarningsHref({ participant: 'p1' })).toBe(
       '/workspace/settlement/earnings?participant=p1'
     );
+    expect(referralParticipantSettlementHref('promoter-uuid')).toBe(
+      '/workspace/settlement?source=referral-management&participant=promoter-uuid'
+    );
+    expect(referralParticipantSettlementHref('promoter-uuid')).not.toContain('/dashboard/payouts');
   });
 });
 

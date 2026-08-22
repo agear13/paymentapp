@@ -128,6 +128,14 @@ export function settlementOverviewHref(query?: SettlementWorkspaceQuery): string
   return withSettlementQuery(COMMERCIAL_OS_ROUTES.settlement, query);
 }
 
+/** Referral Management participant → Settlement Overview, scoped to that participant. */
+export function referralParticipantSettlementHref(participantId: string): string {
+  return settlementOverviewHref({
+    source: 'referral-management',
+    participant: participantId,
+  });
+}
+
 export function settlementReleasesHref(query?: SettlementWorkspaceQuery): string {
   return withSettlementQuery(COMMERCIAL_OS_ROUTES.settlementReleases, query);
 }
