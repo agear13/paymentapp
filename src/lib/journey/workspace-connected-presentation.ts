@@ -1,5 +1,4 @@
 import type { SubscriptionPlan } from '@/lib/entitlements/types';
-import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import type { XeroConnectionState } from '@/lib/xero/xero-connection-state';
 
 export const ASSESSMENT_XERO = 'Xero';
@@ -26,15 +25,13 @@ export type ConnectedSystemsAudience =
   | 'legacy_starter'
   | 'entitled_paid';
 
-export type XeroOfferKind =
-  | 'recommended_connect'
-  | 'available_connect'
-  | 'unavailable';
+export type ConnectedSystemsMode = 'setup' | 'infrastructure' | 'expired' | 'legacy_empty';
 
-export type ConnectedSystemsNextKind = 'connect_xero' | 'manage_xero' | 'enter_workspace';
+export type XeroOfferKind = 'recommended_connect' | 'available_connect' | 'unavailable';
 
 export type ConnectedSystemsPresentation = {
   audience: ConnectedSystemsAudience;
+  mode: ConnectedSystemsMode;
   selectedXero: boolean;
   xeroConnected: boolean;
   xeroUsable: boolean;
@@ -50,14 +47,6 @@ export type ConnectedSystemsPresentation = {
     showConnect: boolean;
     recommended: boolean;
   } | null;
-  next: {
-    message: string;
-    primary: {
-      kind: ConnectedSystemsNextKind;
-      href: string;
-      label: string;
-    };
-  };
 };
 
 export type ConnectedSystemsPresentationInput = {
@@ -82,10 +71,10 @@ export function resolveConnectedSystemsAudience(input: {
   xeroAllowed: boolean;
   plan: SubscriptionPlan;
 }): ConnectedSystemsAudience | null {
-  if (input.entitlementsLoading) return null;
   if (input.hasActiveFirstPartyTrial) return 'active_first_party_trial';
   if (input.trialExpired) return 'expired_first_party_trial';
   if (input.xeroAllowed) return 'entitled_paid';
+  if (input.entitlementsLoading) return null;
   return 'legacy_starter';
 }
 
@@ -96,47 +85,35 @@ function trialNoteFor(
 ): string | null {
   if (audience !== 'active_first_party_trial') return null;
   const days = remainingTrialDays(trialEndsAt, now);
-  if (days == null) {
-    return 'Professional features, including Xero, are available during your trial.';
-  }
-  if (days === 0) {
+  if (days == null || days === 0) {
     return 'Professional features, including Xero, are available during your trial.';
   }
   const dayLabel = days === 1 ? '1 day remaining' : `${days} days remaining`;
   return `Professional features, including Xero, are available during your trial · ${dayLabel}.`;
 }
 
-function nextForConnectedState(state: XeroConnectionState | null | undefined): {
-  message: string;
-  primary: ConnectedSystemsPresentation['next']['primary'];
-} {
-  if (state === 'AUTH_REAUTH_REQUIRED') {
+function setupXeroOffer(selectedXero: boolean, showConnect: boolean): NonNullable<
+  ConnectedSystemsPresentation['xeroOffer']
+> {
+  if (selectedXero) {
     return {
-      message: 'Reconnect Xero to restore accounting sync. Existing account mappings are kept.',
-      primary: {
-        kind: 'manage_xero',
-        href: COMMERCIAL_OS_ROUTES.connectedXero,
-        label: 'Manage Xero',
-      },
-    };
-  }
-  if (state === 'READY') {
-    return {
-      message: 'Xero is ready to sync. Open Manage to review accounts or historical payments.',
-      primary: {
-        kind: 'manage_xero',
-        href: COMMERCIAL_OS_ROUTES.connectedXero,
-        label: 'Manage Xero',
-      },
+      kind: 'recommended_connect',
+      title: 'Xero',
+      detail: 'Accounting · not connected',
+      explanation:
+        'Provvy knows you use Xero because you told us during setup. It is not connected yet. Your Professional Trial includes Xero integration — connecting it is the recommended next step.',
+      showConnect,
+      recommended: true,
     };
   }
   return {
-    message: 'Open accounting setup to choose accounts and check sync status.',
-    primary: {
-      kind: 'manage_xero',
-      href: COMMERCIAL_OS_ROUTES.connectedXero,
-      label: 'Continue setup',
-    },
+    kind: 'available_connect',
+    title: 'Xero',
+    detail: 'Accounting · available on your trial',
+    explanation:
+      'Xero is included in your Professional Trial. Connect it if you use Xero — Provvy has not assumed that you do.',
+    showConnect,
+    recommended: false,
   };
 }
 
@@ -146,134 +123,43 @@ export function buildConnectedSystemsPresentation(
   const now = input.now ?? new Date();
   const selectedXero = assessmentSelectedXero(input.accounting);
   const audience = resolveConnectedSystemsAudience(input);
-  const xeroUsable = !input.entitlementsLoading && input.xeroAllowed;
-  const connectionKnown = input.connectionKnown !== false;
-  const xeroConnected = connectionKnown && input.xeroConnected;
+  const xeroUsable = input.hasActiveFirstPartyTrial || input.xeroAllowed;
+  const confirmedConnected = input.connectionKnown !== false && input.xeroConnected;
 
-  const base: Omit<ConnectedSystemsPresentation, 'title' | 'description' | 'xeroOffer' | 'next'> = {
-    audience: audience ?? 'legacy_starter',
-    selectedXero,
-    xeroConnected,
-    xeroUsable,
-    trialNote: trialNoteFor(audience, input.trialEndsAt, now),
-    showReadinessBanner: xeroConnected && xeroUsable,
-  };
+  const trialNote = trialNoteFor(audience, input.trialEndsAt, now);
 
-  if (!connectionKnown) {
+  if (confirmedConnected) {
+    const expired = audience === 'expired_first_party_trial';
     return {
-      ...base,
-      title:
-        audience === 'expired_first_party_trial'
-          ? 'Your workspace is still here.'
-          : audience === 'active_first_party_trial' && selectedXero
-            ? 'Connect the systems you already use.'
-            : 'Your operating infrastructure.',
-      description:
-        audience === 'expired_first_party_trial'
-          ? 'Your Professional Trial has ended. You can still view your workspace and existing data.'
-          : audience === 'active_first_party_trial' && selectedXero
-            ? 'Provvy knows you use Xero because you told us during setup. Checking whether it is connected…'
-            : 'Checking which systems are actually connected to Provvy.',
+      audience: audience ?? 'entitled_paid',
+      mode: expired ? 'expired' : 'infrastructure',
+      selectedXero,
+      xeroConnected: true,
+      xeroUsable,
+      title: expired ? 'Your workspace is still here.' : 'Your operating infrastructure.',
+      description: expired
+        ? 'Your Professional Trial has ended. Xero is still connected — you can view your existing workspace and data.'
+        : selectedXero
+          ? 'Xero is connected to Provvy. Review the live connection or continue setup.'
+          : 'Every system Provvy is connected to feeds directly into your Commercial Operating System.',
+      trialNote: expired ? null : trialNote,
+      showReadinessBanner: !expired && xeroUsable,
       xeroOffer: null,
-      next: {
-        message: 'Continue into your Commercial Operating System.',
-        primary: {
-          kind: 'enter_workspace',
-          href: COMMERCIAL_OS_ROUTES.workspace,
-          label: 'Enter workspace',
-        },
-      },
-    };
-  }
-
-  if (xeroConnected) {
-    const next = nextForConnectedState(input.xeroConnectionState);
-    if (audience === 'expired_first_party_trial') {
-      return {
-        ...base,
-        title: 'Your workspace is still here.',
-        description:
-          'Your Professional Trial has ended. Xero is still connected — you can view your existing workspace and data.',
-        showReadinessBanner: false,
-        xeroOffer: null,
-        next: {
-          message: 'You can still open your workspace and review existing connected systems.',
-          primary: {
-            kind: 'enter_workspace',
-            href: COMMERCIAL_OS_ROUTES.workspace,
-            label: 'Enter workspace',
-          },
-        },
-      };
-    }
-    return {
-      ...base,
-      title: 'Your operating infrastructure.',
-      description: selectedXero
-        ? 'Xero is connected to Provvy. The next step is to finish setup or start using it in your workspace.'
-        : 'Every system Provvy is connected to feeds directly into your Commercial Operating System.',
-      xeroOffer: null,
-      next,
-    };
-  }
-
-  if (audience === 'active_first_party_trial' && selectedXero) {
-    return {
-      ...base,
-      title: 'Connect the systems you already use.',
-      description:
-        'Provvy knows you use Xero because you told us during setup. Xero is not connected yet.',
-      xeroOffer: {
-        kind: 'recommended_connect',
-        title: 'Xero',
-        detail: 'Accounting · not connected',
-        explanation:
-          'Your Professional Trial includes Xero integration. Connecting it is the recommended next step.',
-        showConnect: true,
-        recommended: true,
-      },
-      next: {
-        message: 'Connect Xero so invoices and payments can sync automatically.',
-        primary: {
-          kind: 'connect_xero',
-          href: COMMERCIAL_OS_ROUTES.connected,
-          label: 'Connect Xero',
-        },
-      },
-    };
-  }
-
-  if (audience === 'active_first_party_trial') {
-    return {
-      ...base,
-      title: 'Your operating infrastructure.',
-      description:
-        'Xero integration is included in your Professional Trial. Connect it if you use Xero — Provvy has not assumed that you do.',
-      xeroOffer: {
-        kind: 'available_connect',
-        title: 'Xero',
-        detail: 'Accounting · available on your trial',
-        explanation: 'A Professional capability you can connect now. No card is required during the trial.',
-        showConnect: true,
-        recommended: false,
-      },
-      next: {
-        message: 'Continue into your Commercial Operating System.',
-        primary: {
-          kind: 'enter_workspace',
-          href: COMMERCIAL_OS_ROUTES.workspace,
-          label: 'Enter workspace',
-        },
-      },
     };
   }
 
   if (audience === 'expired_first_party_trial') {
     return {
-      ...base,
+      audience,
+      mode: 'expired',
+      selectedXero,
+      xeroConnected: false,
+      xeroUsable: false,
       title: 'Your workspace is still here.',
       description:
-        'Your Professional Trial has ended. You can still view your workspace and existing data.',
+        'Your Professional Trial has ended. You can still view your workspace and existing data. Professional integrations are not available to connect right now.',
+      trialNote: null,
+      showReadinessBanner: false,
       xeroOffer: {
         kind: 'unavailable',
         title: 'Xero',
@@ -284,66 +170,52 @@ export function buildConnectedSystemsPresentation(
         showConnect: false,
         recommended: false,
       },
-      next: {
-        message: 'You can still open your workspace, review existing data, and visit billing settings when you are ready.',
-        primary: {
-          kind: 'enter_workspace',
-          href: COMMERCIAL_OS_ROUTES.workspace,
-          label: 'Enter workspace',
-        },
-      },
     };
   }
 
-  if (audience === 'entitled_paid') {
+  if (audience === 'legacy_starter') {
     return {
-      ...base,
-      title: 'Your operating infrastructure.',
+      audience,
+      mode: 'legacy_empty',
+      selectedXero,
+      xeroConnected: false,
+      xeroUsable: false,
+      title: 'Connected systems',
       description: selectedXero
-        ? 'Provvy knows you use Xero because you told us during setup. Xero is not connected yet.'
-        : 'Connect Xero to sync invoices and payments. This is a Professional capability on your plan.',
-      xeroOffer: {
-        kind: selectedXero ? 'recommended_connect' : 'available_connect',
-        title: 'Xero',
-        detail: 'Accounting · not connected',
-        explanation: selectedXero
-          ? 'Connecting Xero is the recommended next step.'
-          : 'Xero integration is included on your plan.',
-        showConnect: true,
-        recommended: selectedXero,
-      },
-      next: {
-        message: selectedXero
-          ? 'Connect Xero so invoices and payments can sync automatically.'
-          : 'Continue into your Commercial Operating System.',
-        primary: selectedXero
-          ? {
-              kind: 'connect_xero',
-              href: COMMERCIAL_OS_ROUTES.connected,
-              label: 'Connect Xero',
-            }
-          : {
-              kind: 'enter_workspace',
-              href: COMMERCIAL_OS_ROUTES.workspace,
-              label: 'Enter workspace',
-            },
-      },
+        ? 'No systems are connected to Provvy yet. Xero is not included on the Starter plan.'
+        : 'No systems are connected to Provvy yet.',
+      trialNote: null,
+      showReadinessBanner: false,
+      xeroOffer: null,
     };
   }
+
+  const showConnect = xeroUsable || Boolean(input.entitlementsLoading);
+  const paidSetup = audience === 'entitled_paid';
 
   return {
-    ...base,
-    title: 'Your operating infrastructure.',
-    description:
-      'Every system Provvy is connected to feeds directly into your Commercial Operating System.',
-    xeroOffer: null,
-    next: {
-      message: 'Continue into your Commercial Operating System.',
-      primary: {
-        kind: 'enter_workspace',
-        href: COMMERCIAL_OS_ROUTES.workspace,
-        label: 'Enter workspace',
-      },
-    },
+    audience: audience ?? 'active_first_party_trial',
+    mode: 'setup',
+    selectedXero,
+    xeroConnected: false,
+    xeroUsable,
+    title: 'Connect your systems',
+    description: selectedXero
+      ? 'Provvy knows you use Xero because you told us during setup. Connecting it lets Provvy coordinate invoices, payments and commercial activity.'
+      : 'Connecting the tools you already use lets Provvy coordinate commercial activity across invoices, payments and accounting.',
+    trialNote: paidSetup ? null : trialNote,
+    showReadinessBanner: false,
+    xeroOffer: paidSetup
+      ? {
+          kind: selectedXero ? 'recommended_connect' : 'available_connect',
+          title: 'Xero',
+          detail: 'Accounting · not connected',
+          explanation: selectedXero
+            ? 'Provvy knows you use Xero because you told us during setup. It is not connected yet. Connecting it is the recommended next step.'
+            : 'Xero integration is included on your plan. Connect it if you use Xero — Provvy has not assumed that you do.',
+          showConnect,
+          recommended: selectedXero,
+        }
+      : setupXeroOffer(selectedXero, showConnect),
   };
 }

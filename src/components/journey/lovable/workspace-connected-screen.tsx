@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Plug, Check, Plus, Settings, ArrowRight, Loader2, RefreshCw } from 'lucide-react';
+import { Plug, Check, Plus, Settings, Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useOrganization } from '@/hooks/use-organization';
 import { useEntitlements } from '@/hooks/use-entitlements';
@@ -61,7 +61,7 @@ function ConnectedSystemsSkeleton() {
 export function WorkspaceConnectedScreen() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { organizationId } = useOrganization();
+  const { organizationId, isLoading: orgLoading } = useOrganization();
   const readiness = useCommercialReadinessOptional();
   const entitlements = useEntitlements();
   const [connecting, setConnecting] = useState(false);
@@ -89,11 +89,15 @@ export function WorkspaceConnectedScreen() {
     let cancelled = false;
     void fetch('/api/onboarding', { credentials: 'include', cache: 'no-store' })
       .then((response) => (response.ok ? response.json() : null))
-      .then((payload: { state?: { onboarding_context?: string; workspace_industry?: string } } | null) => {
+      .then((payload: {
+        data?: { state?: { onboarding_context?: string; workspace_industry?: string } };
+        state?: { onboarding_context?: string; workspace_industry?: string };
+      } | null) => {
         if (cancelled || !payload) return;
-        const fromServer = snapshotFromOnboardingPayload(payload);
+        const state = payload.state ?? payload.data?.state;
+        const fromServer = snapshotFromOnboardingPayload({ state });
         if (!fromServer) return;
-        const parsed = parseJourneyAssessmentContext(payload.state?.onboarding_context);
+        const parsed = parseJourneyAssessmentContext(state?.onboarding_context);
         if (parsed?.objective) persistJourneyObjective(parsed.objective);
         if (parsed?.business) persistJourneyBusiness(parsed.business);
         setAccounting(fromServer.business?.accounting?.trim() || null);
@@ -139,9 +143,13 @@ export function WorkspaceConnectedScreen() {
 
   useEffect(() => {
     if (!organizationId) {
-      setConnectedSystems(null);
-      setXeroConnected(null);
-      setXeroConnectionState(null);
+      if (orgLoading) {
+        setSystemsLoading(true);
+        return;
+      }
+      setConnectedSystems([]);
+      setXeroConnected(false);
+      setXeroConnectionState('DISCONNECTED');
       setSystemsLoading(false);
       return;
     }
@@ -268,7 +276,7 @@ export function WorkspaceConnectedScreen() {
     return () => {
       cancelled = true;
     };
-  }, [organizationId, refreshKey]);
+  }, [organizationId, orgLoading, refreshKey]);
 
   const displayedSystems = useMemo(() => {
     if (!connectedSystems) return connectedSystems;
@@ -313,7 +321,7 @@ export function WorkspaceConnectedScreen() {
   });
 
   const beginXeroConnect = () => {
-    if (!view.xeroUsable || !view.xeroOffer?.showConnect) {
+    if (!view.xeroOffer?.showConnect) {
       return;
     }
     if (!organizationId) {
@@ -324,7 +332,7 @@ export function WorkspaceConnectedScreen() {
   };
 
   const confirmXeroConnect = () => {
-    if (!organizationId || !view.xeroUsable) return;
+    if (!organizationId || !view.xeroOffer?.showConnect) return;
     setConnecting(true);
     window.location.href = xeroConnectUrl(organizationId, COMMERCIAL_OS_ROUTES.connected);
   };
@@ -368,7 +376,7 @@ export function WorkspaceConnectedScreen() {
         <section>
           <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-ink-soft">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Loading connected systems…
+            Checking connected systems…
           </div>
           <div className="mt-3">
             <ConnectedSystemsSkeleton />
@@ -389,132 +397,106 @@ export function WorkspaceConnectedScreen() {
             Try again
           </button>
         </section>
-      ) : (
-        <>
-          {displayedSystems && displayedSystems.length > 0 ? (
-            <section>
-              <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">Connected</div>
-              <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {displayedSystems.map((system) => {
-                  const actionRequired = system.badge === 'action_required';
-                  return (
-                  <div key={system.name} className="rounded-2xl border border-border bg-card p-5 shadow-card">
-                    <div className="flex items-center justify-between">
-                      <div className="grid h-10 w-10 place-items-center rounded-xl bg-secondary text-[13px] font-semibold">
-                        {system.name.slice(0, 2)}
-                      </div>
-                      {actionRequired ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-300">
-                          {system.badgeLabel ?? 'Action required'}
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
-                          <Check className="h-3 w-3" />
-                          {system.badgeLabel ?? 'Connected'}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-4 text-[14.5px] font-semibold">{system.name}</div>
-                    <div className="text-[12px] text-ink-soft">{system.detail}</div>
-                    <div className="mt-4 flex items-center justify-between gap-2">
-                      <div className="inline-flex rounded-full border border-border bg-secondary/60 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
-                        {system.tag}
-                      </div>
-                      {system.manageHref ? (
-                        <Link
-                          href={system.manageHref}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-accent"
-                        >
-                          <Settings className="h-3.5 w-3.5" />
-                          {system.ctaLabel ?? 'Manage'}
-                        </Link>
-                      ) : null}
-                    </div>
+      ) : displayedSystems && displayedSystems.length > 0 ? (
+        <section>
+          <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">Connected</div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {displayedSystems.map((system) => {
+              const actionRequired = system.badge === 'action_required';
+              return (
+              <div key={system.name} className="rounded-2xl border border-border bg-card p-5 shadow-card">
+                <div className="flex items-center justify-between">
+                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-secondary text-[13px] font-semibold">
+                    {system.name.slice(0, 2)}
                   </div>
-                  );
-                })}
-              </div>
-            </section>
-          ) : null}
-
-          {view.xeroOffer ? (
-            <section>
-              <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-                {view.xeroOffer.kind === 'unavailable'
-                  ? 'Professional integrations'
-                  : view.xeroOffer.recommended
-                    ? 'Recommended next step'
-                    : 'Available on your plan'}
-              </div>
-              <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                <div
-                  className={`rounded-2xl border bg-card p-4 shadow-card ${
-                    view.xeroOffer.recommended
-                      ? 'border-primary/30'
-                      : 'border-border'
-                  } ${view.xeroOffer.kind === 'unavailable' ? 'opacity-90' : ''}`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <div className="grid h-10 w-10 place-items-center rounded-xl bg-[oklch(0.55_0.15_220)] text-[13px] font-bold text-white">
-                        X
-                      </div>
-                      <div>
-                        <div className="text-[13.5px] font-semibold">{view.xeroOffer.title}</div>
-                        <div className="text-[11.5px] text-ink-soft">{view.xeroOffer.detail}</div>
-                      </div>
-                    </div>
-                    {view.xeroOffer.showConnect ? (
-                      <button
-                        type="button"
-                        disabled={connecting}
-                        onClick={beginXeroConnect}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        {connecting ? 'Connecting…' : 'Connect'}
-                      </button>
-                    ) : (
-                      <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-ink-soft">
-                        Not available
-                      </span>
-                    )}
+                  {actionRequired ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-300">
+                      {system.badgeLabel ?? 'Action required'}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+                      <Check className="h-3 w-3" />
+                      {system.badgeLabel ?? 'Connected'}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-4 text-[14.5px] font-semibold">{system.name}</div>
+                <div className="text-[12px] text-ink-soft">{system.detail}</div>
+                <div className="mt-4 flex items-center justify-between gap-2">
+                  <div className="inline-flex rounded-full border border-border bg-secondary/60 px-2 py-0.5 text-[11px] font-medium text-ink-soft">
+                    {system.tag}
                   </div>
-                  <p className="mt-3 text-[12px] leading-relaxed text-ink-soft">
-                    {view.xeroOffer.explanation}
-                  </p>
+                  {system.manageHref ? (
+                    <Link
+                      href={system.manageHref}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-accent"
+                    >
+                      <Settings className="h-3.5 w-3.5" />
+                      {system.ctaLabel ?? 'Manage'}
+                    </Link>
+                  ) : null}
                 </div>
               </div>
-            </section>
-          ) : null}
-        </>
-      )}
+              );
+            })}
+          </div>
+        </section>
+      ) : view.mode === 'legacy_empty' ? (
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-card">
+          <p className="text-[14px] font-medium text-foreground">No systems connected</p>
+          <p className="mt-1 text-[13px] text-ink-soft">{view.description}</p>
+        </section>
+      ) : null}
 
-      <section className="rounded-2xl border border-primary/20 bg-accent p-5 shadow-card">
-        <div className="text-[11px] font-medium uppercase tracking-wider text-accent-foreground">
-          Next
-        </div>
-        <div className="mt-2 text-[14px] text-foreground">{view.next.message}</div>
-        {view.next.primary.kind === 'connect_xero' ? (
-          <button
-            type="button"
-            disabled={connecting || !view.xeroUsable}
-            onClick={beginXeroConnect}
-            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow disabled:opacity-60"
-          >
-            {view.next.primary.label}
-            <ArrowRight className="h-4 w-4" />
-          </button>
-        ) : (
-          <Link
-            href={view.next.primary.href}
-            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
-          >
-            {view.next.primary.label}
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        )}
-      </section>
+      {view.xeroOffer ? (
+        <section>
+          <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+            {view.xeroOffer.kind === 'unavailable'
+              ? 'Professional integrations'
+              : view.xeroOffer.recommended
+                ? 'Recommended next step'
+                : 'Available on your trial'}
+          </div>
+          <div className="mt-3 max-w-xl">
+            <div
+              className={`rounded-2xl border bg-card p-5 shadow-card ${
+                view.xeroOffer.recommended ? 'border-primary/30' : 'border-border'
+              } ${view.xeroOffer.kind === 'unavailable' ? 'opacity-90' : ''}`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-[oklch(0.55_0.15_220)] text-[13px] font-bold text-white">
+                    X
+                  </div>
+                  <div>
+                    <div className="text-[14.5px] font-semibold">{view.xeroOffer.title}</div>
+                    <div className="text-[12px] text-ink-soft">{view.xeroOffer.detail}</div>
+                  </div>
+                </div>
+                {view.xeroOffer.showConnect ? null : (
+                  <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-ink-soft">
+                    Not available
+                  </span>
+                )}
+              </div>
+              <p className="mt-3 text-[13px] leading-relaxed text-ink-soft">
+                {view.xeroOffer.explanation}
+              </p>
+              {view.xeroOffer.showConnect ? (
+                <button
+                  type="button"
+                  disabled={connecting}
+                  onClick={beginXeroConnect}
+                  className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow disabled:opacity-60"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {connecting ? 'Connecting…' : 'Connect Xero'}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ) : null}
     </div>
   );
 }
