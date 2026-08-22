@@ -12,7 +12,10 @@ import {
 } from '@/lib/entitlements/plans';
 import {
   getEffectivePlan,
+  hasActiveFirstPartyTrial,
   hasActivePaidSubscription,
+  hasEntitledPlanAccess,
+  isExpiredFirstPartyTrial,
   requiresPaidSubscription,
 } from '@/lib/entitlements/subscription-state';
 
@@ -34,10 +37,13 @@ function checkPlan(
   reason: string
 ): EntitlementDecision {
   if (ctx.pilotBypass) return allowed();
+  if (isExpiredFirstPartyTrial(ctx)) {
+    return denied(requiredPlan, 'trial_expired');
+  }
 
   const effectivePlan = getEffectivePlan(ctx);
   if (hasMinimumPlan(effectivePlan, requiredPlan)) {
-    if (requiresPaidSubscription(requiredPlan) && !hasActivePaidSubscription(ctx)) {
+    if (requiresPaidSubscription(requiredPlan) && !hasEntitledPlanAccess(ctx)) {
       return denied(requiredPlan, 'subscription_inactive');
     }
     return allowed();
@@ -46,9 +52,9 @@ function checkPlan(
   if (
     hasMinimumPlan(ctx.plan, requiredPlan) &&
     requiresPaidSubscription(requiredPlan) &&
-    !hasActivePaidSubscription(ctx)
+    !hasEntitledPlanAccess(ctx)
   ) {
-    return denied(requiredPlan, 'subscription_inactive');
+    return denied(requiredPlan, isExpiredFirstPartyTrial(ctx) ? 'trial_expired' : 'subscription_inactive');
   }
 
   return denied(requiredPlan, reason);
@@ -60,22 +66,42 @@ export function isEntitlementGatingActive(ctx: EntitlementContext): boolean {
 
 export function canCreateAgreement(ctx: EntitlementContext): EntitlementDecision {
   if (ctx.pilotBypass) return allowed();
-  if (hasMinimumPlan(getEffectivePlan(ctx), 'professional')) return allowed();
-  if (ctx.usage.agreementCount < STARTER_MAX_AGREEMENTS) return allowed();
-  return denied('professional', 'active_agreement_limit', {
-    limit: STARTER_MAX_AGREEMENTS,
-    current: ctx.usage.agreementCount,
-  });
+  if (isExpiredFirstPartyTrial(ctx)) {
+    return denied('professional', 'trial_expired');
+  }
+  if (hasMinimumPlan(getEffectivePlan(ctx), 'professional') && hasEntitledPlanAccess(ctx)) {
+    return allowed();
+  }
+  if (ctx.plan === 'starter' && ctx.usage.agreementCount < STARTER_MAX_AGREEMENTS) {
+    return allowed();
+  }
+  if (ctx.plan === 'starter') {
+    return denied('professional', 'active_agreement_limit', {
+      limit: STARTER_MAX_AGREEMENTS,
+      current: ctx.usage.agreementCount,
+    });
+  }
+  return denied('professional', 'subscription_inactive');
 }
 
 export function canUseAiImport(ctx: EntitlementContext): EntitlementDecision {
   if (ctx.pilotBypass) return allowed();
-  if (hasMinimumPlan(getEffectivePlan(ctx), 'professional')) return allowed();
-  if (ctx.usage.aiImportCount < STARTER_MAX_AI_IMPORTS) return allowed();
-  return denied('professional', 'ai_import_limit', {
-    limit: STARTER_MAX_AI_IMPORTS,
-    current: ctx.usage.aiImportCount,
-  });
+  if (isExpiredFirstPartyTrial(ctx)) {
+    return denied('professional', 'trial_expired');
+  }
+  if (hasMinimumPlan(getEffectivePlan(ctx), 'professional') && hasEntitledPlanAccess(ctx)) {
+    return allowed();
+  }
+  if (ctx.plan === 'starter' && ctx.usage.aiImportCount < STARTER_MAX_AI_IMPORTS) {
+    return allowed();
+  }
+  if (ctx.plan === 'starter') {
+    return denied('professional', 'ai_import_limit', {
+      limit: STARTER_MAX_AI_IMPORTS,
+      current: ctx.usage.aiImportCount,
+    });
+  }
+  return denied('professional', 'subscription_inactive');
 }
 
 export function canCreatePaymentLinks(ctx: EntitlementContext): EntitlementDecision {
@@ -166,9 +192,12 @@ export function buildWorkspaceEntitlements(ctx: EntitlementContext): WorkspaceEn
     effectivePlan: getEffectivePlan(ctx),
     status: ctx.status,
     hasActivePaidSubscription: hasActivePaidSubscription(ctx),
+    hasActiveFirstPartyTrial: hasActiveFirstPartyTrial(ctx),
+    trialExpired: isExpiredFirstPartyTrial(ctx),
     stripeCustomerId: ctx.stripeCustomerId,
     stripeSubscriptionId: ctx.stripeSubscriptionId,
     currentPeriodEnd: ctx.currentPeriodEnd?.toISOString() ?? null,
+    trialEndsAt: ctx.trialEndsAt?.toISOString() ?? null,
     usage: ctx.usage,
     pilotBypass: ctx.pilotBypass,
     features,

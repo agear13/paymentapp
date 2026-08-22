@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plug, Check, Plus, Settings, ArrowRight, Loader2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useOrganization } from '@/hooks/use-organization';
+import { useEntitlements } from '@/hooks/use-entitlements';
 import {
   COMMERCIAL_OS_ROUTES,
   xeroConnectUrl,
@@ -20,6 +21,15 @@ import {
   presentXeroConnectionState,
   type XeroConnectionState,
 } from '@/lib/xero/xero-connection-state';
+import {
+  hasJourneyAssessmentData,
+  parseJourneyAssessmentContext,
+  persistJourneyBusiness,
+  persistJourneyObjective,
+  restoreJourneyAssessment,
+} from '@/lib/journey/journey-assessment-storage.client';
+import { snapshotFromOnboardingPayload } from '@/lib/journey/workspace-advisor-intro';
+import { buildConnectedSystemsPresentation } from '@/lib/journey/workspace-connected-presentation';
 
 type ConnectedSystem = {
   name: string;
@@ -30,32 +40,6 @@ type ConnectedSystem = {
   badgeLabel?: string;
   ctaLabel?: string;
 };
-
-type ComingSoonSystem = {
-  name: string;
-  detail: string;
-  explanation: string;
-};
-
-const COMING_SOON: ComingSoonSystem[] = [
-  { name: 'Stripe', detail: 'Payments', explanation: 'Accept card payments directly on your invoices.' },
-  { name: 'Wise', detail: 'Payments', explanation: 'Save your Wise profile for future automated checkout. Bank transfers today use manual verification.' },
-  { name: 'Outlook', detail: 'Email', explanation: 'Send invoices from your work inbox.' },
-  { name: 'Slack', detail: 'Communications', explanation: 'Get payment notifications in Slack.' },
-  { name: 'WhatsApp', detail: 'Communications', explanation: 'Share payment links via WhatsApp.' },
-];
-
-function readAssessmentWantsXero(): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    const raw = sessionStorage.getItem('provvy.business');
-    if (!raw) return true;
-    const parsed = JSON.parse(raw) as { accounting?: string };
-    return parsed.accounting === 'Xero';
-  } catch {
-    return true;
-  }
-}
 
 function ConnectedSystemsSkeleton() {
   return (
@@ -79,10 +63,12 @@ export function WorkspaceConnectedScreen() {
   const searchParams = useSearchParams();
   const { organizationId } = useOrganization();
   const readiness = useCommercialReadinessOptional();
+  const entitlements = useEntitlements();
   const [connecting, setConnecting] = useState(false);
   const [connectedSystems, setConnectedSystems] = useState<ConnectedSystem[] | null>(null);
   const [xeroConnected, setXeroConnected] = useState<boolean | null>(null);
-  const [wantsXero, setWantsXero] = useState(true);
+  const [xeroConnectionState, setXeroConnectionState] = useState<XeroConnectionState | null>(null);
+  const [accounting, setAccounting] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [systemsLoading, setSystemsLoading] = useState(true);
   const [systemsError, setSystemsError] = useState<string | null>(null);
@@ -94,7 +80,31 @@ export function WorkspaceConnectedScreen() {
   }, []);
 
   useEffect(() => {
-    setWantsXero(readAssessmentWantsXero());
+    const local = restoreJourneyAssessment();
+    if (hasJourneyAssessmentData(local)) {
+      setAccounting(local.business?.accounting?.trim() || null);
+      return;
+    }
+
+    let cancelled = false;
+    void fetch('/api/onboarding', { credentials: 'include', cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { state?: { onboarding_context?: string; workspace_industry?: string } } | null) => {
+        if (cancelled || !payload) return;
+        const fromServer = snapshotFromOnboardingPayload(payload);
+        if (!fromServer) return;
+        const parsed = parseJourneyAssessmentContext(payload.state?.onboarding_context);
+        if (parsed?.objective) persistJourneyObjective(parsed.objective);
+        if (parsed?.business) persistJourneyBusiness(parsed.business);
+        setAccounting(fromServer.business?.accounting?.trim() || null);
+      })
+      .catch(() => {
+        /* do not invent an assessment selection */
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -131,6 +141,7 @@ export function WorkspaceConnectedScreen() {
     if (!organizationId) {
       setConnectedSystems(null);
       setXeroConnected(null);
+      setXeroConnectionState(null);
       setSystemsLoading(false);
       return;
     }
@@ -143,6 +154,7 @@ export function WorkspaceConnectedScreen() {
       try {
         const cards: ConnectedSystem[] = [];
         let xeroIsConnected = false;
+        let connectionState: XeroConnectionState = 'DISCONNECTED';
 
         const [xeroRes, merchantRes] = await Promise.all([
           fetch(`/api/xero/status?organization_id=${encodeURIComponent(organizationId)}`, {
@@ -166,7 +178,7 @@ export function WorkspaceConnectedScreen() {
             tenantId?: string | null;
             connectionState?: XeroConnectionState;
           };
-          const connectionState =
+          connectionState =
             readiness && !readiness.loading
               ? readiness.connection.connectionState
               : computeXeroConnectionState({
@@ -236,6 +248,7 @@ export function WorkspaceConnectedScreen() {
 
         if (!cancelled) {
           setXeroConnected(xeroIsConnected);
+          setXeroConnectionState(connectionState);
           setConnectedSystems(cards);
         }
       } catch (error: unknown) {
@@ -245,6 +258,7 @@ export function WorkspaceConnectedScreen() {
           );
           setConnectedSystems([]);
           setXeroConnected(false);
+          setXeroConnectionState('DISCONNECTED');
         }
       } finally {
         if (!cancelled) setSystemsLoading(false);
@@ -276,15 +290,32 @@ export function WorkspaceConnectedScreen() {
     return [xeroCard, ...withoutXero];
   }, [connectedSystems, readiness]);
 
-  const xeroListed = Boolean(displayedSystems?.some((system) => system.name === 'Xero'));
-  const showXeroAvailable = wantsXero && !xeroListed && xeroConnected !== null && !systemsLoading;
+  const xeroStatusKnown = !systemsLoading && xeroConnected !== null;
+  const liveXeroConnected = Boolean(
+    displayedSystems?.some((system) => system.name === 'Xero') || xeroConnected
+  );
+  const liveXeroState =
+    readiness && !readiness.loading
+      ? readiness.connection.connectionState
+      : xeroConnectionState;
 
-  const comingSoonSystems = useMemo(() => {
-    const connectedNames = new Set((displayedSystems ?? []).map((system) => system.name));
-    return COMING_SOON.filter((system) => !connectedNames.has(system.name));
-  }, [displayedSystems]);
+  const view = buildConnectedSystemsPresentation({
+    accounting,
+    xeroConnected: liveXeroConnected,
+    xeroConnectionState: liveXeroState,
+    connectionKnown: xeroStatusKnown,
+    entitlementsLoading: entitlements.loading,
+    hasActiveFirstPartyTrial: entitlements.entitlements?.hasActiveFirstPartyTrial ?? false,
+    trialExpired: entitlements.entitlements?.trialExpired ?? false,
+    trialEndsAt: entitlements.entitlements?.trialEndsAt ?? null,
+    xeroAllowed: entitlements.isAllowed('xero_integration'),
+    plan: entitlements.plan,
+  });
 
   const beginXeroConnect = () => {
+    if (!view.xeroUsable || !view.xeroOffer?.showConnect) {
+      return;
+    }
     if (!organizationId) {
       toast.error('Workspace not ready yet. Complete workspace setup first.');
       return;
@@ -293,7 +324,7 @@ export function WorkspaceConnectedScreen() {
   };
 
   const confirmXeroConnect = () => {
-    if (!organizationId) return;
+    if (!organizationId || !view.xeroUsable) return;
     setConnecting(true);
     window.location.href = xeroConnectUrl(organizationId, COMMERCIAL_OS_ROUTES.connected);
   };
@@ -306,11 +337,12 @@ export function WorkspaceConnectedScreen() {
           Connected Systems
         </div>
         <h1 className="mt-4 text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
-          Your operating infrastructure.
+          {view.title}
         </h1>
-        <p className="mt-2 max-w-2xl text-[15px] text-ink-soft">
-          Every system Provvy is connected to feeds directly into your Commercial Operating System.
-        </p>
+        <p className="mt-2 max-w-2xl text-[15px] text-ink-soft">{view.description}</p>
+        {view.trialNote ? (
+          <p className="mt-3 max-w-2xl text-[13px] text-ink-soft">{view.trialNote}</p>
+        ) : null}
       </header>
 
       {showXeroSuccess ? (
@@ -321,7 +353,9 @@ export function WorkspaceConnectedScreen() {
         />
       ) : null}
 
-      {organizationId ? <CommercialOsXeroReadinessBanner surface="connected-systems" /> : null}
+      {organizationId && view.showReadinessBanner ? (
+        <CommercialOsXeroReadinessBanner surface="connected-systems" />
+      ) : null}
 
       <XeroConnectConfirmDialog
         open={xeroConnectDialogOpen}
@@ -403,59 +437,56 @@ export function WorkspaceConnectedScreen() {
             </section>
           ) : null}
 
-          {(showXeroAvailable || comingSoonSystems.length > 0) && (
+          {view.xeroOffer ? (
             <section>
               <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-                {showXeroAvailable ? 'Available to connect' : 'More integrations'}
+                {view.xeroOffer.kind === 'unavailable'
+                  ? 'Professional integrations'
+                  : view.xeroOffer.recommended
+                    ? 'Recommended next step'
+                    : 'Available on your plan'}
               </div>
               <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {showXeroAvailable ? (
-                  <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4 shadow-card">
+                <div
+                  className={`rounded-2xl border bg-card p-4 shadow-card ${
+                    view.xeroOffer.recommended
+                      ? 'border-primary/30'
+                      : 'border-border'
+                  } ${view.xeroOffer.kind === 'unavailable' ? 'opacity-90' : ''}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-3">
                       <div className="grid h-10 w-10 place-items-center rounded-xl bg-[oklch(0.55_0.15_220)] text-[13px] font-bold text-white">
                         X
                       </div>
                       <div>
-                        <div className="text-[13.5px] font-semibold">Xero</div>
-                        <div className="text-[11.5px] text-ink-soft">Accounting · not connected</div>
+                        <div className="text-[13.5px] font-semibold">{view.xeroOffer.title}</div>
+                        <div className="text-[11.5px] text-ink-soft">{view.xeroOffer.detail}</div>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      disabled={connecting}
-                      onClick={beginXeroConnect}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      {connecting ? 'Connecting…' : 'Connect'}
-                    </button>
-                  </div>
-                ) : null}
-                {comingSoonSystems.map((system) => (
-                  <div
-                    key={system.name}
-                    className="rounded-2xl border border-border bg-card p-4 shadow-card opacity-90"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="grid h-10 w-10 place-items-center rounded-xl bg-secondary text-[13px] font-semibold">
-                          {system.name.slice(0, 2)}
-                        </div>
-                        <div>
-                          <div className="text-[13.5px] font-semibold">{system.name}</div>
-                          <div className="text-[11.5px] text-ink-soft">{system.detail}</div>
-                        </div>
-                      </div>
+                    {view.xeroOffer.showConnect ? (
+                      <button
+                        type="button"
+                        disabled={connecting}
+                        onClick={beginXeroConnect}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12.5px] font-medium text-foreground transition-colors hover:bg-accent disabled:opacity-60"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        {connecting ? 'Connecting…' : 'Connect'}
+                      </button>
+                    ) : (
                       <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-ink-soft">
-                        Coming soon
+                        Not available
                       </span>
-                    </div>
-                    <p className="mt-3 text-[12px] leading-relaxed text-ink-soft">{system.explanation}</p>
+                    )}
                   </div>
-                ))}
+                  <p className="mt-3 text-[12px] leading-relaxed text-ink-soft">
+                    {view.xeroOffer.explanation}
+                  </p>
+                </div>
               </div>
             </section>
-          )}
+          ) : null}
         </>
       )}
 
@@ -463,24 +494,26 @@ export function WorkspaceConnectedScreen() {
         <div className="text-[11px] font-medium uppercase tracking-wider text-accent-foreground">
           Next
         </div>
-        <div className="mt-2 text-[14px] text-foreground">
-          {readiness && !readiness.loading && readiness.connection.connectionState === 'AUTH_REAUTH_REQUIRED'
-            ? 'Reconnect Xero to restore accounting sync. Existing account mappings are kept.'
-            : readiness && !readiness.loading && readiness.connection.connectionState === 'READY'
-            ? 'Xero is ready to sync. Open Manage to review accounts or historical payments.'
-            : xeroListed
-            ? 'Open accounting setup to choose accounts and check sync status.'
-            : wantsXero
-            ? 'Connect accounting to sync invoices and payments automatically.'
-            : 'Continue into your Commercial Operating System.'}
-        </div>
-        <Link
-          href={COMMERCIAL_OS_ROUTES.workspace}
-          className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
-        >
-          Enter workspace
-          <ArrowRight className="h-4 w-4" />
-        </Link>
+        <div className="mt-2 text-[14px] text-foreground">{view.next.message}</div>
+        {view.next.primary.kind === 'connect_xero' ? (
+          <button
+            type="button"
+            disabled={connecting || !view.xeroUsable}
+            onClick={beginXeroConnect}
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow disabled:opacity-60"
+          >
+            {view.next.primary.label}
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        ) : (
+          <Link
+            href={view.next.primary.href}
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-purple px-4 py-2.5 text-[13px] font-semibold text-primary-foreground shadow-glow"
+          >
+            {view.next.primary.label}
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        )}
       </section>
     </div>
   );

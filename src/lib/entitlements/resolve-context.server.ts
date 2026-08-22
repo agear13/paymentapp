@@ -51,6 +51,7 @@ export async function resolveEntitlementContext(input: {
       stripe_customer_id: true,
       stripe_subscription_id: true,
       current_period_end: true,
+      trial_ends_at: true,
     },
   });
 
@@ -69,6 +70,7 @@ export async function resolveEntitlementContext(input: {
     stripeCustomerId: org?.stripe_customer_id ?? null,
     stripeSubscriptionId: org?.stripe_subscription_id ?? null,
     currentPeriodEnd: org?.current_period_end ?? null,
+    trialEndsAt: org?.trial_ends_at ?? null,
     usage,
     pilotBypass: isPilotProfile(productProfile),
   };
@@ -109,5 +111,6 @@ export function serializeEntitlementsSnapshot(ctx: EntitlementContext) {
     effectivePlan: getEffectivePlan(ctx),
     hasActivePaidSubscription: hasActivePaidSubscription(ctx),
     currentPeriodEnd: ctx.currentPeriodEnd?.toISOString() ?? null,
+    trialEndsAt: ctx.trialEndsAt?.toISOString() ?? null,
   };
 }

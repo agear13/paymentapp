@@ -32,7 +32,8 @@ export async function requireEntitlement(input: {
       : input.feature === 'ai_import'
         ? decision.reason === 'ai_import_limit'
         : false;
-  const subscriptionInactive = decision.reason === 'subscription_inactive';
+  const subscriptionInactive =
+    decision.reason === 'subscription_inactive' || decision.reason === 'trial_expired';
 
   const requiredPlan = decision.requiredPlan ?? 'professional';
 

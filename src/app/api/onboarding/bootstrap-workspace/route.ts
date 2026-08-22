@@ -7,6 +7,7 @@ import { prisma } from '@/lib/server/prisma';
 import { saveOperatorOnboardingState } from '@/lib/onboarding/operator-onboarding.server';
 import { DEFAULT_WORKSPACE_CURRENCY, isWorkspaceCurrencyCode } from '@/lib/currency/workspace-currencies';
 import { runOperationalInitializationConvergence } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
+import { journeyWorkspaceSubscriptionCreate } from '@/lib/entitlements/professional-trial';
 
 const schema = z.object({
   workspaceName: z.string().min(2).max(255),
@@ -72,12 +73,13 @@ export async function POST(request: NextRequest) {
   }
 
   const result = await prisma.$transaction(async (tx) => {
-    const organization = await tx.organizations.create({
-      data: {
-        name: body.workspaceName.trim(),
-        clerk_org_id: `onb_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
-      },
-    });
+      const organization = await tx.organizations.create({
+        data: {
+          name: body.workspaceName.trim(),
+          clerk_org_id: `onb_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+          ...journeyWorkspaceSubscriptionCreate(),
+        },
+      });
 
     await tx.user_organizations.create({
       data: {

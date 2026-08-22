@@ -210,6 +210,8 @@ model organizations {
   /// Active Stripe subscription id (source of truth for paid entitlements).
   stripe_subscription_id         String?                        @unique @db.VarChar(255)
   current_period_end             DateTime?                      @db.Timestamptz(6)
+  /// First-party Professional Trial end. Null for legacy Starter and Stripe-only orgs.
+  trial_ends_at                  DateTime?                      @db.Timestamptz(6)
   created_at                   DateTime                       @default(now()) @db.Timestamptz(6)
   audit_logs                   audit_logs[]
   ledger_accounts              ledger_accounts[]

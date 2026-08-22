@@ -22,10 +22,19 @@ export { requireReferralManagementEntitlement } from '@/lib/entitlements/gate-re
 
 export {
   getEffectivePlan,
+  hasActiveFirstPartyTrial,
   hasActivePaidSubscription,
+  hasEntitledPlanAccess,
+  isExpiredFirstPartyTrial,
   isPaidFeatureAllowed,
   requiresPaidSubscription,
 } from '@/lib/entitlements/subscription-state';
+
+export {
+  PROFESSIONAL_TRIAL_DAYS,
+  computeProfessionalTrialEndsAt,
+  journeyWorkspaceSubscriptionCreate,
+} from '@/lib/entitlements/professional-trial';
 
 export {
   canCreateAgreement,

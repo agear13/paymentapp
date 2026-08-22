@@ -35,6 +35,8 @@ export type EntitlementContext = {
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   currentPeriodEnd: Date | null;
+  /** First-party Professional Trial end. Absent/null on legacy Starter orgs. */
+  trialEndsAt?: Date | null;
   usage: WorkspaceUsage;
   /** When true, all entitlement checks pass (Rabbit Hole / Strait pilots). */
   pilotBypass: boolean;
@@ -53,9 +55,12 @@ export type WorkspaceEntitlements = {
   effectivePlan: SubscriptionPlan;
   status: SubscriptionStatus;
   hasActivePaidSubscription: boolean;
+  hasActiveFirstPartyTrial: boolean;
+  trialExpired: boolean;
   stripeCustomerId: string | null;
   stripeSubscriptionId: string | null;
   currentPeriodEnd: string | null;
+  trialEndsAt: string | null;
   usage: WorkspaceUsage;
   pilotBypass: boolean;
   features: Record<EntitlementFeature, EntitlementDecision>;
