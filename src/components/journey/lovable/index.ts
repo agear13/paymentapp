@@ -11,6 +11,7 @@ export { ProvisioningPageClient } from '@/components/journey/lovable/provisionin
 export { WorkspaceLayout } from '@/components/journey/lovable/workspace-layout';
 export { WorkspaceHomeScreen } from '@/components/journey/lovable/workspace-home-screen';
 export { WorkspaceStartScreen } from '@/components/journey/lovable/workspace-start-screen';
+export { WorkspaceAdvisorPanel } from '@/components/journey/lovable/workspace-advisor-panel';
 export { WorkspaceReceivablesScreen } from '@/components/journey/lovable/workspace-receivables-screen';
 export { WorkspaceCreateInvoiceScreen } from '@/components/journey/lovable/workspace-create-invoice-screen';
 export { WorkspaceInvoiceListScreen } from '@/components/journey/lovable/workspace-invoice-list-screen';

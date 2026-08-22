@@ -12,13 +12,22 @@ import {
   LayoutGrid,
   ReceiptText,
   RefreshCw,
-  Sparkles,
   Star,
 } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { buildInstalledWorkspaceActions } from '@/lib/journey/installed-workflow-workspace-actions';
 import { getWorkflowBySlug } from '@/lib/journey/workflow-library-catalog';
 import { useDeployedWorkflows } from '@/hooks/use-deployed-workflows';
+import { WorkspaceAdvisorPanel } from '@/components/journey/lovable/workspace-advisor-panel';
+import {
+  hasJourneyAssessmentData,
+  parseJourneyAssessmentContext,
+  persistJourneyBusiness,
+  persistJourneyObjective,
+  restoreJourneyAssessment,
+  type JourneyAssessmentSnapshot,
+} from '@/lib/journey/journey-assessment-storage.client';
+import { snapshotFromOnboardingPayload, workspaceStartCardIdForObjective } from '@/lib/journey/workspace-advisor-intro';
 
 type CardId = 'create-invoice' | 'manage-invoices' | 'sync-xero' | 'collections' | 'workspace';
 
@@ -66,107 +75,44 @@ const CARDS: {
   },
 ];
 
-const RECOMMENDATION: Record<string, { card: CardId; label: string; rationale: string }> = {
-  reconcile: {
-    card: 'create-invoice',
-    label: 'Create Invoice',
-    rationale:
-      'allowing Provvy to automatically reconcile incoming payments and sync them with your ledger',
-  },
-  'revenue-share': {
-    card: 'create-invoice',
-    label: 'Create Agreement',
-    rationale: 'so revenue splits are calculated, settled and distributed without manual work',
-  },
-  forecast: {
-    card: 'collections',
-    label: 'Cashflow Dashboard',
-    rationale: 'so you can see committed inflows and outflows before they land',
-  },
-  'reduce-admin': {
-    card: 'manage-invoices',
-    label: 'AI Automations',
-    rationale: 'so follow-ups, chasing and bookkeeping run themselves',
-  },
-  'paid-faster': {
-    card: 'create-invoice',
-    label: 'Payment Links',
-    rationale: 'so customers can pay the moment they receive the invoice',
-  },
-  reporting: {
-    card: 'collections',
-    label: 'Collections & Revenue',
-    rationale: 'so commercial performance is visible without building reports',
-  },
-  other: {
-    card: 'create-invoice',
-    label: 'Create Invoice',
-    rationale: 'the fastest way to see Provvy execute an end-to-end commercial loop',
-  },
-};
-
-type Business = {
-  industry?: string;
-  accounting?: string;
-  challenge?: string;
-  systems?: string[];
-};
-
 export function WorkspaceStartScreen() {
   const router = useRouter();
   const { workflows, loading: workflowsLoading } = useDeployedWorkflows();
   const [selected, setSelected] = useState<CardId | null>(null);
-  const [objective, setObjective] = useState('reconcile');
-  const [business, setBusiness] = useState<Business>({});
-  const [revealed, setRevealed] = useState(0);
+  const [snapshot, setSnapshot] = useState<JourneyAssessmentSnapshot>({
+    objective: null,
+    business: null,
+  });
 
   useEffect(() => {
-    try {
-      const o = sessionStorage.getItem('provvy.objective');
-      if (o) setObjective(o);
-      const b = sessionStorage.getItem('provvy.business');
-      if (b) setBusiness(JSON.parse(b) as Business);
-    } catch {
-      /* ignore sessionStorage errors */
+    const local = restoreJourneyAssessment();
+    if (hasJourneyAssessmentData(local)) {
+      setSnapshot(local);
+      return;
     }
+
+    let cancelled = false;
+    void fetch('/api/onboarding', { credentials: 'include', cache: 'no-store' })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((payload: { state?: { onboarding_context?: string; workspace_industry?: string } } | null) => {
+        if (cancelled || !payload) return;
+        const fromServer = snapshotFromOnboardingPayload(payload);
+        if (!fromServer) return;
+        const parsed = parseJourneyAssessmentContext(payload.state?.onboarding_context);
+        if (parsed?.objective) persistJourneyObjective(parsed.objective);
+        if (parsed?.business) persistJourneyBusiness(parsed.business);
+        setSnapshot(fromServer);
+      })
+      .catch(() => {
+        /* keep empty snapshot — do not invent assessment data */
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const CHECKS = [
-    'Business profile created',
-    'Commercial workflows configured',
-    'Accounting software detected',
-    'Integrations mapped',
-    'Workspace ready',
-  ];
-
-  useEffect(() => {
-    if (revealed >= CHECKS.length) return;
-    const t = setTimeout(() => setRevealed((r) => r + 1), 320);
-    return () => clearTimeout(t);
-  }, [revealed, CHECKS.length]);
-
-  const rec = RECOMMENDATION[objective] ?? RECOMMENDATION.reconcile;
-
-  const detected = useMemo(() => {
-    const systems = business.systems?.length ? business.systems : ['Stripe'];
-    const accounting =
-      business.accounting && business.accounting !== 'None / Spreadsheets'
-        ? business.accounting
-        : 'Xero';
-    return {
-      industry: business.industry || 'Professional services',
-      accounting,
-      systems,
-      challenge: business.challenge || 'Manual reconciliation',
-    };
-  }, [business]);
-
-  const integrationLine = useMemo(() => {
-    const all = [...detected.systems, detected.accounting];
-    const list =
-      all.length > 1 ? `${all.slice(0, -1).join(', ')} and ${all[all.length - 1]}` : all[0];
-    return `We've detected ${list} in your workflow. Your first workspace will be preconfigured to accept and reconcile payments across these channels.`;
-  }, [detected]);
+  const recommendedCard = workspaceStartCardIdForObjective(snapshot.objective);
 
   const installedWorkflowCards = useMemo(
     () => buildInstalledWorkspaceActions(workflows),
@@ -202,7 +148,7 @@ export function WorkspaceStartScreen() {
           <div className="mt-10 grid gap-3 sm:grid-cols-2">
             {CARDS.map((c, i) => {
               const Icon = c.icon;
-              const isRec = c.id === rec.card;
+              const isRec = Boolean(recommendedCard && c.id === recommendedCard);
               const isSelected = selected === c.id;
               return (
                 <button
@@ -290,70 +236,10 @@ export function WorkspaceStartScreen() {
           </p>
         </div>
 
-        <aside className="lg:sticky lg:top-28 lg:self-start">
-          <div className="rounded-2xl border border-primary/20 bg-card p-5 shadow-card">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-purple text-primary-foreground shadow-glow">
-                  <Sparkles className="h-4 w-4" />
-                </div>
-                <div className="text-[14px] font-semibold tracking-tight">Provvy AI</div>
-              </div>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-foreground">
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
-                </span>
-                Live
-              </span>
-            </div>
-
-            <ul className="mt-5 space-y-2">
-              {CHECKS.map((label, i) => (
-                <li
-                  key={label}
-                  className={`flex items-center gap-2.5 text-[13px] transition-all duration-300 ${
-                    i < revealed ? 'opacity-100' : 'translate-y-1 opacity-0'
-                  }`}
-                >
-                  <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary/10 text-primary">
-                    <Check className="h-3 w-3" />
-                  </span>
-                  <span className="text-foreground">{label}</span>
-                </li>
-              ))}
-            </ul>
-
-            <div className="mt-6 rounded-2xl border border-primary/20 bg-accent p-4">
-              <div className="text-[11px] font-medium uppercase tracking-wider text-accent-foreground">
-                AI Recommendation
-              </div>
-              <div className="mt-2 text-[13px] text-ink-soft">Based on your assessment we detected:</div>
-              <ul className="mt-2 space-y-1 text-[13px] text-foreground">
-                <li>• {detected.industry} business</li>
-                <li>• {detected.accounting} accounting</li>
-                <li>• {detected.systems.join(', ')} connected</li>
-                <li>• {detected.challenge} as your biggest challenge</li>
-              </ul>
-              <div className="mt-3 text-[13px] leading-relaxed text-foreground">
-                We recommend starting with{' '}
-                <span className="font-semibold text-primary">{rec.label}</span>, {rec.rationale}.
-              </div>
-              <div className="mt-3 text-[12.5px] leading-relaxed text-ink-soft">{integrationLine}</div>
-
-              <div className="mt-4 rounded-xl border border-border bg-card p-3">
-                <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-                  Expected impact
-                </div>
-                <ul className="mt-2 space-y-1 text-[12.5px] text-foreground">
-                  <li>• Faster invoice-to-cash</li>
-                  <li>• Reduced reconciliation time</li>
-                  <li>• Automated bookkeeping</li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </aside>
+        <WorkspaceAdvisorPanel
+          snapshot={snapshot}
+          deployedWorkflowSlugs={workflows.map((workflow) => workflow.templateSlug)}
+        />
       </div>
     </section>
   );
