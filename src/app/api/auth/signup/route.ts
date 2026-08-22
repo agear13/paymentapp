@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { AuditEventType } from '@/lib/audit/audit-log';
 import { recordAuthAuditEvent } from '@/lib/audit/auth-audit.server';
-import { GENERIC_AUTH_FAILURE, GENERIC_RATE_LIMIT } from '@/lib/auth/auth-errors';
+import {
+  ACCOUNT_EXISTS_CODE,
+  ACCOUNT_EXISTS_MESSAGE,
+  GENERIC_RATE_LIMIT,
+  GENERIC_SIGNUP_FAILURE,
+  isExistingAccountSignupError,
+} from '@/lib/auth/auth-errors';
 import {
   checkRegistrationRateLimit,
   incrementAuthFailureCounter,
@@ -93,13 +99,25 @@ export async function POST(request: NextRequest) {
       request,
       success: false,
       reason: error.message,
-      metadata: { scope: 'signup' },
+      metadata: { scope: 'signup', supabaseCode: error.code ?? null },
     });
-    return authJsonError(GENERIC_AUTH_FAILURE, 400);
+    if (isExistingAccountSignupError(error)) {
+      return authJsonError(ACCOUNT_EXISTS_MESSAGE, 409, { code: ACCOUNT_EXISTS_CODE });
+    }
+    return authJsonError(GENERIC_SIGNUP_FAILURE, 400);
   }
 
   if (data.user && !data.user.identities?.length) {
-    return authJsonError(GENERIC_AUTH_FAILURE, 400);
+    await incrementAuthFailureCounter('signup', ip);
+    recordAuthAuditEvent({
+      eventType: AuditEventType.AUTH_LOGIN_FAILED,
+      email,
+      request,
+      success: false,
+      reason: 'existing_account_empty_identities',
+      metadata: { scope: 'signup' },
+    });
+    return authJsonError(ACCOUNT_EXISTS_MESSAGE, 409, { code: ACCOUNT_EXISTS_CODE });
   }
 
   recordAuthAuditEvent({

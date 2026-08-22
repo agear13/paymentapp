@@ -18,6 +18,7 @@ import {
   restoreJourneyAssessment,
 } from '@/lib/journey/journey-assessment-storage.client';
 import { emitAuthAuditEvent } from '@/lib/security/auth-audit.client';
+import { ACCOUNT_EXISTS_CODE, ACCOUNT_EXISTS_MESSAGE } from '@/lib/auth/auth-errors';
 
 type AuthMode = 'signup' | 'signin';
 
@@ -203,6 +204,13 @@ export function WorkspaceCreateScreen() {
 
       if (!response.ok) {
         if (data.turnstileRequired) setTurnstileRequired(true);
+        if (data.code === ACCOUNT_EXISTS_CODE) {
+          setAuthMode('signin');
+          setShowEmailAuth(true);
+          setNotice(typeof data.error === 'string' ? data.error : ACCOUNT_EXISTS_MESSAGE);
+          setError(null);
+          return;
+        }
         throw new Error(data.error || 'Failed to create account');
       }
 
