@@ -1,6 +1,10 @@
 /** @jest-environment jsdom */
 
-import { signOutParticipantSession } from '@/lib/participant-portal/participant-sign-out.client';
+import {
+  participantWorkspaceEntryPath,
+  reloadParticipantInvitation,
+  signOutParticipantSession,
+} from '@/lib/participant-portal/participant-sign-out.client';
 
 const mockSignOut = jest.fn();
 const mockGetSession = jest.fn();
@@ -45,5 +49,28 @@ describe('signOutParticipantSession', () => {
     mockGetSession.mockResolvedValueOnce({ data: { session: { user: { id: 'operator' } } } });
     await signOutParticipantSession();
     expect(mockSignOut).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('participant workspace re-entry after logout', () => {
+  it('returns to the same participant URL with a signed-out flag', () => {
+    expect(participantWorkspaceEntryPath('portal-1', { signedOut: true })).toBe(
+      '/participant/portal-1?signedOut=1'
+    );
+    expect(participantWorkspaceEntryPath('portal-1', { recover: true })).toBe(
+      '/participant/portal-1?recover=1'
+    );
+  });
+
+  it('reloads the invitation URL after logout instead of a generic homepage', () => {
+    const replace = jest.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { replace },
+    });
+    reloadParticipantInvitation('portal-1');
+    expect(replace).toHaveBeenCalledWith('/participant/portal-1?signedOut=1');
+    reloadParticipantInvitation('portal-1', true);
+    expect(replace).toHaveBeenCalledWith('/participant/portal-1?recover=1');
   });
 });

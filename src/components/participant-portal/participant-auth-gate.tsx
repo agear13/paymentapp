@@ -17,10 +17,12 @@ export function ParticipantAuthGate({
   token,
   invitation,
   recoveredFromWrongAccount = false,
+  signedOut = false,
 }: {
   token: string;
   invitation: ParticipantInvitationPreview;
   recoveredFromWrongAccount?: boolean;
+  signedOut?: boolean;
 }) {
   const [sending, setSending] = React.useState(false);
   const [sent, setSent] = React.useState(false);
@@ -46,69 +48,65 @@ export function ParticipantAuthGate({
     }
   };
 
+  const projectName = invitation.projectName.trim();
+  const invitedEmail = invitation.invitedEmail?.trim() || null;
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <CsrfBootstrap />
       <Card className="w-full max-w-lg">
         <CardHeader>
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Referral Management invitation
-          </p>
-          <CardTitle className="text-xl">
-            {invitation.hostLabel} has invited you to participate
-            {invitation.projectName ? ` in ${invitation.projectName}` : ''}.
-          </CardTitle>
-          <CardDescription>
-            Sign in with the invited email to continue to this agreement and workspace. Opening this
-            link does not grant access by itself.
-          </CardDescription>
+          <CardTitle className="text-xl">{sent ? 'Check your email' : 'Sign in to continue'}</CardTitle>
+          {sent ? (
+            <CardDescription>
+              We&apos;ve sent a secure sign-in link to {invitedEmail || 'the invited email'}.
+              Open the most recent email from Provvypay to continue.
+            </CardDescription>
+          ) : (
+            <CardDescription>
+              {projectName ? `Sign in to ${projectName}` : 'Sign in to your participant workspace'}.
+            </CardDescription>
+          )}
         </CardHeader>
         <div className="space-y-4 px-6 pb-6">
-          {invitation.invitedEmail ? (
+          {signedOut && !sent ? (
+            <p className="text-sm text-foreground" data-testid="participant-signed-out">
+              You&apos;ve been signed out.
+              {projectName ? ` Sign in again to continue to ${projectName}.` : ' Sign in again to continue.'}
+            </p>
+          ) : null}
+          {recoveredFromWrongAccount && !sent ? (
+            <p className="text-sm text-foreground">
+              You signed out of the previous account. We&apos;ll send a secure sign-in link to the
+              invited email below.
+            </p>
+          ) : null}
+          {!sent && invitedEmail ? (
             <div
               className="rounded-lg bg-muted px-3 py-3 space-y-1"
               data-invitation-gate="sign-in-to-continue"
             >
               <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Sign in to continue
+                We&apos;ll send a secure sign-in link to
               </p>
               <p className="text-sm font-medium" data-testid="invited-participant-email">
-                {invitation.invitedEmail}
+                {invitedEmail}
               </p>
             </div>
-          ) : (
+          ) : null}
+          {!sent && !invitedEmail ? (
             <p className="text-sm text-muted-foreground">
               This invitation does not have an email address. Contact the organiser.
             </p>
-          )}
-          {recoveredFromWrongAccount ? (
-            <p className="text-sm text-foreground">
-              You signed out of the previous account. We&apos;ll send a secure sign-in link to the
-              invited email address above.
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              We&apos;ll email a secure sign-in link to this address. You are not signed in yet.
-              Open that newest sign-in email — not the original invitation that says Review
-              agreement.
-            </p>
-          )}
-          {sent ? (
-            <p className="text-sm text-foreground">
-              A secure sign-in link has been sent. Open the newest sign-in email in this browser.
-              Do not use the original Review agreement invitation — that link is not a sign-in
-              code.
-            </p>
-          ) : (
-            <Button
-              type="button"
-              onClick={() => void sendLink()}
-              disabled={sending || !invitation.invitedEmail}
-            >
-              {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              Send secure sign-in link
-            </Button>
-          )}
+          ) : null}
+          <Button
+            type="button"
+            onClick={() => void sendLink()}
+            disabled={sending || !invitedEmail}
+          >
+            {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {sent ? 'Send another link' : 'Send secure sign-in link'}
+          </Button>
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
         </div>
       </Card>

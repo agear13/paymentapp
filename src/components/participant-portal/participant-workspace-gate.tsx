@@ -83,8 +83,11 @@ function WorkspaceShell({
         </div>
       </header>
       <main className="mx-auto max-w-4xl px-4 py-6 sm:py-8">{children}</main>
-      <footer className="border-t mt-8 py-6 text-center text-xs text-muted-foreground">
-        Your participant workspace · Powered by Provvypay
+      <footer className="border-t mt-8 py-6 text-center text-xs text-muted-foreground space-y-1">
+        <p>Your participant workspace · Powered by Provvypay</p>
+        <p data-testid="participant-bookmark-hint">
+          You can bookmark this page to return to your workspace anytime.
+        </p>
       </footer>
     </div>
   );

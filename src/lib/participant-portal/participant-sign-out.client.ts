@@ -34,8 +34,22 @@ export async function signOutParticipantSession(): Promise<{ ok: true } | { ok: 
   return { ok: true };
 }
 
-export function reloadParticipantInvitation(token: string, recoveredFromWrongAccount = false): void {
+export function participantWorkspaceEntryPath(
+  token: string,
+  query?: { recover?: boolean; signedOut?: boolean }
+): string {
   const path = participantWorkspaceReturnPath(token);
-  const url = recoveredFromWrongAccount ? `${path}?recover=1` : path;
-  window.location.replace(url);
+  const params = new URLSearchParams();
+  if (query?.recover) params.set('recover', '1');
+  if (query?.signedOut) params.set('signedOut', '1');
+  const search = params.toString();
+  return search ? `${path}?${search}` : path;
+}
+
+export function reloadParticipantInvitation(token: string, recoveredFromWrongAccount = false): void {
+  window.location.replace(
+    participantWorkspaceEntryPath(token, recoveredFromWrongAccount
+      ? { recover: true }
+      : { signedOut: true })
+  );
 }

@@ -45,6 +45,7 @@ export default function ParticipantWorkspacePage() {
   const previewMode = searchParams?.get('mode') === 'preview';
   const urlStep = searchParams?.get('step');
   const recoveredFromWrongAccount = searchParams?.get('recover') === '1';
+  const signedOut = searchParams?.get('signedOut') === '1';
 
   const [payload, setPayload] = React.useState<WorkspacePayload | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
@@ -155,6 +156,7 @@ export default function ParticipantWorkspacePage() {
         token={token}
         invitation={payload.invitation}
         recoveredFromWrongAccount={recoveredFromWrongAccount}
+        signedOut={signedOut}
       />
     );
   }
