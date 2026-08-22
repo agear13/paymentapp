@@ -5,6 +5,12 @@
 
 import type { ExtractedParty, ExtractionResult } from '@/lib/ai-extractor/extraction-types';
 import { hasFixedFeeAmount, hasRevenueSharePct } from '@/lib/ai-extractor/party-obligation-metrics';
+import type {
+  WorkflowCoordinationAgreementStatus,
+  WorkflowCoordinationNextActionKind,
+  WorkflowCoordinationPayoutStatus,
+  WorkflowCoordinationReferralStatus,
+} from '@/lib/workflows/agreement-intelligence/types';
 import type { ReferralCompensationInput, ReferralPromoterRole } from '@/lib/workflows/referral-management/constants';
 
 export type ReferralCatalogItem = { id: string; name: string };
@@ -42,6 +48,122 @@ export type ReferralImportPreview = {
   candidates: ReferralImportCandidate[];
   excludedParties: ReferralImportExcludedParty[];
 };
+
+export type ReferralExtractionCoordination = {
+  nextActionKind?: WorkflowCoordinationNextActionKind | null;
+  nextActionLabel?: string | null;
+  agreementStatus?: WorkflowCoordinationAgreementStatus | null;
+  payoutSetupStatus?: WorkflowCoordinationPayoutStatus | null;
+  referralStatus?: WorkflowCoordinationReferralStatus | null;
+  statusLabel?: string | null;
+};
+
+export const NEW_PROMOTER_EXTRACTION_STATUS = 'Awaiting approval';
+
+export type ReferralExtractionSuccessSummary = {
+  participantId: string;
+  participantName: string;
+  commission: string;
+  eligibleServices: string[];
+  status: string;
+  nextStep: string | null;
+  inviteActionLabel: string | null;
+};
+
+export function referralExtractionNextStep(
+  name: string,
+  coordination?: ReferralExtractionCoordination | null
+): string | null {
+  const participant = name.trim() || 'this promoter';
+  switch (coordination?.nextActionKind) {
+    case 'request_approval':
+      if (coordination.agreementStatus === 'requested' || coordination.agreementStatus === 'viewed') {
+        return `Wait for ${participant} to review and approve their agreement.`;
+      }
+      return `${participant} needs to review and approve their agreement before their referral can be activated.`;
+    case 'request_payout_details':
+      if (coordination.payoutSetupStatus === 'requested') {
+        return `Wait for ${participant} to submit their payout details.`;
+      }
+      return `Request payout details from ${participant}.`;
+    case 'review_payout_details':
+      return `Review the payout details ${participant} submitted.`;
+    case 'request_update':
+      return `Ask ${participant} to update their payout details.`;
+    case 'activate_referral':
+      if (coordination.referralStatus === 'service_required') {
+        return `Select an eligible service before activating ${participant}'s referral.`;
+      }
+      return `Activate ${participant}'s referral so they can start referring.`;
+    case 'none':
+      return null;
+    default:
+      return coordination?.nextActionLabel?.trim() || null;
+  }
+}
+
+export function referralExtractionStatusLabel(
+  coordination?: ReferralExtractionCoordination | null
+): string {
+  if (coordination?.agreementStatus === 'approved') {
+    return coordination.statusLabel?.trim() || 'Approved';
+  }
+  if (coordination?.agreementStatus === 'requested' || coordination?.agreementStatus === 'viewed') {
+    return 'Invitation sent';
+  }
+  if (coordination?.agreementStatus === 'not_requested' || !coordination?.agreementStatus) {
+    return NEW_PROMOTER_EXTRACTION_STATUS;
+  }
+  return coordination.statusLabel?.trim() || NEW_PROMOTER_EXTRACTION_STATUS;
+}
+
+export function selectedReferralCandidates(
+  preview: ReferralImportPreview
+): ReferralImportCandidate[] {
+  const selected = preview.candidates.filter((row) => row.selected);
+  if (selected.length > 0) return selected;
+  if (preview.candidates.length === 1 && preview.candidates[0]) return [preview.candidates[0]];
+  return [];
+}
+
+export function buildReferralExtractionSuccessSummary(input: {
+  candidate: ReferralImportCandidate;
+  catalog: ReferralCatalogItem[];
+  participantId: string;
+  status?: string | null;
+  coordination?: ReferralExtractionCoordination | null;
+}): ReferralExtractionSuccessSummary {
+  const catalogName = input.candidate.serviceId
+    ? input.catalog.find((item) => item.id === input.candidate.serviceId)?.name?.trim()
+    : null;
+  const extractedLabel = input.candidate.extractedServiceLabel?.trim() || null;
+  const eligibleServices = catalogName
+    ? [catalogName]
+    : extractedLabel
+      ? [extractedLabel]
+      : [];
+  const participantName = input.candidate.name.trim() || 'Participant';
+  const coordination = input.coordination ?? {
+    nextActionKind: 'request_approval',
+    agreementStatus: 'not_requested',
+    statusLabel: input.status,
+  };
+
+  const canInvite =
+    coordination.nextActionKind === 'request_approval' &&
+    coordination.agreementStatus !== 'requested' &&
+    coordination.agreementStatus !== 'viewed';
+
+  return {
+    participantId: input.participantId,
+    participantName,
+    commission: input.candidate.commissionLabel.trim() || 'Commission not specified',
+    eligibleServices,
+    status: input.status?.trim() || referralExtractionStatusLabel(coordination),
+    nextStep: referralExtractionNextStep(participantName, coordination),
+    inviteActionLabel: canInvite ? `Send ${participantName} an invitation →` : null,
+  };
+}
 
 const REFERRAL_ROLE = /promoter|affiliate|referr|partner/i;
 

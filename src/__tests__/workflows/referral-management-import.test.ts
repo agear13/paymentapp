@@ -1,10 +1,14 @@
 import { testParty, field } from '@/lib/ai-extractor/test-helpers/party-fixture';
 import type { ExtractionResult } from '@/lib/ai-extractor/extraction-types';
 import {
+  buildReferralExtractionSuccessSummary,
   candidateToPromoterInput,
   isReferralRelationshipParty,
   mapExtractionToReferralPreview,
   matchOrganizationService,
+  NEW_PROMOTER_EXTRACTION_STATUS,
+  referralExtractionNextStep,
+  selectedReferralCandidates,
 } from '@/lib/workflows/referral-management/import-from-extraction';
 
 const SERVICE_A = '11111111-1111-1111-1111-111111111111';
@@ -167,5 +171,53 @@ describe('Referral Management import-from-extraction adapter', () => {
     );
     expect(ambiguous.serviceMatch).toBe('ambiguous');
     expect(ambiguous.serviceId).toBeNull();
+  });
+
+  it('builds a success summary from the created participant identifier', () => {
+    const preview = mapExtractionToReferralPreview({
+      extraction: extraction([apex]),
+      catalog,
+      sourceLabel: 'Pasted agreement or conversation',
+    });
+    const [candidate] = selectedReferralCandidates(preview);
+    expect(candidate?.name).toBe('Apex Promotions');
+    expect(
+      buildReferralExtractionSuccessSummary({
+        candidate: candidate!,
+        catalog,
+        participantId: 'participant-apex',
+      })
+    ).toEqual({
+      participantId: 'participant-apex',
+      participantName: 'Apex Promotions',
+      commission: '20% revenue share',
+      eligibleServices: ['Summer Launch Package'],
+      status: NEW_PROMOTER_EXTRACTION_STATUS,
+      nextStep:
+        'Apex Promotions needs to review and approve their agreement before their referral can be activated.',
+      inviteActionLabel: 'Send Apex Promotions an invitation →',
+    });
+  });
+
+  it('uses the existing coordination action for next-step copy', () => {
+    expect(
+      referralExtractionNextStep('Sarah', {
+        nextActionKind: 'request_approval',
+        agreementStatus: 'not_requested',
+      })
+    ).toBe('Sarah needs to review and approve their agreement before their referral can be activated.');
+    expect(
+      referralExtractionNextStep('Sarah', {
+        nextActionKind: 'request_approval',
+        agreementStatus: 'requested',
+      })
+    ).toBe('Wait for Sarah to review and approve their agreement.');
+    expect(
+      referralExtractionNextStep('Sarah', {
+        nextActionKind: 'activate_referral',
+        referralStatus: 'ready',
+      })
+    ).toBe("Activate Sarah's referral so they can start referring.");
+    expect(referralExtractionNextStep('Sarah', { nextActionKind: 'none' })).toBeNull();
   });
 });

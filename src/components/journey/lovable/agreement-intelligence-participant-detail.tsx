@@ -22,6 +22,7 @@ type Props = {
   activity: WorkflowActivityItem[];
   coordinationBlocked: boolean;
   busy: boolean;
+  autoOpenInvite?: boolean;
   showReferralManagementHandoff?: boolean;
   onBack: () => void;
   onAction: (
@@ -44,6 +45,7 @@ export function AgreementIntelligenceParticipantDetail({
   activity,
   coordinationBlocked,
   busy,
+  autoOpenInvite = false,
   showReferralManagementHandoff = true,
   onBack,
   onAction,
@@ -64,6 +66,12 @@ export function AgreementIntelligenceParticipantDetail({
     participant.compensationKind !== 'fixed';
   const [inviteOpen, setInviteOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!autoOpenInvite) return;
+    if (participant.agreementStatus === 'approved') return;
+    setInviteOpen(true);
+  }, [autoOpenInvite, participant.id, participant.agreementStatus]);
   const invitationSent =
     participant.agreementStatus === 'requested' || participant.agreementStatus === 'viewed';
   const invitation = participantInvitationCopy({

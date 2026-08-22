@@ -98,8 +98,10 @@ export function ReferralStatusLine({ participant }: { participant: WorkflowOpera
 
 export function ParticipantCoordinationSummary({
   participant,
+  nextActionLabel,
 }: {
   participant: WorkflowOperationalParticipant;
+  nextActionLabel?: string | null;
 }) {
   if (participant.partyKind === 'contractual_party') {
     return (
@@ -123,10 +125,10 @@ export function ParticipantCoordinationSummary({
         <span className="text-[12px] font-medium uppercase tracking-wide text-ink-soft">Referral</span>
         <ReferralStatusLine participant={participant} />
       </div>
-      {participant.nextActionLabel ? (
+      {(nextActionLabel ?? participant.nextActionLabel) ? (
         <p className="mt-1 text-[13px]">
           <span className="font-medium">Next:</span>{' '}
-          <span className="text-ink-soft">{participant.nextActionLabel}</span>
+          <span className="text-ink-soft">{nextActionLabel ?? participant.nextActionLabel}</span>
         </p>
       ) : null}
     </div>

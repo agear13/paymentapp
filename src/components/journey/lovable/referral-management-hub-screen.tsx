@@ -19,9 +19,17 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { AgreementIntelligenceInputModal } from '@/components/journey/lovable/agreement-intelligence-input-modal';
 import { ReferralImportReview } from '@/components/journey/lovable/referral-import-review';
-import { candidateToPromoterInput } from '@/lib/workflows/referral-management/import-from-extraction';
-import type { ReferralImportPreview } from '@/lib/workflows/referral-management/import-from-extraction';
+import {
+  buildReferralExtractionSuccessSummary,
+  candidateToPromoterInput,
+  selectedReferralCandidates,
+} from '@/lib/workflows/referral-management/import-from-extraction';
+import type {
+  ReferralExtractionSuccessSummary,
+  ReferralImportPreview,
+} from '@/lib/workflows/referral-management/import-from-extraction';
 import type { AddPromoterInput, AddPromoterResult } from '@/hooks/use-referral-management';
+import { cn } from '@/lib/utils';
 import { ExistingPromoterDuplicateCard } from '@/components/journey/lovable/existing-promoter-duplicate-card';
 import type { ExistingPromoterRelationship } from '@/lib/workflows/referral-management/promoter-duplicate';
 import { AgreementIntelligenceParticipantDetail } from '@/components/journey/lovable/agreement-intelligence-participant-detail';
@@ -35,6 +43,11 @@ import {
   promoterMatchesFilter,
   type ReferralPromoterFilter,
 } from '@/lib/workflows/referral-management/attention';
+import {
+  referralPromoterLifecycleLabel,
+  referralPromoterLifecycleStage,
+  referralPromoterNextActionCopy,
+} from '@/lib/workflows/referral-management/lifecycle';
 
 function MetricCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -53,6 +66,8 @@ function AddPromoterForm({
   onLookupEmail,
   onExtract,
   onImported,
+  onReturnedToList,
+  promoters,
   onManageServices,
   onOpenExisting,
   onSearchPromoters,
@@ -63,7 +78,9 @@ function AddPromoterForm({
   onSubmit: (body: AddPromoterInput) => Promise<AddPromoterResult>;
   onLookupEmail: (email: string) => Promise<ExistingPromoterRelationship | null>;
   onExtract: ReturnType<typeof useReferralManagement>['extractReferralRelationships'];
-  onImported: (participantId?: string) => void;
+  onImported: (participantId?: string, options?: { invite?: boolean }) => void;
+  onReturnedToList: (participantId: string) => void;
+  promoters: ReferralManagementContext['promoters'];
   onManageServices: () => void;
   onOpenExisting: (existing: ExistingPromoterRelationship) => void;
   onSearchPromoters: () => void;
@@ -74,6 +91,8 @@ function AddPromoterForm({
   const [importOpen, setImportOpen] = React.useState(false);
   const [preview, setPreview] = React.useState<ReferralImportPreview | null>(null);
   const [importError, setImportError] = React.useState<string | null>(null);
+  const [extractionSuccess, setExtractionSuccess] = React.useState<ReferralExtractionSuccessSummary | null>(null);
+  const [processingExtract, setProcessingExtract] = React.useState(false);
   const [email, setEmail] = React.useState('');
   const [duplicate, setDuplicate] = React.useState<ExistingPromoterRelationship | null>(null);
   const [lookingUp, setLookingUp] = React.useState(false);
@@ -93,6 +112,8 @@ function AddPromoterForm({
     setPreview(null);
     setImportError(null);
     setImportOpen(false);
+    setExtractionSuccess(null);
+    setProcessingExtract(false);
     setEmail('');
     setDuplicate(null);
     setLookingUp(false);
@@ -145,76 +166,190 @@ function AddPromoterForm({
   }
 
   if (mode === 'import') {
+    const persistPreview = async (
+      next: ReferralImportPreview
+    ): Promise<ReferralExtractionSuccessSummary | null> => {
+      const selected = selectedReferralCandidates(next);
+      if (selected.length === 0) {
+        setPreview(next);
+        setImportError(
+          next.candidates.length === 0
+            ? 'No referral or commission relationship was found in this conversation.'
+            : 'Select at least one referral relationship to add.'
+        );
+        return null;
+      }
+
+      let lastSummary: ReferralExtractionSuccessSummary | null = null;
+      for (const candidate of selected) {
+        const mapped = candidateToPromoterInput(candidate);
+        if ('error' in mapped) {
+          setPreview(next);
+          setImportError(mapped.error);
+          return null;
+        }
+        const result = await onSubmit({ ...mapped, reuseExisting: true });
+        const participantId = result.participantId ?? result.existing?.participantId;
+        if ((!result.ok && !result.existing) || !participantId) {
+          setPreview(next);
+          setImportError(error ?? 'Could not save the extracted participant.');
+          return null;
+        }
+        const existingPromoter = promoters.find((row) => row.id === participantId);
+        lastSummary = buildReferralExtractionSuccessSummary({
+          candidate,
+          catalog,
+          participantId,
+          coordination:
+            result.coordination ??
+            (existingPromoter
+              ? {
+                  nextActionKind: existingPromoter.nextActionKind,
+                  nextActionLabel: existingPromoter.nextActionLabel,
+                  agreementStatus: existingPromoter.agreementStatus,
+                  payoutSetupStatus: existingPromoter.payoutSetupStatus,
+                  referralStatus: existingPromoter.referralStatus,
+                  statusLabel: existingPromoter.statusLabel,
+                }
+              : result.existing
+                ? { statusLabel: result.existing.statusLabel, nextActionKind: 'request_approval' }
+                : undefined),
+        });
+      }
+
+      if (!lastSummary) {
+        setPreview(next);
+        setImportError('Could not save the extracted participant.');
+        return null;
+      }
+      setPreview(null);
+      setExtractionSuccess(lastSummary);
+      setImportError(null);
+      return lastSummary;
+    };
+
+    const extractAndPersist = async (
+      extract: () => Promise<ReferralImportPreview | null>,
+      failedMessage: string
+    ): Promise<boolean> => {
+      setProcessingExtract(true);
+      setImportError(null);
+      setExtractionSuccess(null);
+      try {
+        const next = await extract();
+        if (!next) {
+          setImportError(failedMessage);
+          return false;
+        }
+        return Boolean(await persistPreview(next));
+      } finally {
+        setProcessingExtract(false);
+      }
+    };
+
+    const reviewExtracted = () => {
+      const participantId = extractionSuccess?.participantId;
+      reset();
+      if (participantId) onImported(participantId);
+    };
+
+    const inviteExtracted = () => {
+      const participantId = extractionSuccess?.participantId;
+      reset();
+      if (participantId) onImported(participantId, { invite: true });
+    };
+
+    const returnToList = () => {
+      const participantId = extractionSuccess?.participantId;
+      reset();
+      if (participantId) onReturnedToList(participantId);
+    };
+
     return (
       <>
         <AgreementIntelligenceInputModal
           open={importOpen}
           onOpenChange={(next) => {
-            if (!next && !preview) reset();
-            else setImportOpen(next);
+            if (!next) {
+              if (extractionSuccess) {
+                returnToList();
+                return;
+              }
+              if (!preview) reset();
+              else setImportOpen(false);
+              return;
+            }
+            setImportOpen(true);
           }}
-          submitting={busy}
+          submitting={busy || processingExtract}
+          closeOnSuccess={false}
+          defaultTab="paste"
           title="From agreement or conversation"
           uploadDescription="Upload a signed or unsigned agreement, supplier agreement, invoice, or similar commercial document. Provvy uses the existing Agreement Intelligence extractor."
           pasteLabel="Agreement or conversation"
           pastePlaceholder="Paste an agreement, invoice, email, WhatsApp, SMS, Telegram, or other conversation…"
-          onUpload={async (file) => {
-            const next = await onExtract({ file });
-            if (!next) return false;
-            setPreview(next);
-            setImportOpen(false);
-            return true;
-          }}
-          onPaste={async (text) => {
-            const next = await onExtract({
-              text,
-              sourceLabel: 'Pasted agreement or conversation',
-            });
-            if (!next) return false;
-            setPreview(next);
-            setImportOpen(false);
-            return true;
-          }}
+          error={extractionSuccess ? null : importError ?? error}
+          success={extractionSuccess}
+          onReviewParticipant={reviewExtracted}
+          onInviteParticipant={inviteExtracted}
+          onDone={returnToList}
+          review={
+            preview && !extractionSuccess ? (
+              <ReferralImportReview
+                preview={preview}
+                catalog={catalog}
+                busy={busy}
+                error={importError ?? error}
+                onChange={setPreview}
+                onBack={reset}
+                onConfirm={async () => {
+                  setImportError(null);
+                  const summary = await persistPreview(preview);
+                  if (!summary) return;
+                }}
+              />
+            ) : null
+          }
+          onUpload={async (file) =>
+            extractAndPersist(
+              () => onExtract({ file }),
+              'This document could not be extracted. Check the file and try again.'
+            )
+          }
+          onPaste={async (text) =>
+            extractAndPersist(
+              () =>
+                onExtract({
+                  text,
+                  sourceLabel: 'Pasted agreement or conversation',
+                }),
+              'This conversation could not be extracted. Check the text and try again.'
+            )
+          }
         />
-        {preview ? (
-          <ReferralImportReview
-            preview={preview}
-            catalog={catalog}
-            busy={busy}
-            error={importError ?? error}
-            onChange={setPreview}
-            onBack={reset}
-            onConfirm={async () => {
-              setImportError(null);
-              const selected = preview.candidates.filter((row) => row.selected);
-              if (selected.length === 0) {
-                setImportError('Select at least one referral relationship to add.');
-                return;
-              }
-              let lastId: string | undefined;
-              let reused = false;
-              for (const candidate of selected) {
-                const mapped = candidateToPromoterInput(candidate);
-                if ('error' in mapped) {
-                  setImportError(mapped.error);
-                  return;
-                }
-                const result = await onSubmit({ ...mapped, reuseExisting: true });
-                if (!result.ok) return;
-                lastId = result.participantId;
-                reused = Boolean(result.reused);
-              }
-              toast.success(reused && selected.length === 1 ? 'Existing promoter opened' : 'Promoter added');
-              reset();
-              onImported(lastId);
-            }}
-          />
-        ) : !importOpen ? (
-          <div className="rounded-2xl border border-border bg-card p-4">
-            <Button type="button" variant="outline" onClick={reset}>
-              Cancel
-            </Button>
-          </div>
+        {!importOpen && !extractionSuccess ? (
+          preview ? (
+            <ReferralImportReview
+              preview={preview}
+              catalog={catalog}
+              busy={busy}
+              error={importError ?? error}
+              onChange={setPreview}
+              onBack={reset}
+              onConfirm={async () => {
+                setImportError(null);
+                const summary = await persistPreview(preview);
+                if (!summary) return;
+                setImportOpen(true);
+              }}
+            />
+          ) : (
+            <div className="rounded-2xl border border-border bg-card p-4">
+              <Button type="button" variant="outline" onClick={reset}>
+                Cancel
+              </Button>
+            </div>
+          )
         ) : null}
       </>
     );
@@ -377,6 +512,9 @@ export function ReferralManagementHubScreen() {
   const [selectedParticipantId, setSelectedParticipantId] = React.useState<string | null>(null);
   const [hubView, setHubView] = React.useState<'overview' | 'services'>('overview');
   const [promoterFilter, setPromoterFilter] = React.useState<ReferralPromoterFilter>('all');
+  const [highlightedParticipantId, setHighlightedParticipantId] = React.useState<string | null>(null);
+  const [justAdded, setJustAdded] = React.useState<{ id: string; name: string } | null>(null);
+  const [autoOpenInvite, setAutoOpenInvite] = React.useState(false);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -399,11 +537,57 @@ export function ReferralManagementHubScreen() {
     window.history.replaceState(null, '', `${url.pathname}${url.search}`);
   }, []);
 
-  const selectParticipant = React.useCallback((participantId: string | null) => {
+  const clearJustAdded = React.useCallback(() => {
+    setHighlightedParticipantId(null);
+    setJustAdded(null);
+  }, []);
+
+  const selectParticipant = React.useCallback((
+    participantId: string | null,
+    options?: { invite?: boolean }
+  ) => {
     setSelectedParticipantId(participantId);
     setHubView('overview');
+    setAutoOpenInvite(Boolean(participantId && options?.invite));
+    setHighlightedParticipantId(null);
+    setJustAdded(null);
     syncUrl({ participantId, view: 'overview' });
   }, [syncUrl]);
+
+  const scrollToPromoter = React.useCallback((participantId: string) => {
+    const tryScroll = () => {
+      document.getElementById(`promoter-${participantId}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    };
+    window.requestAnimationFrame(() => {
+      window.setTimeout(tryScroll, 80);
+      window.setTimeout(tryScroll, 280);
+    });
+  }, []);
+
+  const surfaceCreatedPromoter = React.useCallback((participantId: string) => {
+    const name =
+      context?.promoters.find((row) => row.id === participantId)?.name?.trim() || 'Promoter';
+    setSelectedParticipantId(null);
+    setHubView('overview');
+    setPromoterFilter('all');
+    setAutoOpenInvite(false);
+    setHighlightedParticipantId(participantId);
+    setJustAdded({ id: participantId, name });
+    syncUrl({ participantId: null, view: 'overview' });
+    scrollToPromoter(participantId);
+  }, [context?.promoters, scrollToPromoter, syncUrl]);
+
+  React.useEffect(() => {
+    if (!highlightedParticipantId) return;
+    const timer = window.setTimeout(() => {
+      setHighlightedParticipantId(null);
+      setJustAdded(null);
+    }, 12_000);
+    return () => window.clearTimeout(timer);
+  }, [highlightedParticipantId]);
 
   const selectView = React.useCallback((view: 'overview' | 'services') => {
     setSelectedParticipantId(null);
@@ -474,6 +658,15 @@ export function ReferralManagementHubScreen() {
   const visiblePromoters = context.promoters.filter((row) =>
     promoterMatchesFilter(row, promoterFilter)
   );
+  const highlighted =
+    highlightedParticipantId
+      ? context.promoters.find((row) => row.id === highlightedParticipantId) ??
+        visiblePromoters.find((row) => row.id === highlightedParticipantId) ??
+        null
+      : null;
+  const orderedPromoters = highlighted
+    ? [highlighted, ...visiblePromoters.filter((row) => row.id !== highlighted.id)]
+    : visiblePromoters;
   const attentionCount = promoterCounts.attention;
 
   const filterChips: Array<{ id: ReferralPromoterFilter; label: string }> = [
@@ -523,9 +716,11 @@ export function ReferralManagementHubScreen() {
               onSubmit={addPromoter}
               onLookupEmail={lookupPromoterEmail}
               onExtract={extractReferralRelationships}
-              onImported={(participantId) => {
-                if (participantId) selectParticipant(participantId);
+              onImported={(participantId, options) => {
+                if (participantId) selectParticipant(participantId, options);
               }}
+              onReturnedToList={surfaceCreatedPromoter}
+              promoters={context.promoters}
               onManageServices={() => selectView('services')}
               onOpenExisting={(existing) => {
                 selectParticipant(existing.participantId);
@@ -590,6 +785,7 @@ export function ReferralManagementHubScreen() {
                 activity={context.activity}
                 coordinationBlocked={context.paused}
                 busy={busy}
+                autoOpenInvite={autoOpenInvite}
                 onBack={() => selectParticipant(null)}
                 onAction={(action, extra) => coordinatePromoter(selected.id!, action, extra)}
                 onIdentityUpdated={() => void refresh()}
@@ -638,6 +834,26 @@ export function ReferralManagementHubScreen() {
               </section>
 
               <section id="promoters" className="space-y-3 scroll-mt-4">
+                {justAdded ? (
+                  <div
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-primary/10 px-4 py-3"
+                    data-testid="just-added-banner"
+                  >
+                    <p className="text-[14px] font-medium">{justAdded.name} was just added</p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => selectParticipant(justAdded.id)}
+                      >
+                        Review
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={clearJustAdded}>
+                        Dismiss
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap items-end justify-between gap-2">
                   <div>
                     <h2 className="text-[13px] font-semibold uppercase tracking-wide text-ink-soft">Promoters</h2>
@@ -666,17 +882,37 @@ export function ReferralManagementHubScreen() {
                   <p className="text-[13px] text-ink-soft">
                     Add a promoter to start acquiring referral revenue. No agreement upload is required.
                   </p>
-                ) : visiblePromoters.length === 0 ? (
+                ) : orderedPromoters.length === 0 ? (
                   <p className="text-[13px] text-ink-soft">No promoters match this filter.</p>
                 ) : (
                   <ul className="space-y-3">
-                    {visiblePromoters.map((promoter) => (
+                    {orderedPromoters.map((promoter) => {
+                      const stage = referralPromoterLifecycleStage(promoter);
+                      const highlightedCard =
+                        Boolean(highlightedParticipantId) && promoter.id === highlightedParticipantId;
+                      return (
                       <li
                         key={promoter.id}
-                        className="flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-border bg-card p-4"
+                        id={promoter.id ? `promoter-${promoter.id}` : undefined}
+                        className={cn(
+                          'flex flex-wrap items-start justify-between gap-3 rounded-2xl border bg-card p-4',
+                          highlightedCard
+                            ? 'border-primary bg-primary/10 ring-2 ring-primary/40'
+                            : 'border-border'
+                        )}
                       >
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium">{promoter.name}</p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="rounded-full bg-secondary px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide">
+                              {referralPromoterLifecycleLabel(stage)}
+                            </p>
+                            {highlightedCard ? (
+                              <p className="rounded-full bg-primary px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-primary-foreground">
+                                Just added
+                              </p>
+                            ) : null}
+                          </div>
+                          <p className="mt-2 font-medium">{promoter.name}</p>
                           <p className="text-[13px] text-ink-soft">
                             {promoter.compensationLabel ?? 'Compensation not configured'}
                             {promoter.referral?.destinationLabel
@@ -686,13 +922,17 @@ export function ReferralManagementHubScreen() {
                           <p className="text-[13px] text-ink-soft">
                             {context.performance[promoter.id ?? '']?.revenueLabel ?? '$0'} referred revenue
                           </p>
-                          <ParticipantCoordinationSummary participant={promoter} />
+                          <ParticipantCoordinationSummary
+                            participant={promoter}
+                            nextActionLabel={referralPromoterNextActionCopy(promoter)}
+                          />
                         </div>
                         <Button type="button" variant="outline" onClick={() => selectParticipant(promoter.id)}>
                           Manage
                         </Button>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 )}
               </section>

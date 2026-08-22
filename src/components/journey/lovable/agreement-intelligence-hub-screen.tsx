@@ -684,6 +684,8 @@ export function AgreementIntelligenceHubScreen() {
         submitting={submitting}
         onUpload={submitUpload}
         onPaste={submitPaste}
+        loadingTitle="Extracting agreement details…"
+        loadingDescription="Identifying parties, payment terms and obligations."
       />
 
       {extraction && installed.id && (

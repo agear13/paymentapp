@@ -4,7 +4,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import type { ParticipantCoordinationAction } from '@/lib/workflows/agreement-intelligence/participant-coordination';
 import type { ReferralManagementContext } from '@/lib/workflows/referral-management/hub.server';
-import type { ReferralImportPreview } from '@/lib/workflows/referral-management/import-from-extraction';
+import type {
+  ReferralExtractionCoordination,
+  ReferralImportPreview,
+} from '@/lib/workflows/referral-management/import-from-extraction';
 import type { ExistingPromoterRelationship } from '@/lib/workflows/referral-management/promoter-duplicate';
 
 export type AddPromoterInput = {
@@ -23,6 +26,7 @@ export type AddPromoterResult = {
   participantId?: string;
   reused?: boolean;
   existing?: ExistingPromoterRelationship | null;
+  coordination?: ReferralExtractionCoordination | null;
 };
 
 export function useReferralManagement(workflowId: string | null) {
@@ -87,10 +91,22 @@ export function useReferralManagement(workflowId: string | null) {
           return { ok: false };
         }
         if (payload?.context) setContext(payload.context);
+        const participantId = payload?.participant?.id;
+        const created = payload?.context?.promoters.find((row) => row.id === participantId);
         return {
           ok: true,
-          participantId: payload?.participant?.id,
+          participantId,
           reused: Boolean(payload?.reused),
+          coordination: created
+            ? {
+                nextActionKind: created.nextActionKind,
+                nextActionLabel: created.nextActionLabel,
+                agreementStatus: created.agreementStatus,
+                payoutSetupStatus: created.payoutSetupStatus,
+                referralStatus: created.referralStatus,
+                statusLabel: created.statusLabel,
+              }
+            : null,
         };
       } catch {
         setError('Could not add promoter');

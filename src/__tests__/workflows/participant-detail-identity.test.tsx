@@ -120,4 +120,21 @@ describe('Referral Management participant detail identity', () => {
     expect(text).toContain('Edit details');
     expect(text).toContain('betty@example.com');
   });
+
+  it('opens the existing invitation dialog when requested after extraction', () => {
+    render(
+      <AgreementIntelligenceParticipantDetail
+        participant={participant()}
+        activity={[]}
+        coordinationBlocked={false}
+        busy={false}
+        autoOpenInvite
+        onBack={() => undefined}
+        onAction={async () => true}
+      />
+    );
+
+    expect(screen.getByText('Send agreement to Apples')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Send approval request' })).toBeTruthy();
+  });
 });
