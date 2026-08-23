@@ -52,6 +52,12 @@ import { isValidShortCode } from '@/lib/short-code';
 import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
 import { AccountingFirstInvoiceBanner } from '@/components/journey/lovable/accounting-first-invoice-banner';
 import { CreateInvoicePreviewSidebar } from '@/components/journey/lovable/create-invoice-preview-sidebar';
+import { CreateInvoiceContextualGuidance } from '@/components/journey/lovable/create-invoice-contextual-guidance';
+import {
+  deriveCreateInvoiceContextualGuidance,
+  isCustomerPaymentMethodConfigured,
+  isInvoiceBrandingConfigured,
+} from '@/lib/journey/contextual-guidance';
 import {
   CREATE_INVOICE_INPUT_CLS,
   CreateInvoiceFieldLabel,
@@ -95,6 +101,8 @@ type MerchantSettingsSnapshot = {
   wiseAutoSettlementAvailable?: boolean;
   evmGloballyEnabled?: boolean;
   defaultCurrency?: string | null;
+  displayName?: string | null;
+  organizationLogoUrl?: string | null;
 };
 
 const PAYMENTS_SETTINGS_HREF = `${COMMERCIAL_OS_ROUTES.payments}?from=invoice`;
@@ -276,6 +284,8 @@ export function WorkspaceCreateInvoiceScreen() {
               (settings._features as { evmGloballyEnabled?: boolean } | undefined)?.evmGloballyEnabled ??
               false,
             defaultCurrency: (settings.default_currency as string | null) ?? null,
+            displayName: (settings.display_name as string | null) ?? null,
+            organizationLogoUrl: (settings.organization_logo_url as string | null) ?? null,
           });
         } else {
           setMerchantSettings(null);
@@ -634,6 +644,10 @@ export function WorkspaceCreateInvoiceScreen() {
       railDefaultsLoaded={railDefaultsLoaded}
       merchantSettingsLoaded={merchantSettingsLoaded}
       railSetup={railSetup}
+      brandingConfigured={isInvoiceBrandingConfigured({
+        displayName: merchantSettings?.displayName,
+        organizationLogoUrl: merchantSettings?.organizationLogoUrl,
+      })}
       previewAmount={previewAmount}
       hasPreviewAmount={hasPreviewAmount}
       aiPrompt={aiPrompt}
@@ -659,6 +673,7 @@ function CreateInvoiceForm({
   railDefaultsLoaded,
   merchantSettingsLoaded,
   railSetup,
+  brandingConfigured,
   previewAmount,
   hasPreviewAmount,
   aiPrompt,
@@ -680,6 +695,7 @@ function CreateInvoiceForm({
   railDefaultsLoaded: boolean;
   merchantSettingsLoaded: boolean;
   railSetup: PaymentLinkRailSetupStatus;
+  brandingConfigured: boolean;
   previewAmount: string;
   hasPreviewAmount: boolean;
   aiPrompt: string;
@@ -754,6 +770,23 @@ function CreateInvoiceForm({
     progressiveGuidance: guidance,
   });
   const setupSectionExpanded = readyPaymentOptions.length === 0;
+  const contextualGuidance = useMemo(() => {
+    if (formLoading) return null;
+    return deriveCreateInvoiceContextualGuidance({
+      brandingConfigured,
+      paymentRailConfigured: isCustomerPaymentMethodConfigured({
+        anyRailConfigured: railSetup.anyRailConfigured,
+        manualBankConfigured: Boolean(railDefaults.manualBank),
+        cryptoConfigured: Boolean(railDefaults.crypto),
+      }),
+    });
+  }, [
+    formLoading,
+    brandingConfigured,
+    railSetup.anyRailConfigured,
+    railDefaults.manualBank,
+    railDefaults.crypto,
+  ]);
 
   const onCreateClick = () => {
     if (!validation.isSubmittable) {
@@ -791,6 +824,9 @@ function CreateInvoiceForm({
             <CreateInvoiceFormSkeleton />
           ) : (
             <>
+          {contextualGuidance ? (
+            <CreateInvoiceContextualGuidance guidance={contextualGuidance} />
+          ) : null}
           <CreateInvoiceFormCard
             title="Customer"
             icon={User}

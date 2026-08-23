@@ -225,7 +225,8 @@ function Hero() {
           </a>
         </div>
         <p className="mt-6 text-[13px] text-ink-soft/70">
-          Coordinate commercial work before it reaches accounting · No credit card required
+          Tell Provvy what you&apos;re trying to do, then start working · 30 days of Professional ·
+          No credit card required
         </p>
       </div>
 
@@ -754,8 +755,8 @@ function FinalCTA() {
               <span className="text-gradient">before it reaches accounting.</span>
             </h2>
             <p className="mx-auto mt-6 max-w-xl text-[15px] text-ink-soft">
-              Start with a two-minute assessment. Provvy maps how your commercial operations work
-              today—and shows where to coordinate before anything hits the books.
+              Tell Provvy what you&apos;re trying to do, then start working. You get 30 days of
+              Professional — no credit card required.
             </p>
             <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
               <a

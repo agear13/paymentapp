@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   BookOpen,
@@ -36,6 +37,12 @@ export function WorkspacePaymentsSettlementScreen() {
   const { activation } = useWorkspaceActivation();
   const { loading, readiness, railSetup, manualBankConfigured, refresh } =
     usePaymentsSettlementReadiness();
+
+  useEffect(() => {
+    const hash = window.location.hash.replace(/^#/, '');
+    if (!hash) return;
+    document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
 
   const enabledCheckoutRails = railSetup
     ? [
@@ -81,6 +88,7 @@ export function WorkspacePaymentsSettlementScreen() {
       <PaymentsSettlementProgressCard />
 
       <PaymentsSectionCard
+        id="branding"
         icon={Building2}
         title="Branding"
         description="These details appear on your invoices, payment pages and customer receipts. Saved separately from payment providers."
@@ -93,6 +101,7 @@ export function WorkspacePaymentsSettlementScreen() {
       </PaymentsSectionCard>
 
       <PaymentsSectionCard
+        id="payment-providers"
         icon={CreditCard}
         title="Payment Providers"
         description="Paste provider account IDs to enable checkout rails. Each section has its own save button — saving branding does not save payment providers."

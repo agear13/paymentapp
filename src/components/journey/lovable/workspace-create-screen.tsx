@@ -257,28 +257,31 @@ export function WorkspaceCreateScreen() {
       <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[1fr_1fr]">
         <div>
           <Link
-            href="/journey/recommendation"
+            href="/journey/assessment/business"
             className="mb-6 inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-foreground"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </Link>
           <div className="mb-4 inline-flex items-center gap-2 rounded-full glass px-3 py-1.5 text-[12px] text-ink-soft shadow-soft">
             <Sparkles className="h-3 w-3 text-primary" />
-            Ready to deploy
+            30-day Professional trial
           </div>
           <h1 className="text-balance text-4xl font-semibold tracking-[-0.03em] sm:text-5xl">
-            Create your Commercial OS
+            Start with 30 days of Provvy Professional
           </h1>
           <p className="mt-4 max-w-lg text-lg text-ink-soft">
-            Create a workspace to save your recommendation and deploy Autonomous Reconciliation across
-            your business.
+            You have 30 days of Provvy Professional and can start using available Professional
+            capabilities immediately. You can create invoices now. Add payment methods when you
+            are ready so customers can pay. Contextual AI guidance will introduce branding,
+            payment methods, workflows and other capabilities when they are relevant — you do not
+            need to configure everything now.
           </p>
 
           <div className="mt-8 space-y-2.5">
             {[
-              'Save your tailored recommendation',
+              'Start working immediately — create invoices now and add payment methods when you are ready',
+              'Contextual AI introduces branding, payment methods and workflows when useful',
               "Invite your team when you're ready",
-              'Deploy workflows on your systems',
             ].map((line) => (
               <div key={line} className="flex items-center gap-2.5 text-[13.5px] text-foreground">
                 <div className="grid h-4 w-4 place-items-center rounded-full bg-primary/10 text-primary">
@@ -297,7 +300,7 @@ export function WorkspaceCreateScreen() {
             </div>
             <div>
               <div className="text-[13px] font-semibold text-foreground">Create your workspace</div>
-              <div className="text-[12px] text-ink-soft">Free while in early access</div>
+              <div className="text-[12px] text-ink-soft">30-day Professional trial</div>
             </div>
           </div>
 
@@ -446,7 +449,12 @@ export function WorkspaceCreateScreen() {
             </>
           )}
 
-          <div className="mt-5 text-center text-[11px] text-ink-soft">
+          <p className="mt-5 text-center text-[12px] text-ink-soft">
+            After you start, check{' '}
+            <span className="font-medium text-foreground">Settings → Plan &amp; Billing</span> for
+            your current plan, trial status and upgrade options.
+          </p>
+          <div className="mt-3 text-center text-[11px] text-ink-soft">
             By continuing you agree to Provvy&apos;s terms and privacy policy.
           </div>
         </div>

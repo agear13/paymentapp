@@ -52,6 +52,8 @@ export const COMMERCIAL_OS_ROUTES = {
   accountPreferences: '/workspace/settings/preferences',
   accountSecurity: '/workspace/settings/security',
   payments: '/workspace/payments',
+  /** Payment Providers section on Payments & Settlement. Branding is the page default. */
+  paymentsProviders: '/workspace/payments#payment-providers',
   treasury: '/workspace/treasury',
   settlement: '/workspace/settlement',
   settlementObligations: '/workspace/settlement/obligations',

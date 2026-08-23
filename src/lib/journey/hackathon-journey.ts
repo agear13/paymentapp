@@ -1,5 +1,5 @@
 /**
- * Hackathon public onboarding journey — routes and feature flag.
+ * Commercial OS public onboarding journey — routes and feature flag.
  * Lovable source: src/lovable-import/src/routes/
  *
  * Client-visible demo behaviour uses the single public flag:
@@ -17,24 +17,13 @@ export const JOURNEY_ROUTES = {
   provisioningBuild: '/journey/provisioning?build=1',
 } as const;
 
-export type JourneyStepId =
-  | 'landing'
-  | 'assessment'
-  | 'business'
-  | 'connect'
-  | 'analysis'
-  | 'recommendation'
-  | 'provisioning'
-  | 'provisioningBuild';
+export type JourneyStepId = 'intent' | 'context' | 'create-workspace';
 
+/** Honest setup progress only — leftover analysis/recommendation routes are not steps. */
 export const JOURNEY_STEPS: { id: JourneyStepId; label: string; href: string }[] = [
-  { id: 'assessment', label: 'Objective', href: JOURNEY_ROUTES.assessment },
-  { id: 'business', label: 'Business', href: JOURNEY_ROUTES.assessmentBusiness },
-  { id: 'connect', label: 'Connect', href: JOURNEY_ROUTES.assessmentConnect },
-  { id: 'analysis', label: 'Analysis', href: JOURNEY_ROUTES.assessmentAnalysis },
-  { id: 'recommendation', label: 'Recommendation', href: JOURNEY_ROUTES.recommendation },
-  { id: 'provisioning', label: 'Workspace', href: JOURNEY_ROUTES.provisioning },
-  { id: 'provisioningBuild', label: 'Provisioning', href: JOURNEY_ROUTES.provisioningBuild },
+  { id: 'intent', label: 'Intent', href: JOURNEY_ROUTES.assessment },
+  { id: 'context', label: 'Context', href: JOURNEY_ROUTES.assessmentBusiness },
+  { id: 'create-workspace', label: 'Create workspace', href: JOURNEY_ROUTES.provisioning },
 ];
 
 /** Single public hackathon/demo flag — safe for client and server components. */
@@ -64,15 +53,24 @@ export function logHackathonDemoFlagsInDevelopment(): void {
   console.log(`Hackathon Pinch Simulator Fallback: ${isHackathonPinchSimulatorFallback()}`);
 }
 
+export function isJourneyProvisioningBuild(pathname: string, search = ''): boolean {
+  return pathname.startsWith('/journey/provisioning') && search.includes('build=1');
+}
+
+const UNCOUNTED_JOURNEY_PREFIXES = [
+  JOURNEY_ROUTES.assessmentAnalysis,
+  JOURNEY_ROUTES.assessmentConnect,
+  JOURNEY_ROUTES.recommendation,
+] as const;
+
 export function journeyStepIndex(pathname: string, search = ''): number {
-  if (pathname.startsWith('/journey/provisioning')) {
-    return search.includes('build=1') ? 6 : 5;
-  }
-  if (pathname.startsWith(JOURNEY_ROUTES.recommendation)) return 4;
-  if (pathname.startsWith(JOURNEY_ROUTES.assessmentAnalysis)) return 3;
-  if (pathname.startsWith(JOURNEY_ROUTES.assessmentConnect)) return 2;
+  if (isJourneyProvisioningBuild(pathname, search)) return -1;
+  if (UNCOUNTED_JOURNEY_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return -1;
+  if (pathname.startsWith('/journey/provisioning')) return 2;
   if (pathname.startsWith(JOURNEY_ROUTES.assessmentBusiness)) return 1;
-  if (pathname.startsWith(JOURNEY_ROUTES.assessment)) return 0;
+  if (pathname === JOURNEY_ROUTES.assessment || pathname === `${JOURNEY_ROUTES.assessment}/`) {
+    return 0;
+  }
   return -1;
 }
 

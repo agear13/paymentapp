@@ -21,7 +21,8 @@ export type JourneyAssessmentContextPayload = {
   source: 'journey_assessment';
   objective: string | null;
   business: JourneyAssessmentBusiness | null;
-  recommendedWorkflow: string;
+  /** @deprecated No longer written. Old snapshots may still include this. */
+  recommendedWorkflow?: string;
 };
 
 function readStorageItem(key: string): string | null {
@@ -139,7 +140,6 @@ export function journeyAssessmentContext(
     source: 'journey_assessment',
     objective,
     business,
-    recommendedWorkflow: 'autonomous-reconciliation',
   } satisfies JourneyAssessmentContextPayload);
 }
 

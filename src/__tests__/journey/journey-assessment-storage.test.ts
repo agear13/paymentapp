@@ -47,6 +47,24 @@ describe('journey assessment storage', () => {
 
     expect(journeyAssessmentsMatch(saved, objective, business)).toBe(true);
     expect(journeyAssessmentsMatch(saved, 'reconcile', business)).toBe(false);
+    expect(saved).not.toHaveProperty('recommendedWorkflow');
+    expect(JSON.parse(journeyAssessmentContext(objective, business))).not.toHaveProperty(
+      'recommendedWorkflow'
+    );
+  });
+
+  it('still parses legacy snapshots that included a hardcoded workflow', () => {
+    const parsed = parseJourneyAssessmentContext(
+      JSON.stringify({
+        source: 'journey_assessment',
+        objective: 'reconcile',
+        business: { accounting: 'Xero' },
+        recommendedWorkflow: 'autonomous-reconciliation',
+      })
+    );
+
+    expect(parsed?.objective).toBe('reconcile');
+    expect(parsed?.recommendedWorkflow).toBe('autonomous-reconciliation');
   });
 
   it('reads the latest persisted snapshot', () => {

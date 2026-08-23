@@ -9,6 +9,7 @@ import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark'
 import {
   JOURNEY_ROUTES,
   JOURNEY_STEPS,
+  isJourneyProvisioningBuild,
   journeyProgressPercent,
   journeyStepIndex,
 } from '@/lib/journey/hackathon-journey';
@@ -37,8 +38,15 @@ export function AssessmentLayout({ children }: { children: React.ReactNode }) {
     localStorage.setItem('theme', next ? 'dark' : 'light');
   };
 
-  const currentIndex = Math.max(0, journeyStepIndex(pathname, search));
+  const currentIndex = journeyStepIndex(pathname, search);
+  const provisioningBuild = isJourneyProvisioningBuild(pathname, search);
   const progress = journeyProgressPercent(pathname, search);
+  const stepLabel =
+    currentIndex >= 0
+      ? `Step ${currentIndex + 1} of ${JOURNEY_STEPS.length} · ${JOURNEY_STEPS[currentIndex]?.label}`
+      : provisioningBuild
+        ? 'Setting up your workspace'
+        : null;
 
   return (
     <div className={`lovable-journey min-h-screen ${dark ? 'dark' : ''}`}>
@@ -51,15 +59,15 @@ export function AssessmentLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center justify-between gap-4">
             <ProvvyBrandMark href={JOURNEY_ROUTES.landing} />
             <div className="hidden flex-1 items-center gap-3 md:flex">
-              <div className="text-[12px] text-ink-soft">
-                Step {currentIndex + 1} of {JOURNEY_STEPS.length} · {JOURNEY_STEPS[currentIndex]?.label}
-              </div>
-              <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-secondary">
-                <div
-                  className="absolute left-0 top-0 h-full rounded-full bg-primary transition-all duration-700 ease-out"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
+              {stepLabel ? <div className="text-[12px] text-ink-soft">{stepLabel}</div> : null}
+              {currentIndex >= 0 ? (
+                <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-secondary">
+                  <div
+                    className="absolute left-0 top-0 h-full rounded-full bg-primary transition-all duration-700 ease-out"
+                    style={{ width: `${progress}%` }}
+                  />
+                </div>
+              ) : null}
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -79,17 +87,19 @@ export function AssessmentLayout({ children }: { children: React.ReactNode }) {
               </Link>
             </div>
           </div>
-          <div className="mt-3 flex items-center gap-2 md:hidden">
-            <div className="text-[11px] text-ink-soft whitespace-nowrap">
-              {currentIndex + 1}/{JOURNEY_STEPS.length}
+          {currentIndex >= 0 ? (
+            <div className="mt-3 flex items-center gap-2 md:hidden">
+              <div className="text-[11px] text-ink-soft whitespace-nowrap">
+                {currentIndex + 1}/{JOURNEY_STEPS.length}
+              </div>
+              <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-secondary">
+                <div
+                  className="absolute left-0 top-0 h-full rounded-full bg-primary transition-all duration-700 ease-out"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
             </div>
-            <div className="relative h-1 flex-1 overflow-hidden rounded-full bg-secondary">
-              <div
-                className="absolute left-0 top-0 h-full rounded-full bg-primary transition-all duration-700 ease-out"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
+          ) : null}
         </header>
         <main className="relative">{children}</main>
       </div>

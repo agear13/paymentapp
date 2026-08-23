@@ -3,15 +3,12 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-/**
- * Legacy connect step — onboarding now uses Connected Systems after workspace provisioning.
- * Redirect anyone landing here to the analysis step.
- */
+/** Legacy connect step — new-user path goes Context → Create workspace. */
 export function AssessmentConnectScreen() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace('/journey/assessment/analysis');
+    router.replace('/journey/provisioning');
   }, [router]);
 
   return null;

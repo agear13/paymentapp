@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import {
@@ -23,7 +22,7 @@ const OBJECTIVES = [
   { id: "forecast", icon: TrendingUp, title: "Forecast cashflow", desc: "See what's coming in and out with clarity." },
   { id: "revenue-share", icon: Split, title: "Revenue sharing", desc: "Split, distribute and settle earnings automatically." },
   { id: "reporting", icon: BarChart3, title: "Improve reporting", desc: "Understand how your business really operates." },
-  { id: "other", icon: Sparkles, title: "Something else", desc: "Let Provvy AI figure out where to start." },
+  { id: "other", icon: Sparkles, title: "Something else", desc: "I'm not sure yet — I'll start in the workspace." },
 ];
 
 export function AssessmentObjectiveScreen() {
@@ -44,13 +43,13 @@ export function AssessmentObjectiveScreen() {
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
             <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
           </span>
-          Commercial Assessment
+          A few questions
         </div>
         <h1 className="text-balance text-4xl font-semibold tracking-[-0.03em] sm:text-5xl md:text-6xl">
-          What would you like to improve?
+          What do you want to get done first?
         </h1>
         <p className="mt-4 max-w-2xl text-lg text-ink-soft">
-          Pick the outcome that matters most. Provvy will design the right commercial workflow around it.
+          This helps Provvy suggest a useful next step. You can start working either way.
         </p>
 
         <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

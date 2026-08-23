@@ -1,10 +1,17 @@
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
-import { getWorkflowBySlug } from '@/lib/journey/workflow-library-catalog';
 import {
   parseJourneyAssessmentContext,
-  type JourneyAssessmentBusiness,
   type JourneyAssessmentSnapshot,
 } from '@/lib/journey/journey-assessment-storage.client';
+import {
+  accountingIsConnectable,
+  accountingIsNonConnectable,
+  deriveWorkspaceRecommendation,
+  listedPaymentSystems,
+  recommendationSourceLabel,
+  type WorkspaceRecommendation,
+  type WorkspaceRecommendationState,
+} from '@/lib/journey/workspace-recommendation';
 
 export const JOURNEY_OBJECTIVE_LABELS: Record<string, string> = {
   'paid-faster': 'Get paid faster',
@@ -16,37 +23,48 @@ export const JOURNEY_OBJECTIVE_LABELS: Record<string, string> = {
   other: 'Something else',
 };
 
-const CONNECTABLE_ACCOUNTING = new Set(['Xero']);
+export const ADVISOR_LEARNING_NOTE =
+  "As you use Provvy, I'll recommend workflows, connected systems and automation based on how you actually work.";
 
-export type WorkspaceAdvisorWorkspaceState = {
-  xeroConnected: boolean;
-  deployedWorkflowSlugs: string[];
-};
+export const ADVISOR_NO_ACTIVITY_NOTE =
+  'There is no commercial activity to learn from yet.';
+
+export const ADVISOR_HAS_ACTIVITY_NOTE =
+  'I can see commercial activity in your workspace — invoices, payments or connected work that has already happened.';
+
+/** Factual timeline summary only. Not an observed recommendation. */
+export function deriveAdvisorActivityNote(input: {
+  timelineLoaded: boolean;
+  hasCommercialActivity: boolean;
+}): string | null {
+  if (!input.timelineLoaded) return null;
+  return input.hasCommercialActivity ? ADVISOR_HAS_ACTIVITY_NOTE : ADVISOR_NO_ACTIVITY_NOTE;
+}
+
+export type WorkspaceAdvisorWorkspaceState = WorkspaceRecommendationState;
 
 export type WorkspaceAdvisorFinding = {
-  key: 'industry' | 'objective' | 'accounting' | 'challenge';
+  key: 'industry' | 'objective' | 'accounting' | 'systems' | 'challenge';
   label: string;
   value: string;
 };
 
-export type WorkspaceAdvisorPrimaryAction = {
+export type WorkspaceAdvisorSecondaryCta = {
   label: string;
   href: string;
-  kind: 'connect' | 'review-workflow' | 'start';
 };
 
 export type WorkspaceAdvisorIntro = {
   displayName: string | null;
   greeting: string;
-  status: 'learning' | 'ready';
+  /** Setup-stage until observed-activity recommendations exist. */
+  status: 'setup' | 'observed';
   statusLabel: string;
   findings: WorkspaceAdvisorFinding[];
-  recommendation: string;
-  primary: WorkspaceAdvisorPrimaryAction;
-  systemsCta: {
-    label: 'Connect your systems' | 'Review your connected systems';
-    href: string;
-  };
+  recommendation: WorkspaceRecommendation | null;
+  recommendationSourceLabel: string | null;
+  learningNote: string;
+  systemsCta: WorkspaceAdvisorSecondaryCta | null;
   advisorHref: string;
 };
 
@@ -81,6 +99,11 @@ export function snapshotFromOnboardingPayload(payload: {
   return null;
 }
 
+/**
+ * @deprecated Legacy objective→workflow mapping. Not used by the setup-stage
+ * recommendation heuristic or Workspace start screen. Kept so tests can lock
+ * that it is not reintroduced as the recommendation engine.
+ */
 export function recommendedWorkflowSlug(
   objective: string | null,
   savedSlug?: string | null
@@ -111,6 +134,7 @@ export function collectAdvisorFindings(
   const objective = snapshot.objective?.trim();
   const accounting = snapshot.business?.accounting?.trim();
   const challenge = snapshot.business?.challenge?.trim();
+  const systems = snapshot.business?.systems?.map((item) => item.trim()).filter(Boolean) ?? [];
 
   if (industry) {
     findings.push({ key: 'industry', label: 'Industry', value: industry });
@@ -125,6 +149,9 @@ export function collectAdvisorFindings(
   if (accounting) {
     findings.push({ key: 'accounting', label: 'Accounting', value: accounting });
   }
+  if (systems.length > 0) {
+    findings.push({ key: 'systems', label: 'Existing systems', value: systems.join(', ') });
+  }
   if (challenge) {
     findings.push({ key: 'challenge', label: 'Primary challenge', value: challenge });
   }
@@ -132,149 +159,102 @@ export function collectAdvisorFindings(
   return findings;
 }
 
-function accountingRequiresConnection(accounting?: string | null): boolean {
-  return Boolean(accounting && CONNECTABLE_ACCOUNTING.has(accounting));
-}
+export function deriveAdvisorSecondaryCta(input: {
+  snapshot: JourneyAssessmentSnapshot;
+  workspace: WorkspaceAdvisorWorkspaceState;
+  recommendation: WorkspaceRecommendation | null;
+}): WorkspaceAdvisorSecondaryCta | null {
+  const objective = input.snapshot.objective?.trim() || null;
+  const accounting = input.snapshot.business?.accounting?.trim() || undefined;
+  const challenge = input.snapshot.business?.challenge?.trim() || undefined;
+  const systems = input.snapshot.business?.systems;
 
-function recommendedWorkflowRequiresAccounting(objective: string | null, workflowSlug: string | null): boolean {
-  if (workflowSlug === 'autonomous-reconciliation') return true;
-  return objective === 'reconcile' || objective === 'reduce-admin';
-}
+  if (input.workspace.xeroConnected) {
+    return {
+      label: 'Review your connected systems',
+      href: COMMERCIAL_OS_ROUTES.connected,
+    };
+  }
 
-function startActionForObjective(objective: string | null): WorkspaceAdvisorPrimaryAction {
-  switch (objective) {
-    case 'paid-faster':
+  if (accountingIsNonConnectable(accounting)) {
+    if (input.recommendation) return null;
+    if (objective === 'paid-faster' || challenge === 'Late payments' || listedPaymentSystems(systems)) {
       return {
-        kind: 'start',
-        label: 'Create a payment link',
-        href: COMMERCIAL_OS_ROUTES.createInvoice,
+        label: 'Set up payment methods',
+        href: COMMERCIAL_OS_ROUTES.paymentsProviders,
       };
-    case 'forecast':
-    case 'reporting':
+    }
+    if (objective === 'revenue-share' || objective === 'other' || objective === 'forecast' || objective === 'reporting') {
       return {
-        kind: 'start',
-        label: 'Open Collections & Revenue',
-        href: COMMERCIAL_OS_ROUTES.timeline,
-      };
-    case 'reduce-admin':
-      return {
-        kind: 'start',
-        label: 'Manage invoices',
-        href: COMMERCIAL_OS_ROUTES.receivables,
-      };
-    case 'revenue-share':
-      return {
-        kind: 'start',
-        label: 'Review workflows',
+        label: 'Open Workflow Library',
         href: COMMERCIAL_OS_ROUTES.workflows,
       };
-    case 'reconcile':
-    case 'other':
-    default:
-      return {
-        kind: 'start',
-        label: 'Create invoice',
-        href: COMMERCIAL_OS_ROUTES.createInvoice,
-      };
-  }
-}
-
-function recommendationForPrimary(
-  primary: WorkspaceAdvisorPrimaryAction,
-  input: {
-    objective: string | null;
-    accounting?: string;
-    workflowName?: string;
-  }
-): string {
-  if (primary.kind === 'connect') {
-    const software = input.accounting ?? 'your accounting software';
-    return `Connect ${software} so Provvy can start coordinating invoices, payments and your ledger.`;
-  }
-  if (primary.kind === 'review-workflow' && input.workflowName) {
-    return `Review ${input.workflowName} — it's already in your workspace from setup.`;
+    }
+    return null;
   }
 
-  switch (input.objective) {
-    case 'paid-faster':
-      return 'Create a payment link so customers can pay as soon as they receive an invoice.';
-    case 'forecast':
-    case 'reporting':
-      return 'Open Collections & Revenue to start seeing commercial activity in one place.';
-    case 'reduce-admin':
-      return 'Open Manage invoices to start reducing follow-up and bookkeeping work from one list.';
-    case 'revenue-share':
-      return 'Open Workflows to choose how you want to split and settle revenue.';
-    case 'reconcile':
-      return 'Create an invoice so incoming payments have something to reconcile against.';
-    default:
-      return 'Create an invoice to start a first commercial loop in this workspace.';
+  if (input.recommendation) {
+    return null;
   }
+
+  if (accountingIsConnectable(accounting)) {
+    return {
+      label: 'Connect Xero',
+      href: COMMERCIAL_OS_ROUTES.connected,
+    };
+  }
+
+  if (objective === 'paid-faster' || challenge === 'Late payments' || listedPaymentSystems(systems)) {
+    return {
+      label: 'Set up payment methods',
+      href: COMMERCIAL_OS_ROUTES.paymentsProviders,
+    };
+  }
+
+  if (objective === 'revenue-share') {
+    return {
+      label: 'Open Workflow Library',
+      href: COMMERCIAL_OS_ROUTES.workflows,
+    };
+  }
+
+  return null;
 }
 
 export function buildWorkspaceAdvisorIntro(input: {
   snapshot: JourneyAssessmentSnapshot;
   workspace: WorkspaceAdvisorWorkspaceState;
   displayName?: string | null;
-  savedRecommendedWorkflow?: string | null;
 }): WorkspaceAdvisorIntro {
-  const objective = input.snapshot.objective;
-  const business: JourneyAssessmentBusiness = input.snapshot.business ?? {};
   const findings = collectAdvisorFindings(input.snapshot);
-  const workflowSlug = recommendedWorkflowSlug(objective, input.savedRecommendedWorkflow);
-  const catalog = workflowSlug ? getWorkflowBySlug(workflowSlug) : undefined;
-  const workflowDeployed = Boolean(
-    workflowSlug && input.workspace.deployedWorkflowSlugs.includes(workflowSlug)
-  );
-  const needsAccounting =
-    recommendedWorkflowRequiresAccounting(objective, workflowSlug) &&
-    accountingRequiresConnection(business.accounting);
-  const missingAccounting = needsAccounting && !input.workspace.xeroConnected;
-
-  let primary: WorkspaceAdvisorPrimaryAction;
-  if (missingAccounting) {
-    primary = {
-      kind: 'connect',
-      label: business.accounting ? `Connect ${business.accounting}` : 'Connect your systems',
-      href: COMMERCIAL_OS_ROUTES.connected,
-    };
-  } else if (workflowDeployed && catalog) {
-    primary = {
-      kind: 'review-workflow',
-      label: `Review ${catalog.name}`,
-      href: COMMERCIAL_OS_ROUTES.workflowInstance(catalog.slug),
-    };
-  } else {
-    primary = startActionForObjective(objective);
-  }
-
-  const hasConnectedContext =
-    input.workspace.xeroConnected || input.workspace.deployedWorkflowSlugs.length > 0;
+  const recommendation = deriveWorkspaceRecommendation({
+    snapshot: input.snapshot,
+    workspace: input.workspace,
+  });
 
   return {
     displayName: input.displayName ?? null,
     greeting: input.displayName ? `Welcome, ${input.displayName}` : 'Welcome',
-    status: hasConnectedContext ? 'learning' : 'ready',
-    statusLabel: hasConnectedContext
-      ? 'Learning from your workspace'
-      : 'Ready to learn from your workflows',
+    status: 'setup',
+    statusLabel: 'Ready to learn from your workflows',
     findings,
-    recommendation: recommendationForPrimary(primary, {
-      objective,
-      accounting: business.accounting,
-      workflowName: catalog?.name,
+    recommendation,
+    recommendationSourceLabel: recommendationSourceLabel(recommendation),
+    learningNote: ADVISOR_LEARNING_NOTE,
+    systemsCta: deriveAdvisorSecondaryCta({
+      snapshot: input.snapshot,
+      workspace: input.workspace,
+      recommendation,
     }),
-    primary,
-    systemsCta: {
-      label: input.workspace.xeroConnected
-        ? 'Review your connected systems'
-        : 'Connect your systems',
-      href: COMMERCIAL_OS_ROUTES.connected,
-    },
     advisorHref: COMMERCIAL_OS_ROUTES.advisor,
   };
 }
 
+/**
+ * @deprecated Legacy objective→card mapping. Not used by Workspace start or
+ * the setup-stage recommendation heuristic. Tests lock that the start screen
+ * does not import this helper.
+ */
 export function workspaceStartCardIdForObjective(
   objective: string | null
 ): 'create-invoice' | 'manage-invoices' | 'sync-xero' | 'collections' | 'workspace' | null {

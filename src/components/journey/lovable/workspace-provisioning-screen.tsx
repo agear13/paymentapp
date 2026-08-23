@@ -10,12 +10,10 @@ import { completeJourneyOnboarding } from '@/lib/journey/complete-journey-onboar
 import { restoreJourneyAssessment } from '@/lib/journey/journey-assessment-storage.client';
 
 const STEPS = [
-  'Creating workspace',
-  'Connecting systems',
-  'Configuring workflows',
-  'Preparing automations',
-  'Creating Commercial Timeline',
-  'Finalising Commercial OS',
+  'Creating your workspace',
+  'Setting up your Professional trial',
+  'Saving your workspace preferences',
+  'Preparing your Workspace',
 ];
 
 export function WorkspaceProvisioningScreen() {
@@ -92,15 +90,15 @@ export function WorkspaceProvisioningScreen() {
           {error
             ? 'Setup needs another try'
             : done
-              ? 'Your Commercial OS is live.'
-              : 'Building your Commercial OS'}
+              ? 'Your workspace is ready'
+              : 'Setting up your workspace'}
         </h1>
         <p className="mt-4 text-lg text-ink-soft">
           {error
             ? error
             : done
               ? 'Opening your workspace…'
-              : 'Provisioning your workspace, workflows and infrastructure.'}
+              : 'You have 30 days of Provvy Professional. You can create invoices now. Add payment methods when you are ready so customers can pay. Contextual AI guidance will introduce branding, payment methods, workflows and other capabilities when they are useful.'}
         </p>
 
         <div className="mx-auto mt-10 max-w-md">
@@ -142,6 +140,10 @@ export function WorkspaceProvisioningScreen() {
             );
           })}
         </div>
+
+        <p className="mx-auto mt-8 max-w-md text-[13px] text-ink-soft">
+          Check plan, trial status and upgrades anytime in Settings → Plan &amp; Billing.
+        </p>
 
         {error ? (
           <button
