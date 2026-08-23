@@ -153,7 +153,24 @@ export function journeyPostAuthDestination(): string {
 /** OAuth/email callback redirect for journey onboarding (must stay on journey routes). */
 export function journeyAuthCallbackUrl(origin: string): string {
   const redirectedFrom = encodeURIComponent(COMMERCIAL_OS_ROUTES.journeyPostAuth);
-  return `${origin}/auth/callback?redirectedFrom=${redirectedFrom}`;
+  return `${origin.replace(/\/$/, '')}/auth/callback?redirectedFrom=${redirectedFrom}`;
+}
+
+/**
+ * Confirmation-email redirect for Commercial OS email/password signup.
+ * Includes type=signup so the callback still returns to provisioning if
+ * redirectedFrom is stripped by the auth provider allowlist.
+ */
+export function journeySignupEmailRedirectTo(origin: string): string {
+  const redirectedFrom = encodeURIComponent(COMMERCIAL_OS_ROUTES.journeyPostAuth);
+  return `${origin.replace(/\/$/, '')}/auth/callback?type=signup&redirectedFrom=${redirectedFrom}`;
+}
+
+/** Post-verification destination when no participant return path is present. */
+export function merchantPostVerificationDestination(
+  candidateReturn?: string | null
+): string {
+  return candidateReturn || COMMERCIAL_OS_ROUTES.journeyPostAuth;
 }
 
 /** Default destination for authenticated users returning to the app root. */

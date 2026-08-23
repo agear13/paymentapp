@@ -5,6 +5,8 @@ import { getOperatorOnboardingState } from '@/lib/onboarding/operator-onboarding
 import { enforceVerifiedSession } from '@/lib/auth/verified-gate.server';
 import { redirect } from 'next/navigation';
 import { CsrfBootstrap } from '@/components/security/csrf-bootstrap';
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
+import { prisma } from '@/lib/server/prisma';
 
 /** Layout reads session cookies; prerender must be skipped for this subtree. */
 export const dynamic = 'force-dynamic';
@@ -32,11 +34,21 @@ export default async function OnboardingLayout({
   }
 
   const organization = await getUserOrganization();
-  if (organization) {
-    const onboardingState = await getOperatorOnboardingState(organization.id);
-    if (onboardingState?.completed || !onboardingState) {
-      redirect('/dashboard');
-    }
+  if (!organization) {
+    redirect(COMMERCIAL_OS_ROUTES.journeyPostAuth);
+  }
+
+  const organizationPlan = await prisma.organizations.findUnique({
+    where: { id: organization.id },
+    select: { subscription_plan: true },
+  });
+  if (organizationPlan?.subscription_plan && organizationPlan.subscription_plan !== 'starter') {
+    redirect(COMMERCIAL_OS_ROUTES.workspace);
+  }
+
+  const onboardingState = await getOperatorOnboardingState(organization.id);
+  if (onboardingState?.completed || !onboardingState) {
+    redirect('/dashboard');
   }
 
   return (

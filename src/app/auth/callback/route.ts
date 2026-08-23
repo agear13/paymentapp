@@ -29,6 +29,10 @@ import {
   createAuthCookieBuffer,
   createRequestBoundSupabaseClient,
 } from '@/lib/supabase/route-handler-client';
+import {
+  COMMERCIAL_OS_ROUTES,
+  merchantPostVerificationDestination,
+} from '@/lib/journey/commercial-os-routes';
 
 function canonicalRedirectBase(request: NextRequest): string {
   return resolveParticipantAuthOrigin(request);
@@ -153,10 +157,16 @@ export async function GET(request: NextRequest) {
       exchangeCalled: false,
       note: 'Hash tokens are not visible to this route; completing on the client page.',
     });
-    return redirectWithCookies(completeSignInPath(candidateReturn, undefined), {
-      exchangeCalled: false,
-      exchangeError: null,
-    });
+    return redirectWithCookies(
+      completeSignInPath(
+        candidateReturn ?? (type === 'signup' ? COMMERCIAL_OS_ROUTES.journeyPostAuth : null),
+        undefined
+      ),
+      {
+        exchangeCalled: false,
+        exchangeError: null,
+      }
+    );
   }
 
   let exchangeError: string | null = null;
@@ -268,7 +278,7 @@ export async function GET(request: NextRequest) {
       if (restored.kind === 'unique' || restored.kind === 'chooser') {
         redirectPath = restored.path;
       } else {
-        redirectPath = candidateReturn ?? '/onboarding';
+        redirectPath = merchantPostVerificationDestination(candidateReturn);
       }
     }
   }

@@ -4,7 +4,10 @@ import { getUserOrganization } from '@/lib/auth/get-org';
 import { JourneyLandingPage } from '@/components/journey/lovable';
 import { PublicLandingPage } from '@/components/marketing/public-landing-page';
 import { isHackathonJourneyEnabled } from '@/lib/journey/hackathon-journey';
-import { authenticatedHomeDestination } from '@/lib/journey/commercial-os-routes';
+import {
+  authenticatedHomeDestination,
+  COMMERCIAL_OS_ROUTES,
+} from '@/lib/journey/commercial-os-routes';
 
 /** Uses cookie-backed Supabase (`getCurrentUser`); cannot be statically generated. */
 export const dynamic = 'force-dynamic';
@@ -16,7 +19,7 @@ export default async function Home() {
     const organization = await getUserOrganization();
 
     if (!organization) {
-      redirect('/onboarding');
+      redirect(COMMERCIAL_OS_ROUTES.journeyPostAuth);
     }
 
     redirect(authenticatedHomeDestination());

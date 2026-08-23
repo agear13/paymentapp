@@ -70,14 +70,14 @@ function jsonRequest(url: string, body: unknown) {
 }
 
 function mockSignUp(result: { data?: { user?: unknown; session?: unknown }; error?: unknown }) {
-  mockCreateRouteHandlerSupabaseClient.mockResolvedValue({
-    auth: {
-      signUp: jest.fn().mockResolvedValue({
-        data: { user: null, session: null, ...result.data },
-        error: result.error ?? null,
-      }),
-    },
+  const signUp = jest.fn().mockResolvedValue({
+    data: { user: null, session: null, ...result.data },
+    error: result.error ?? null,
   });
+  mockCreateRouteHandlerSupabaseClient.mockResolvedValue({
+    auth: { signUp },
+  });
+  return signUp;
 }
 
 describe('isExistingAccountSignupError', () => {
@@ -105,7 +105,7 @@ describe('POST /api/auth/signup', () => {
   });
 
   it('creates a new account when signUp succeeds with identities', async () => {
-    mockSignUp({
+    const signUp = mockSignUp({
       data: {
         user: {
           id: 'user-1',
@@ -130,6 +130,14 @@ describe('POST /api/auth/signup', () => {
     expect(body.requiresVerification).toBe(true);
     expect(body.error).toBeUndefined();
     expect(mockIncrementAuthFailureCounter).not.toHaveBeenCalled();
+    expect(signUp).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: {
+          emailRedirectTo:
+            'http://localhost:3000/auth/callback?type=signup&redirectedFrom=%2Fjourney%2Fprovisioning%3Fbuild%3D1',
+        },
+      })
+    );
   });
 
   it('returns ACCOUNT_EXISTS when signUp returns a user with empty identities', async () => {

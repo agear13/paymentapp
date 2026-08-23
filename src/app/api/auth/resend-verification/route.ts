@@ -16,6 +16,7 @@ import {
   createRouteHandlerSupabaseClient,
   resolveAuthRedirectOrigin,
 } from '@/lib/supabase/route-handler-client';
+import { journeySignupEmailRedirectTo } from '@/lib/journey/commercial-os-routes';
 
 const bodySchema = z
   .object({
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
     type: 'signup',
     email,
     options: {
-      emailRedirectTo: `${origin}/auth/callback?type=signup`,
+      emailRedirectTo: journeySignupEmailRedirectTo(origin),
     },
   });
 
