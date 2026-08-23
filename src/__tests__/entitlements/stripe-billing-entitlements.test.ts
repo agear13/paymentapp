@@ -45,11 +45,12 @@ function paidCtx(
 }
 
 describe('Stripe billing entitlements', () => {
-  it('treats orgs without Stripe subscription as Starter for paid features', () => {
+  it('keeps a stored Professional plan when Stripe is missing and denies paid features', () => {
     const dangling = ctx({ plan: 'professional', status: 'active' });
     expect(hasActivePaidSubscription(dangling)).toBe(false);
-    expect(getEffectivePlan(dangling)).toBe('starter');
+    expect(getEffectivePlan(dangling)).toBe('professional');
     expect(canCreatePaymentLinks(dangling).allowed).toBe(false);
+    expect(canCreatePaymentLinks(dangling).reason).toBe('subscription_inactive');
   });
 
   it('grants Professional features with active Stripe subscription', () => {

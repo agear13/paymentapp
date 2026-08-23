@@ -9,10 +9,10 @@ jest.mock('@/lib/billing/start-saas-checkout.client', () => ({
 }));
 
 describe('PlanComparison', () => {
-  it('renders all four plans from App_Pricing', () => {
-    render(<PlanComparison currentPlan="starter" highlightPlan="professional" />);
+  it('renders self-serve plans from App_Pricing without Starter', () => {
+    render(<PlanComparison currentPlan="professional" highlightPlan="professional" />);
 
-    expect(screen.getByText('Starter')).toBeInTheDocument();
+    expect(screen.queryByText('Starter')).not.toBeInTheDocument();
     expect(screen.getByText('Professional')).toBeInTheDocument();
     expect(screen.getByText('Growth')).toBeInTheDocument();
     expect(screen.getByText('Enterprise')).toBeInTheDocument();
@@ -25,7 +25,7 @@ describe('PlanComparison', () => {
   });
 
   it('marks current and recommended plans', () => {
-    render(<PlanComparison currentPlan="starter" highlightPlan="professional" />);
+    render(<PlanComparison currentPlan="professional" highlightPlan="growth" />);
     expect(screen.getByText('Current')).toBeInTheDocument();
     expect(screen.getByText('Recommended')).toBeInTheDocument();
   });
@@ -36,7 +36,7 @@ describe('PlanComparison', () => {
   });
 
   it('uses a scroll region and responsive card minimum widths', () => {
-    render(<PlanComparison currentPlan="starter" />);
+    render(<PlanComparison currentPlan="professional" />);
 
     expect(screen.getByTestId('plan-comparison-scroll-region')).toBeInTheDocument();
     expect(screen.getByTestId('plan-comparison-layout')).toBeInTheDocument();

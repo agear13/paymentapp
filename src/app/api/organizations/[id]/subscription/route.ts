@@ -48,9 +48,16 @@ export async function PATCH(
     where: { id },
     select: { subscription_plan: true },
   });
-  const previousPlan = isSubscriptionPlan(existing?.subscription_plan ?? 'starter')
+  const previousPlan = isSubscriptionPlan(existing?.subscription_plan)
     ? (existing!.subscription_plan as SubscriptionPlan)
-    : 'starter';
+    : null;
+
+  if (body.plan === 'starter' && previousPlan && previousPlan !== 'starter') {
+    return apiError(
+      'Starter cannot be assigned to a workspace that is not already a historical Starter organisation.',
+      403
+    );
+  }
 
   const status: SubscriptionStatus | undefined =
     body.plan === 'starter'
@@ -70,7 +77,7 @@ export async function PATCH(
     workspaceId: id,
     currentPlan: body.plan,
     requiredPlan: body.plan,
-    previousPlan,
+    previousPlan: previousPlan ?? body.plan,
     userId: user.id,
   });
 

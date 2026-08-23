@@ -18,7 +18,7 @@ export class EntitlementRequiredError extends Error {
   readonly code = ENTITLEMENT_REQUIRED_CODE;
   readonly feature?: EntitlementFeature;
   readonly featureName?: string;
-  readonly currentPlan: SubscriptionPlan;
+  readonly currentPlan?: SubscriptionPlan;
   readonly requiredPlan: SubscriptionPlan;
   readonly headline: string;
   readonly userMessage: string;
@@ -38,7 +38,7 @@ export class EntitlementRequiredError extends Error {
     this.name = 'EntitlementRequiredError';
     this.feature = payload.feature;
     this.featureName = payload.featureName;
-    this.currentPlan = payload.currentPlan ?? 'starter';
+    this.currentPlan = payload.currentPlan;
     this.requiredPlan = payload.requiredPlan ?? 'professional';
     this.headline = headline;
     this.userMessage = userMessage;

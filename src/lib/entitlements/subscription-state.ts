@@ -53,8 +53,8 @@ export function hasEntitledPlanAccess(ctx: EntitlementContext, now: Date = new D
 /**
  * Plan used for entitlement evaluation.
  * Legacy Starter orgs stay Starter.
- * Expired first-party trials keep stored plan `professional` for display and
- * must not be treated as a usable Starter grant — evaluators deny via trial_expired.
+ * Expired first-party trials and cancelled paid plans keep their stored plan
+ * for display. Evaluators deny access without mapping the workspace to Starter.
  */
 export function getEffectivePlan(ctx: EntitlementContext, now: Date = new Date()): SubscriptionPlan {
   if (ctx.pilotBypass) return ctx.plan;
@@ -63,7 +63,7 @@ export function getEffectivePlan(ctx: EntitlementContext, now: Date = new Date()
   if (hasActivePaidSubscription(ctx)) return ctx.plan;
   if (hasActiveFirstPartyTrial(ctx, now)) return ctx.plan;
   if (isExpiredFirstPartyTrial(ctx, now)) return ctx.plan;
-  return 'starter';
+  return ctx.plan;
 }
 
 export function requiresPaidSubscription(plan: SubscriptionPlan): boolean {

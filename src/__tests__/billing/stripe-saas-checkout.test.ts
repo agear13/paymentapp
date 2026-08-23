@@ -3,6 +3,7 @@ import path from 'path';
 import type Stripe from 'stripe';
 import {
   applyStripeSubscriptionToOrganization,
+  clearStripeSubscriptionForOrganization,
   createSaasSubscriptionCheckoutSession,
 } from '@/lib/billing/stripe-subscription.server';
 import { resolveSaasCheckoutReturnUrls } from '@/lib/billing/saas-billing-return-urls';
@@ -132,6 +133,43 @@ describe('SaaS subscription checkout', () => {
         subscription_status: 'active',
       }),
     });
+  });
+
+  it('does not rewrite a cancelled paid plan to Starter', async () => {
+    mockOrganizationsUpdate.mockResolvedValue({ id: ORG_ID });
+
+    await applyStripeSubscriptionToOrganization({
+      organizationId: ORG_ID,
+      subscription: {
+        id: SUBSCRIPTION_ID,
+        status: 'past_due',
+        customer: CUSTOMER_ID,
+        current_period_end: Math.floor(Date.now() / 1000),
+        items: {
+          data: [{ price: { id: PROFESSIONAL_PRICE } }],
+        },
+      } as Stripe.Subscription,
+    });
+
+    expect(mockOrganizationsUpdate).toHaveBeenCalledWith({
+      where: { id: ORG_ID },
+      data: expect.objectContaining({
+        subscription_plan: 'professional',
+        subscription_status: 'past_due',
+      }),
+    });
+    expect(mockOrganizationsUpdate.mock.calls[0][0].data.subscription_plan).not.toBe('starter');
+  });
+
+  it('clears Stripe ids on cancel without assigning Starter', async () => {
+    mockOrganizationsUpdate.mockResolvedValue({ id: ORG_ID });
+
+    await clearStripeSubscriptionForOrganization({ organizationId: ORG_ID });
+
+    const data = mockOrganizationsUpdate.mock.calls[0][0].data as Record<string, unknown>;
+    expect(data.stripe_subscription_id).toBeNull();
+    expect(data.subscription_status).toBe('canceled');
+    expect(data).not.toHaveProperty('subscription_plan');
   });
 });
 

@@ -14,9 +14,17 @@ export function isSubscriptionPlan(value: string): value is SubscriptionPlan {
   return value === 'starter' || value === 'professional' || value === 'growth' || value === 'enterprise';
 }
 
-export function normalizeSubscriptionPlan(value: string | null | undefined): SubscriptionPlan {
+export function parseSubscriptionPlan(value: string | null | undefined): SubscriptionPlan | null {
   if (value && isSubscriptionPlan(value)) return value;
-  return 'starter';
+  return null;
+}
+
+/**
+ * Stored plan parser. Unknown values are unentitled Professional, not Starter.
+ * Historical Starter rows still parse as `starter`.
+ */
+export function normalizeSubscriptionPlan(value: string | null | undefined): SubscriptionPlan {
+  return parseSubscriptionPlan(value) ?? 'professional';
 }
 
 export function hasMinimumPlan(current: SubscriptionPlan, required: SubscriptionPlan): boolean {

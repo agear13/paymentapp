@@ -182,16 +182,14 @@ export async function applyStripeSubscriptionToOrganization(input: {
     ? new Date(input.subscription.current_period_end * 1000)
     : null;
 
-  const isEntitled = status === 'active' || status === 'trialing';
-
   await prisma.organizations.update({
     where: { id: input.organizationId },
     data: {
       stripe_customer_id: customerId ?? undefined,
       stripe_subscription_id: input.subscription.id,
       current_period_end: periodEnd,
-      subscription_plan: isEntitled ? plan : 'starter',
-      subscription_status: isEntitled ? status : status === 'canceled' ? 'canceled' : 'inactive',
+      subscription_plan: plan,
+      subscription_status: status,
     },
   });
 
@@ -216,14 +214,13 @@ export async function clearStripeSubscriptionForOrganization(input: {
     data: {
       stripe_subscription_id: null,
       current_period_end: null,
-      subscription_plan: 'starter',
-      subscription_status: 'inactive',
+      subscription_status: 'canceled',
     },
   });
 
   log.info(
     { correlationId: input.correlationId, organizationId: input.organizationId },
-    'Workspace subscription cleared — reverted to Starter'
+    'Workspace subscription cleared — last stored plan preserved'
   );
 }
 

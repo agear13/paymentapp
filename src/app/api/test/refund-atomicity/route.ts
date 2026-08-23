@@ -51,6 +51,8 @@ export async function POST(request: NextRequest) {
         clerk_org_id: `refund_atomicity_test_${crypto.randomUUID()}`,
         name: 'Refund atomicity test org',
         created_at: now,
+        subscription_plan: 'professional',
+        subscription_status: 'active',
       },
     });
 

@@ -23,8 +23,10 @@ export const FEATURE_DISPLAY_NAMES: Record<EntitlementFeature, string> = {
 export function upgradeHeadline(
   feature: EntitlementFeature,
   atLimit?: boolean,
-  subscriptionInactive?: boolean
+  subscriptionInactive?: boolean,
+  trialExpired?: boolean
 ): string {
+  if (trialExpired) return 'Your Professional trial has ended';
   if (subscriptionInactive) return 'Active subscription required';
   if (atLimit && feature === 'create_agreement') return 'Project limit reached';
   if (atLimit && feature === 'ai_import') return 'AI import limit reached';
@@ -35,8 +37,12 @@ export function upgradeBody(
   feature: EntitlementFeature,
   requiredPlan: SubscriptionPlan,
   atLimit?: boolean,
-  subscriptionInactive?: boolean
+  subscriptionInactive?: boolean,
+  trialExpired?: boolean
 ): string {
+  if (trialExpired) {
+    return `Your Professional trial has ended. Choose a paid Professional, Growth, or Enterprise plan to keep using ${FEATURE_DISPLAY_NAMES[feature]}.`;
+  }
   if (subscriptionInactive) {
     return `Complete checkout to activate your ${requiredPlanLabel(requiredPlan)} subscription and unlock ${FEATURE_DISPLAY_NAMES[feature]}.`;
   }
@@ -50,7 +56,7 @@ export function upgradeBody(
         ? starterLimitMessage('ai_import')
         : `Upgrade to ${requiredPlanLabel(requiredPlan)} for unlimited AI imports.`;
     case 'payment_links':
-      return "You're currently on Starter. Upgrade to Professional to create Payment Links and automate settlement tracking.";
+      return 'Upgrade to Professional to create Payment Links and automate settlement tracking.';
     case 'referral_management':
       return 'Referral & Affiliate Management is available on Professional.';
     case 'xero_integration':

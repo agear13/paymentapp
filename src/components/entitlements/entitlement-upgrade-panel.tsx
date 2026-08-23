@@ -6,7 +6,7 @@ import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { EntitlementFeature, SubscriptionPlan } from '@/lib/entitlements/types';
 import { FEATURE_DISPLAY_NAMES } from '@/lib/entitlements/feature-labels';
-import { getPlanCatalogEntry, planDisplayName } from '@/lib/plans/plan-catalog';
+import { getPlanCatalogEntry } from '@/lib/plans/plan-catalog';
 import { PlanComparisonDialog } from '@/components/plans/plan-comparison-dialog';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import {
@@ -66,19 +66,21 @@ export function EntitlementUpgradePanel({
   const decision = getDecision(feature);
   const requiredPlan = resolveRequiredPlan(feature, decision?.requiredPlan);
   const targetPlan = getPlanCatalogEntry(requiredPlan);
-  const currentPlanName = planDisplayName(plan);
   const subscriptionInactive = decision?.reason === 'subscription_inactive';
+  const trialExpired = decision?.reason === 'trial_expired';
 
-  const headline =
-    feature === 'payment_links'
+  const headline = trialExpired
+    ? 'Your Professional trial has ended'
+    : feature === 'payment_links'
       ? 'Payment Links are available on Professional'
       : `${FEATURE_DISPLAY_NAMES[feature]} requires ${targetPlan.name}`;
 
-  const body =
-    subscriptionInactive
+  const body = trialExpired
+    ? `Your Professional trial has ended. Choose a paid Professional, Growth, or Enterprise plan to keep using ${FEATURE_DISPLAY_NAMES[feature]}.`
+    : subscriptionInactive
       ? `Complete checkout to activate your ${targetPlan.name} subscription and unlock ${FEATURE_DISPLAY_NAMES[feature]}.`
       : feature === 'payment_links'
-        ? `You're currently on ${currentPlanName}. ${targetPlan.positioning}`
+        ? `${targetPlan.positioning}`
         : `${FEATURE_DISPLAY_NAMES[feature]} is available on ${targetPlan.name} and above.`;
 
   React.useEffect(() => {

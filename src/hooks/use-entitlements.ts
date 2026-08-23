@@ -3,7 +3,6 @@
 import * as React from 'react';
 import type {
   EntitlementFeature,
-  SubscriptionPlan,
   WorkspaceEntitlements,
 } from '@/lib/entitlements/types';
 import type { EntitlementDecision } from '@/lib/entitlements/types';
@@ -91,8 +90,8 @@ export function useEntitlements() {
     refresh,
     isAllowed,
     getDecision,
-    plan: (data?.plan ?? 'starter') as SubscriptionPlan,
-    effectivePlan: (data?.effectivePlan ?? 'starter') as SubscriptionPlan,
+    plan: data?.plan ?? null,
+    effectivePlan: data?.effectivePlan ?? null,
     pilotBypass: data?.pilotBypass ?? false,
     usage: data?.usage,
   };

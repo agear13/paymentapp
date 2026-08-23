@@ -33,7 +33,7 @@ export function PlanComparisonDialog({
             Choose the plan that matches how your business coordinates commerce.
           </DialogDescription>
         </DialogHeader>
-        <PlanComparison highlightPlan={highlightPlan} currentPlan={plan} />
+        <PlanComparison highlightPlan={highlightPlan} currentPlan={plan ?? undefined} />
       </DialogContent>
     </Dialog>
   );

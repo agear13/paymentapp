@@ -234,7 +234,7 @@ export function WorkflowOnboardingForm() {
   const [bootstrapMutation, setBootstrapMutation] =
     React.useState<OnboardingRecoveryMutation | null>(null);
   const bootstrapOperationIdRef = React.useRef<string>(createOperationId());
-  const { isAllowed, pilotBypass, loading: entitlementsLoading } = useEntitlements();
+  const { isAllowed, pilotBypass, loading: entitlementsLoading, plan } = useEntitlements();
   const agreementAtLimit = !entitlementsLoading && !pilotBypass && !isAllowed('create_agreement');
   const aiImportAtLimit = !entitlementsLoading && !pilotBypass && !isAllowed('ai_import');
 
@@ -656,11 +656,13 @@ export function WorkflowOnboardingForm() {
   async function completeStarterOnboarding() {
     if (!organizationId) return;
 
-    await csrfAwareFetch(`/api/organizations/${organizationId}/subscription`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan: 'starter', status: 'inactive' }),
-    });
+    if (plan === 'starter') {
+      await csrfAwareFetch(`/api/organizations/${organizationId}/subscription`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: 'starter', status: 'inactive' }),
+      });
+    }
 
     trackOnboardingActivation('plan_selected', {
       organizationId,

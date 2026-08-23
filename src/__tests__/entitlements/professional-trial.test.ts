@@ -149,6 +149,17 @@ describe('first-party Professional Trial entitlements', () => {
     expect(canCreatePaymentLinks(growth).allowed).toBe(true);
   });
 
+  it('does not grant Starter limits after a cancelled paid Professional subscription', () => {
+    const canceled = paidProfessional({
+      status: 'canceled',
+      stripeSubscriptionId: null,
+    });
+    expect(getEffectivePlan(canceled)).toBe('professional');
+    expect(hasEntitledPlanAccess(canceled)).toBe(false);
+    expect(canCreateAgreement(canceled).allowed).toBe(false);
+    expect(canUseXeroIntegration(canceled).allowed).toBe(false);
+  });
+
   it('leaves legacy Starter organisations unchanged', () => {
     const starter = ctx({
       usage: { agreementCount: 2, aiImportCount: 1, teamMemberCount: 1, workspaceCount: 1 },

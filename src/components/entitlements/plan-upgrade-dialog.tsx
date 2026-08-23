@@ -28,7 +28,7 @@ export type PlanUpgradeDialogProps = {
   onOpenChange: (open: boolean) => void;
   requiredPlan: SubscriptionPlan;
   featureName: string;
-  currentPlan: SubscriptionPlan;
+  currentPlan?: SubscriptionPlan | null;
   headline?: string;
   body?: string;
   organizationId?: string;
@@ -61,7 +61,7 @@ export function PlanUpgradeDialog({
     setError(null);
     trackEntitlementAnalytics('upgrade_prompt_opened', {
       organizationId,
-      currentPlan,
+      currentPlan: currentPlan ?? undefined,
       requiredPlan,
       featureName,
     });
@@ -70,7 +70,7 @@ export function PlanUpgradeDialog({
   async function handleUpgradeClick() {
     trackEntitlementAnalytics('upgrade_clicked', {
       organizationId,
-      currentPlan,
+      currentPlan: currentPlan ?? undefined,
       requiredPlan,
       featureName,
     });

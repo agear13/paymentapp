@@ -21,6 +21,7 @@ import {
   type MutationResult,
 } from '@/lib/onboarding/mutation-resilience';
 import { log } from '@/lib/logger';
+import { journeyWorkspaceSubscriptionCreate } from '@/lib/entitlements/professional-trial';
 import {
   runOperationalInitializationConvergence,
 } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
@@ -198,6 +199,7 @@ async function runBootstrap(
       data: {
         name: 'Workspace',
         clerk_org_id: `onb_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`,
+        ...journeyWorkspaceSubscriptionCreate(),
       },
     });
 

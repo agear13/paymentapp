@@ -24,12 +24,13 @@ describe('plan-catalog', () => {
     expect(PLAN_CATALOG.professional.features).toContain('Payment Links');
   });
 
-  it('orders plans starter through enterprise', () => {
-    expect(PLAN_CATALOG_ORDER).toEqual(['starter', 'professional', 'growth', 'enterprise']);
+  it('orders self-serve plans without Starter', () => {
+    expect(PLAN_CATALOG_ORDER).toEqual(['professional', 'growth', 'enterprise']);
+    expect(PLAN_CATALOG.starter.id).toBe('starter');
   });
 
-  it('defaults unknown plan to starter', () => {
-    expect(getPlanCatalogEntry('unknown').id).toBe('starter');
+  it('does not invent Starter for an unknown plan id', () => {
+    expect(getPlanCatalogEntry('unknown').id).toBe('professional');
   });
 });
 

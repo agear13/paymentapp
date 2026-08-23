@@ -8,6 +8,10 @@ import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { apiResponse, apiError, validateBody } from '@/lib/api/middleware';
 import { log } from '@/lib/logger';
+import {
+  additionalWorkspaceSubscriptionCreate,
+  journeyWorkspaceSubscriptionCreate,
+} from '@/lib/entitlements/professional-trial';
 
 const createOrganizationSchema = z.object({
   name: z.string().min(2).max(255),
@@ -84,6 +88,15 @@ export async function POST(request: NextRequest) {
       if (entitlementBlock) return entitlementBlock;
     }
 
+    const subscriptionCreate = primaryOrg
+      ? additionalWorkspaceSubscriptionCreate(
+          (await prisma.organizations.findUnique({
+            where: { id: primaryOrg.id },
+            select: { subscription_plan: true, subscription_status: true },
+          })) ?? { subscription_plan: 'enterprise', subscription_status: 'active' }
+        )
+      : journeyWorkspaceSubscriptionCreate();
+
     // Create organization and link to user in a transaction
     const result = await prisma.$transaction(async (tx) => {
       // Create the organization
@@ -91,6 +104,7 @@ export async function POST(request: NextRequest) {
         data: {
           name: body.name,
           clerk_org_id: clerkOrgId,
+          ...subscriptionCreate,
         },
       });
 

@@ -70,7 +70,7 @@ export function PlanComparison({
           className={cn(
             'grid grid-cols-1 gap-4',
             'sm:flex sm:w-max sm:min-w-full sm:gap-4',
-            '2xl:grid 2xl:w-auto 2xl:min-w-0 2xl:grid-cols-4'
+            '2xl:grid 2xl:w-auto 2xl:min-w-0 2xl:grid-cols-3'
           )}
           data-testid="plan-comparison-layout"
         >
@@ -124,9 +124,7 @@ export function PlanComparison({
                       ? 'Redirecting…'
                       : planId === 'enterprise'
                         ? 'Contact Sales'
-                        : planId === 'starter'
-                          ? 'Current default'
-                          : `Choose ${plan.name}`}
+                        : `Choose ${plan.name}`}
                   </Button>
                 ) : null}
               </div>

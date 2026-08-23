@@ -156,6 +156,14 @@ export function PlanBillingPage() {
     );
   }
 
+  if (!entitlements || !effectivePlan) {
+    return (
+      <div className="py-16 text-[15px] text-ink-soft">
+        Plan details are unavailable. Refresh to try again.
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-up space-y-8 pb-16">
       <header>
@@ -174,6 +182,12 @@ export function PlanBillingPage() {
             <Badge variant="secondary" className="mt-2">
               Current plan
             </Badge>
+            {entitlements.trialExpired ? (
+              <p className="mt-2 text-[13px] text-ink-soft">
+                Your Professional trial has ended. Choose a paid Professional, Growth, or
+                Enterprise plan to restore entitled features.
+              </p>
+            ) : null}
             {pilotBypass ? (
               <p className="mt-2 text-[13px] text-ink-soft">Pilot access — full feature bypass active.</p>
             ) : null}

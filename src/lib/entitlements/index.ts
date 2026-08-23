@@ -15,6 +15,7 @@ export {
   hasMinimumPlan,
   isSubscriptionPlan,
   normalizeSubscriptionPlan,
+  parseSubscriptionPlan,
   requiredPlanLabel,
 } from '@/lib/entitlements/plans';
 
@@ -34,6 +35,7 @@ export {
   PROFESSIONAL_TRIAL_DAYS,
   computeProfessionalTrialEndsAt,
   journeyWorkspaceSubscriptionCreate,
+  additionalWorkspaceSubscriptionCreate,
 } from '@/lib/entitlements/professional-trial';
 
 export {

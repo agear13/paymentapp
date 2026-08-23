@@ -78,7 +78,6 @@ export const PLAN_CATALOG: Record<PlanCatalogId, PlanCatalogEntry> = {
 };
 
 export const PLAN_CATALOG_ORDER: readonly PlanCatalogId[] = [
-  'starter',
   'professional',
   'growth',
   'enterprise',
@@ -88,9 +87,13 @@ export function getPlanCatalogEntry(plan: string | null | undefined): PlanCatalo
   if (plan && plan in PLAN_CATALOG) {
     return PLAN_CATALOG[plan as PlanCatalogId];
   }
-  return PLAN_CATALOG.starter;
+  return PLAN_CATALOG.professional;
 }
 
 export function planDisplayName(plan: string | null | undefined): string {
-  return getPlanCatalogEntry(plan).name;
+  if (!plan) return 'Unknown';
+  if (plan in PLAN_CATALOG) {
+    return PLAN_CATALOG[plan as PlanCatalogId].name;
+  }
+  return 'Unknown';
 }

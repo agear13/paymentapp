@@ -71,6 +71,7 @@ export function FeatureGate({
         ? decision?.reason === 'ai_import_limit'
         : false;
   const subscriptionInactive = decision?.reason === 'subscription_inactive';
+  const trialExpired = decision?.reason === 'trial_expired';
 
   return (
     <div className="relative">
@@ -80,10 +81,10 @@ export function FeatureGate({
       <div className="absolute inset-0 flex items-center justify-center p-4">
         <div className="pointer-events-auto max-w-md w-full rounded-xl border bg-card p-4 shadow-lg text-center space-y-3">
           <h3 className="font-semibold text-sm">
-            {upgradeHeadline(feature, atLimit, subscriptionInactive)}
+            {upgradeHeadline(feature, atLimit, subscriptionInactive, trialExpired)}
           </h3>
           <p className="text-sm text-muted-foreground">
-            {upgradeBody(feature, requiredPlan, atLimit, subscriptionInactive)}
+            {upgradeBody(feature, requiredPlan, atLimit, subscriptionInactive, trialExpired)}
           </p>
           <Button type="button" size="sm" onClick={() => setDialogOpen(true)}>
             {upgradeCta(requiredPlan)}
@@ -93,9 +94,9 @@ export function FeatureGate({
             onOpenChange={setDialogOpen}
             requiredPlan={requiredPlan}
             featureName={FEATURE_DISPLAY_NAMES[feature]}
-            currentPlan={entitlements?.plan ?? 'starter'}
-            headline={upgradeHeadline(feature, atLimit, subscriptionInactive)}
-            body={upgradeBody(feature, requiredPlan, atLimit, subscriptionInactive)}
+            currentPlan={entitlements?.plan}
+            headline={upgradeHeadline(feature, atLimit, subscriptionInactive, trialExpired)}
+            body={upgradeBody(feature, requiredPlan, atLimit, subscriptionInactive, trialExpired)}
             organizationId={entitlements?.organizationId}
           />
         </div>
@@ -130,6 +131,7 @@ export function GatedButton({
         ? decision?.reason === 'ai_import_limit'
         : false;
   const subscriptionInactive = decision?.reason === 'subscription_inactive';
+  const trialExpired = decision?.reason === 'trial_expired';
 
   return (
     <>
@@ -153,8 +155,8 @@ export function GatedButton({
         requiredPlan={requiredPlan}
         featureName={FEATURE_DISPLAY_NAMES[feature]}
         currentPlan={plan}
-        headline={upgradeHeadline(feature, atLimit, subscriptionInactive)}
-        body={upgradeBody(feature, requiredPlan, atLimit, subscriptionInactive)}
+        headline={upgradeHeadline(feature, atLimit, subscriptionInactive, trialExpired)}
+        body={upgradeBody(feature, requiredPlan, atLimit, subscriptionInactive, trialExpired)}
         organizationId={organizationId ?? entitlements?.organizationId}
       />
     </>

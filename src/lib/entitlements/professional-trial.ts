@@ -12,3 +12,17 @@ export function journeyWorkspaceSubscriptionCreate(from: Date = new Date()) {
     trial_ends_at: computeProfessionalTrialEndsAt(from),
   };
 }
+
+/**
+ * Additional workspace under an already-entitled Enterprise operator.
+ * Copies the primary plan/status only — never starts a new trial or Stripe id.
+ */
+export function additionalWorkspaceSubscriptionCreate(primary: {
+  subscription_plan: string;
+  subscription_status: string;
+}) {
+  return {
+    subscription_plan: primary.subscription_plan,
+    subscription_status: primary.subscription_status,
+  };
+}

@@ -3,8 +3,8 @@ import { STARTER_MAX_AGREEMENTS } from '@/lib/entitlements/plans';
 import { getPlanCatalogEntry } from '@/lib/plans/plan-catalog';
 
 export type PlanRecommendationInput = {
-  currentPlan: SubscriptionPlan;
-  effectivePlan: SubscriptionPlan;
+  currentPlan: SubscriptionPlan | null;
+  effectivePlan: SubscriptionPlan | null;
   usage?: WorkspaceUsage;
   deniedFeatures?: Partial<Record<EntitlementFeature, boolean>>;
   stripeConnectConfigured?: boolean;
