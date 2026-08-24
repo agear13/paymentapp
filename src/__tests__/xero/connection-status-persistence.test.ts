@@ -32,6 +32,7 @@ jest.mock('@/lib/logger', () => ({
 }));
 
 import { prisma } from '@/lib/server/prisma';
+import { loggers } from '@/lib/logger';
 import { revokeConnection } from '@/lib/xero/client';
 import {
   disconnectXero,
@@ -160,7 +161,16 @@ describe('Xero connection status persistence', () => {
 
   it('marks AUTH_REAUTH_REQUIRED when the refresh token is invalid', async () => {
     persistRow();
-    mockRefreshAccessToken.mockRejectedValue(new Error('invalid_grant'));
+    mockRefreshAccessToken.mockRejectedValue({
+      message: 'Request failed with status code 400',
+      response: {
+        status: 400,
+        data: {
+          error: 'invalid_grant',
+          error_description: 'Invalid refresh_token',
+        },
+      },
+    });
 
     const status = await getConnectionStatus(ORG_ID);
 
@@ -169,12 +179,21 @@ describe('Xero connection status persistence', () => {
     expect(status.reauthorizationRequired).toBe(true);
     expect(status.connectionState).toBe('AUTH_REAUTH_REQUIRED');
     expect(status.transientRefreshFailure).toBeUndefined();
+    expect(status.refreshFailure).toEqual({
+      category: 'invalid_grant',
+      statusCode: 400,
+      providerError: 'invalid_grant',
+      message: 'Invalid refresh_token',
+    });
     expect(mockRefreshAccessToken).toHaveBeenCalled();
   });
 
   it('does not mark reconnect required on a transient refresh failure', async () => {
     persistRow();
-    mockRefreshAccessToken.mockRejectedValue(new Error('fetch failed'));
+    mockRefreshAccessToken.mockRejectedValue({
+      message: 'Too Many Requests',
+      response: { status: 429 },
+    });
 
     const status = await getConnectionStatus(ORG_ID);
 
@@ -183,6 +202,115 @@ describe('Xero connection status persistence', () => {
     expect(status.reauthorizationRequired).toBeUndefined();
     expect(status.transientRefreshFailure).toBe(true);
     expect(status.connectionState).toBe('ERROR');
+    expect(status.refreshFailure).toEqual({
+      category: 'transient',
+      statusCode: 429,
+      providerError: null,
+      message: 'Too Many Requests',
+    });
+  });
+
+  it('does not mark reconnect required on a network timeout refresh failure', async () => {
+    persistRow();
+    mockRefreshAccessToken.mockRejectedValue({
+      code: 'ETIMEDOUT',
+      message: 'connect ETIMEDOUT identity.xero.com:443',
+    });
+
+    const status = await getConnectionStatus(ORG_ID);
+
+    expect(status.reauthorizationRequired).toBeUndefined();
+    expect(status.transientRefreshFailure).toBe(true);
+    expect(status.connectionState).toBe('ERROR');
+    expect(status.refreshFailure).toEqual({
+      category: 'transient',
+      statusCode: null,
+      providerError: 'ETIMEDOUT',
+      message: 'connect ETIMEDOUT identity.xero.com:443',
+    });
+  });
+
+  it('does not mark reconnect required on an unclassified refresh failure', async () => {
+    persistRow();
+    mockRefreshAccessToken.mockRejectedValue({
+      message: 'TokenSet missing access_token',
+      response: { status: 418, body: { unexpected: true } },
+    });
+
+    const status = await getConnectionStatus(ORG_ID);
+
+    expect(status.connected).toBe(true);
+    expect(status.stale).toBeUndefined();
+    expect(status.reauthorizationRequired).toBeUndefined();
+    expect(status.transientRefreshFailure).toBe(true);
+    expect(status.connectionState).toBe('ERROR');
+    expect(status.refreshFailure).toEqual({
+      category: 'unclassified',
+      statusCode: 418,
+      providerError: null,
+      message: 'TokenSet missing access_token',
+    });
+  });
+
+  it('surfaces persist_failed diagnostics without rotating stored credentials', async () => {
+    persistRow();
+    mockRefreshAccessToken.mockResolvedValue({
+      accessToken: 'access-new',
+      refreshToken: 'refresh-new',
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+      tokenType: 'Bearer',
+    });
+    updateMany.mockRejectedValueOnce(new Error('database write failed'));
+
+    const status = await getConnectionStatus(ORG_ID);
+
+    expect(status.connected).toBe(true);
+    expect(status.reauthorizationRequired).toBe(true);
+    expect(status.connectionState).toBe('AUTH_REAUTH_REQUIRED');
+    expect(status.refreshFailure).toEqual({
+      category: 'persist_failed',
+      statusCode: null,
+      providerError: null,
+      message: 'Failed to persist rotated Xero credentials',
+    });
+    expect(decryptToken(row!.access_token)).toBe('access-old');
+    expect(decryptToken(row!.refresh_token)).toBe('refresh-old');
+  });
+
+  it('logs sanitized refresh failure diagnostics without credentials', async () => {
+    persistRow();
+    mockRefreshAccessToken.mockRejectedValue({
+      message:
+        'refresh failed Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.aaa.bbb access_token=secret-access',
+      response: { status: 418, body: { unexpected: true } },
+      config: {
+        headers: { Authorization: 'Bearer secret-access' },
+        data: 'client_secret=super-secret&refresh_token=rotating-refresh',
+      },
+    });
+
+    await getConnectionStatus(ORG_ID);
+
+    expect(loggers.xero.error).toHaveBeenCalledWith(
+      'xero_token_refresh_failed',
+      undefined,
+      expect.objectContaining({
+        source: 'connection_service',
+        organizationId: ORG_ID,
+        category: 'unclassified',
+        statusCode: 418,
+        providerError: null,
+      })
+    );
+
+    const failedLog = (loggers.xero.error as jest.Mock).mock.calls.find(
+      ([event]) => event === 'xero_token_refresh_failed'
+    );
+    expect(failedLog).toBeDefined();
+    expect(failedLog?.[1]).toBeUndefined();
+    expect(JSON.stringify(failedLog?.[2])).not.toMatch(
+      /secret-access|super-secret|rotating-refresh|Bearer eyJ/
+    );
   });
 
   it('does not treat a decryptable persisted connection as disconnected', async () => {

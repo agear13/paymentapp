@@ -86,10 +86,15 @@ export async function GET(request: NextRequest) {
       expiresAt: status.expiresAt?.toISOString(),
       reauthorizationRequired: Boolean(status.reauthorizationRequired),
       transientRefreshFailure: Boolean(status.transientRefreshFailure),
+      refreshFailureCategory: status.refreshFailure?.category ?? null,
+      refreshFailureStatusCode: status.refreshFailure?.statusCode ?? null,
+      refreshFailureProviderError: status.refreshFailure?.providerError ?? null,
+      refreshFailureMessage: status.refreshFailure?.message ?? null,
     });
 
     return NextResponse.json({
       ...status,
+      refreshFailure: status.refreshFailure ?? null,
       tenants,
       ...(operatorMessage ? { operatorMessage } : {}),
     });

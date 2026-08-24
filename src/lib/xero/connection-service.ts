@@ -18,7 +18,9 @@ import {
 } from './token-set-trace';
 import {
   classifyXeroRefreshFailure,
+  toXeroRefreshFailureDiagnostics,
   XeroRefreshError,
+  type XeroRefreshFailureDiagnostics,
 } from './xero-refresh-errors';
 import { computeXeroConnectionState, type XeroConnectionState } from './xero-connection-state';
 
@@ -501,6 +503,7 @@ export type XeroActiveConnectionLoad = {
   persisted: boolean;
   reauthorizationRequired: boolean;
   transientRefreshFailure: boolean;
+  refreshFailure?: XeroRefreshFailureDiagnostics | null;
 };
 
 function emptyActiveLoad(
@@ -512,8 +515,28 @@ function emptyActiveLoad(
     persisted,
     reauthorizationRequired: false,
     transientRefreshFailure: false,
+    refreshFailure: extra?.refreshFailure ?? null,
     ...extra,
   };
+}
+
+function logXeroTokenRefreshFailed(
+  connection: XeroConnection,
+  refreshFailure: XeroRefreshFailureDiagnostics
+): void {
+  loggers.xero.error('xero_token_refresh_failed', undefined, {
+    step: 'refresh_access_token',
+    source: 'connection_service',
+    organizationId: connection.organizationId,
+    tenantId: connection.tenantId,
+    connectionId: connection.id,
+    category: refreshFailure.category,
+    statusCode: refreshFailure.statusCode,
+    providerError: refreshFailure.providerError,
+    message: refreshFailure.message,
+    expiresAt: connection.expiresAt.toISOString(),
+    tokenVersion: connection.tokenVersion,
+  });
 }
 
 /**
@@ -566,11 +589,13 @@ export async function loadActiveXeroConnection(
         persisted: true,
         reauthorizationRequired: false,
         transientRefreshFailure: false,
+        refreshFailure: null,
       };
     }
 
     loggers.xero.info('xero_token_refresh_attempted', {
       step: 'refresh_access_token',
+      source: 'connection_service',
       organizationId,
       tenantId: connection.tenantId,
       connectionId: connection.id,
@@ -583,6 +608,7 @@ export async function loadActiveXeroConnection(
 
       loggers.xero.info('xero_token_refresh_succeeded', {
         step: 'refresh_access_token',
+        source: 'connection_service',
         organizationId,
         tenantId: stored.tenantId,
         connectionId: stored.id,
@@ -595,18 +621,12 @@ export async function loadActiveXeroConnection(
         persisted: true,
         reauthorizationRequired: false,
         transientRefreshFailure: false,
+        refreshFailure: null,
       };
     } catch (error: unknown) {
       const classified = classifyXeroRefreshFailure(error);
-      loggers.xero.error('xero_token_refresh_failed', error, {
-        step: 'refresh_access_token',
-        organizationId,
-        tenantId: connection.tenantId,
-        connectionId: connection.id,
-        category: classified.category,
-        status: classified.statusCode,
-        expiresAt: connection.expiresAt.toISOString(),
-      });
+      const refreshFailure = toXeroRefreshFailureDiagnostics(classified);
+      logXeroTokenRefreshFailed(connection, refreshFailure);
 
       if (classified.category === 'invalid_grant') {
         const reloaded = await getXeroConnection(organizationId);
@@ -626,6 +646,7 @@ export async function loadActiveXeroConnection(
             persisted: true,
             reauthorizationRequired: false,
             transientRefreshFailure: false,
+            refreshFailure: null,
           };
         }
 
@@ -634,10 +655,15 @@ export async function loadActiveXeroConnection(
           connectionId: connection.id,
           tenantId: connection.tenantId,
           category: classified.category,
-          status: classified.statusCode,
+          statusCode: classified.statusCode ?? null,
+          providerError: classified.providerError ?? null,
+          message: refreshFailure.message,
           expiresAt: connection.expiresAt.toISOString(),
         });
-        return emptyActiveLoad(true, { reauthorizationRequired: true });
+        return emptyActiveLoad(true, {
+          reauthorizationRequired: true,
+          refreshFailure,
+        });
       }
 
       if (connection.expiresAt.getTime() > Date.now()) {
@@ -647,18 +673,23 @@ export async function loadActiveXeroConnection(
           tenantId: connection.tenantId,
           connectionId: connection.id,
           category: classified.category,
+          statusCode: classified.statusCode ?? null,
+          providerError: classified.providerError ?? null,
         });
         return {
           connection,
           persisted: true,
           reauthorizationRequired: false,
-          transientRefreshFailure: classified.category === 'transient',
+          transientRefreshFailure:
+            classified.category === 'transient' || classified.category === 'unclassified',
+          refreshFailure,
         };
       }
 
       return emptyActiveLoad(true, {
         transientRefreshFailure: classified.category !== 'persist_failed',
         reauthorizationRequired: classified.category === 'persist_failed',
+        refreshFailure,
       });
     }
   });
@@ -689,6 +720,7 @@ export type XeroConnectionStatus = {
   stale?: boolean;
   reauthorizationRequired?: boolean;
   transientRefreshFailure?: boolean;
+  refreshFailure?: XeroRefreshFailureDiagnostics | null;
   connectionState: XeroConnectionState;
   tenantId?: string;
   expiresAt?: Date;
@@ -758,6 +790,9 @@ export async function getConnectionStatus(
   }
   if (loaded.transientRefreshFailure && !loaded.connection) {
     status.transientRefreshFailure = true;
+  }
+  if (loaded.refreshFailure) {
+    status.refreshFailure = loaded.refreshFailure;
   }
 
   return status;

@@ -170,7 +170,10 @@ export async function refreshAccessToken(
     throw new Error('Refresh token is required but was not provided');
   }
 
-  loggers.xero.info('xero_token_refresh_attempted', { step: 'refresh_access_token' });
+  loggers.xero.info('xero_token_refresh_attempted', {
+    step: 'refresh_access_token',
+    source: 'identity',
+  });
 
   try {
     loggers.xero.debug('xero_refresh_construct_client', { step: 'construct_xero_client' });
@@ -204,6 +207,7 @@ export async function refreshAccessToken(
 
     loggers.xero.info('xero_token_refresh_succeeded', {
       step: 'refresh_access_token',
+      source: 'identity',
       expiresAt: parsed.expiresAt.toISOString(),
       rotatedRefreshToken: Boolean(tokenSet.refresh_token),
     });
@@ -217,10 +221,13 @@ export async function refreshAccessToken(
     return parsed;
   } catch (error: unknown) {
     const classified = xeroRefreshErrorFromUnknown(error);
-    loggers.xero.error('xero_token_refresh_failed', error, {
+    loggers.xero.error('xero_token_refresh_failed', undefined, {
       step: 'refresh_access_token',
+      source: 'identity',
       category: classified.category,
-      status: classified.statusCode,
+      statusCode: classified.statusCode ?? null,
+      providerError: classified.providerError ?? null,
+      message: classified.message,
     });
     throw classified;
   }
