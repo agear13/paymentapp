@@ -44,7 +44,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Participant already exists' }, { status: 409 });
     }
 
-    const { participant: toPersist } = repairScalarCompensationProfile(participant);
+    const { participant: repaired } = repairScalarCompensationProfile(participant);
+    const toPersist = {
+      ...repaired,
+      id: participant.id,
+      dealId: deal.id,
+      inviteToken: participant.inviteToken,
+    };
 
     const row = await prisma.deal_network_pilot_participants.create({
       data: {
