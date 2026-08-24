@@ -38,7 +38,7 @@ ALTER TABLE "referral_links"
 
 -- Backfill one default program per org that already has referral links or codes.
 INSERT INTO "referral_programs" ("organization_id", "slug", "name", "status")
-SELECT DISTINCT org_id, 'default', 'Default Referral Program', 'ACTIVE'
+SELECT DISTINCT org_id, 'default', 'Default Referral Program', 'ACTIVE'::"ReferralProgramStatus"
 FROM (
     SELECT "organization_id" AS org_id FROM "referral_links"
     UNION
