@@ -22,9 +22,12 @@ import {
   normalizeReferralCommerce,
 } from '@/lib/referrals/referral-commerce-config';
 import type { ManualPayoutMethod } from '@/lib/participants/manual-payout-method';
+import { resolveReferralProgramIdForNewLink } from '@/lib/referrals/referral-program.server';
 
 export type EnsureReferralIssuanceInput = {
   organizationId: string;
+  /** Optional explicit program. When omitted, the org default program is used/created. */
+  programId?: string | null;
   operatorUserId: string;
   participantUserId?: string | null;
   participantEmail?: string | null;
@@ -453,6 +456,11 @@ export async function ensureReferralIssuance(
     ? normalizeReferralCommerce(input.referralCommerce)
     : null;
   const checkoutConfig = buildIssuanceCheckoutConfig(input);
+  const programId = await resolveReferralProgramIdForNewLink(
+    prisma,
+    organizationId,
+    input.programId
+  );
 
   let created: { link: { id: string; slug: string | null; code: string }; rc: { id: string; code: string } };
   let createCode = code;
@@ -461,6 +469,7 @@ export async function ensureReferralIssuance(
       const link = await tx.referral_links.create({
         data: {
           organization_id: organizationId,
+          program_id: programId,
           created_by_user_id: operatorUserId,
           code: createCode,
           slug,
@@ -530,6 +539,7 @@ export async function ensureReferralIssuance(
       const link = await tx.referral_links.create({
         data: {
           organization_id: organizationId,
+          program_id: programId,
           created_by_user_id: operatorUserId,
           code: createCode,
           slug,

@@ -15,6 +15,12 @@ import {
   shouldRejectTruncatedExtraction,
 } from './parse-extraction-response';
 import { validateExtractionResult } from './validate-extraction-result';
+import {
+  createExtractionCorrelationId,
+  logExtractionAttemptTiming,
+  logExtractionTotalTiming,
+  markAttemptWindow,
+} from './extraction-timing';
 
 export { validateExtractionResult } from './validate-extraction-result';
 
@@ -117,30 +123,130 @@ export async function extractAgreementFromText(rawText: string): Promise<Extract
     return degradedResult('Extraction service not configured. Please fill in all fields manually.');
   }
 
+  const extractionId = createExtractionCorrelationId();
+  const provider = 'anthropic' as const;
+  const requestedModel = getExtractorModel();
+  const inputTextLength = rawText.length;
+  const extractionStartedMs = Date.now();
+  let attemptCount = 0;
+  let attemptStartedMs = extractionStartedMs;
+  let attemptLogged = false;
+  let retried = false;
+  let lastModel = requestedModel;
+  let lastAttemptEndedMs = extractionStartedMs;
+  let extractionOutcome: 'success' | 'failure' = 'failure';
+
+  const finishTiming = () => {
+    logExtractionTotalTiming({
+      extractionId,
+      provider,
+      model: lastModel,
+      attemptCount,
+      ...markAttemptWindow(extractionStartedMs, lastAttemptEndedMs),
+      totalDurationMs: Math.max(0, lastAttemptEndedMs - extractionStartedMs),
+      retried,
+      result: extractionOutcome,
+    });
+  };
+
   const initialMaxTokens = getExtractorMaxTokens();
   let completion: ExtractionCompletion;
 
   try {
+    attemptCount = 1;
+    attemptStartedMs = Date.now();
+    attemptLogged = false;
     completion = await requestExtractionCompletion(rawText, initialMaxTokens);
-    logExtractionObservability('extraction_response', rawText, completion);
+    lastModel = completion.model;
+    const attempt1Window = markAttemptWindow(attemptStartedMs);
+    lastAttemptEndedMs = Date.now();
+    const retryTriggered = completion.stopReason === 'max_tokens';
+    retried = retryTriggered;
+    logExtractionAttemptTiming({
+      extractionId,
+      provider,
+      model: completion.model,
+      attempt: 1,
+      completionBudget: completion.maxTokens,
+      ...attempt1Window,
+      success: true,
+      result: retryTriggered ? 'retry' : 'success',
+      retryTriggered,
+      retryReason: retryTriggered ? 'max_tokens' : undefined,
+      stopReason: completion.stopReason,
+      inputTextLength,
+      inputTokens: completion.inputTokens,
+      outputTokens: completion.outputTokens,
+    });
+    attemptLogged = true;
+    logExtractionObservability('extraction_response', rawText, completion, {
+      extractionId,
+      attempt: 1,
+      durationMs: attempt1Window.durationMs,
+    });
 
     if (completion.stopReason === 'max_tokens') {
       console.error(
         '[ai-extractor]',
         JSON.stringify({
           event: 'extraction_retry',
+          extractionId,
           reason: 'max_tokens',
           initialMaxTokens,
           retryMaxTokens: EXTRACTOR_MAX_TOKENS_RETRY,
         })
       );
+      attemptCount = 2;
+      attemptStartedMs = Date.now();
+      attemptLogged = false;
       completion = await requestExtractionCompletion(rawText, EXTRACTOR_MAX_TOKENS_RETRY);
+      lastModel = completion.model;
+      const attempt2Window = markAttemptWindow(attemptStartedMs);
+      lastAttemptEndedMs = Date.now();
+      logExtractionAttemptTiming({
+        extractionId,
+        provider,
+        model: completion.model,
+        attempt: 2,
+        completionBudget: completion.maxTokens,
+        ...attempt2Window,
+        success: true,
+        result: 'success',
+        retryTriggered: false,
+        stopReason: completion.stopReason,
+        inputTextLength,
+        inputTokens: completion.inputTokens,
+        outputTokens: completion.outputTokens,
+      });
+      attemptLogged = true;
       logExtractionObservability('extraction_response_retry', rawText, completion, {
         retried: true,
+        extractionId,
+        attempt: 2,
+        durationMs: attempt2Window.durationMs,
       });
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
+    if (!attemptLogged && attemptCount > 0) {
+      const failedWindow = markAttemptWindow(attemptStartedMs);
+      lastAttemptEndedMs = Date.now();
+      logExtractionAttemptTiming({
+        extractionId,
+        provider,
+        model: lastModel,
+        attempt: attemptCount,
+        completionBudget:
+          attemptCount === 1 ? initialMaxTokens : EXTRACTOR_MAX_TOKENS_RETRY,
+        ...failedWindow,
+        success: false,
+        result: 'failure',
+        retryTriggered: false,
+        failureReason: message,
+        inputTextLength,
+      });
+    }
+    finishTiming();
     return degradedResult(`AI service error: ${message}. Please fill in all fields manually.`);
   }
 
@@ -150,28 +256,35 @@ export async function extractAgreementFromText(rawText: string): Promise<Extract
 
   if (shouldRejectTruncatedExtraction(completion.stopReason, parseResult)) {
     logExtractionObservability('extraction_parse_failed', rawText, completion, {
+      extractionId,
       parseReason: parseResult.ok ? 'repaired_after_max_tokens' : parseResult.reason,
       parseDetail: parseResult.ok ? undefined : parseResult.detail,
       truncated: true,
       repaired: parseResult.ok ? parseResult.repaired : false,
     });
+    finishTiming();
     throw new ExtractionResponseError('truncated', EXTRACTION_TRUNCATION_USER_MESSAGE);
   }
 
   if (!parseResult.ok) {
     logExtractionObservability('extraction_parse_failed', rawText, completion, {
+      extractionId,
       parseReason: parseResult.reason,
       parseDetail: parseResult.detail,
       truncated: false,
     });
+    finishTiming();
     return degradedResult('Could not parse AI response. Please fill in all fields manually.');
   }
 
   logExtractionObservability('extraction_parse_succeeded', rawText, completion, {
+    extractionId,
     repaired: parseResult.repaired,
     topLevelKeys: Object.keys(parseResult.parsed as object),
   });
 
   const validated = validateExtractionResult(parseResult.parsed);
+  extractionOutcome = 'success';
+  finishTiming();
   return normalizeExtractionResult(validated);
 }

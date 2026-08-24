@@ -17,6 +17,7 @@ import { prisma } from '@/lib/server/prisma';
 import { compensationKindOf } from '@/lib/workflows/agreement-intelligence/participant-coordination';
 import { referralManagementDealId } from '@/lib/workflows/referral-management/constants';
 import type { ApprovedAgreementStructure } from '@/lib/workflows/agreement-intelligence/types';
+import { proveSourceOrganizationFromWorkflow } from '@/lib/workflows/prove-source-organization.server';
 
 export type AgreementIntelligenceBootstrapResult = {
   pilotDealId: string;
@@ -222,7 +223,28 @@ export async function bootstrapAgreementIntelligenceCommercialGraph(input: {
     pilotDealId
   );
 
-  await syncPilotSnapshotForUser(input.userId, mergedDeals, mergedParticipants);
+  const existingIds = new Set(snapshot.participants.map((row) => row.id));
+  const newParticipantIds = new Set(
+    mergedParticipants.filter((row) => !existingIds.has(row.id)).map((row) => row.id)
+  );
+  const sourceOrganizationId = await proveSourceOrganizationFromWorkflow(
+    input.organizationWorkflowId,
+    input.userId
+  );
+
+  await syncPilotSnapshotForUser(
+    input.userId,
+    mergedDeals,
+    mergedParticipants,
+    sourceOrganizationId && newParticipantIds.size > 0
+      ? {
+          sourceOrganizationIdForNewIds: {
+            organizationId: sourceOrganizationId,
+            participantIds: newParticipantIds,
+          },
+        }
+      : undefined
+  );
   await refreshProjectObligationsAfterParticipantPersist(input.userId, pilotDealId);
 
   const refreshed = await getPilotSnapshotForUser(input.userId);

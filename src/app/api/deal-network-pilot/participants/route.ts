@@ -8,6 +8,7 @@ import {
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { prisma } from '@/lib/server/prisma';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import { repairScalarCompensationProfile } from '@/lib/participants/repair-scalar-compensation-profile';
 import {
   orchestrateOperationalMutation,
   operationalSyncJson,
@@ -43,19 +44,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Participant already exists' }, { status: 409 });
     }
 
+    const { participant: toPersist } = repairScalarCompensationProfile(participant);
+
     const row = await prisma.deal_network_pilot_participants.create({
       data: {
-        id: participant.id,
-        deal_id: participant.dealId,
-        invite_token: participant.inviteToken,
-        name: participant.name,
-        email: participant.email?.trim() ? participant.email : null,
-        role: participant.role,
-        role_details: participant.roleDetails ?? null,
-        payout_condition: participant.payoutCondition ?? null,
-        approval_status: participant.approvalStatus,
-        approved_at: participant.approvedAt ? new Date(participant.approvedAt) : null,
-        participant_payload: participant as unknown as Prisma.InputJsonValue,
+        id: toPersist.id,
+        deal_id: toPersist.dealId,
+        invite_token: toPersist.inviteToken,
+        name: toPersist.name,
+        email: toPersist.email?.trim() ? toPersist.email : null,
+        role: toPersist.role,
+        role_details: toPersist.roleDetails ?? null,
+        payout_condition: toPersist.payoutCondition ?? null,
+        approval_status: toPersist.approvalStatus,
+        approved_at: toPersist.approvedAt ? new Date(toPersist.approvedAt) : null,
+        participant_payload: toPersist as unknown as Prisma.InputJsonValue,
       },
     });
 

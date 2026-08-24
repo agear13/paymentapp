@@ -8,12 +8,19 @@ import { saveOperatorOnboardingState } from '@/lib/onboarding/operator-onboardin
 import { DEFAULT_WORKSPACE_CURRENCY, isWorkspaceCurrencyCode } from '@/lib/currency/workspace-currencies';
 import { runOperationalInitializationConvergence } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
 import { journeyWorkspaceSubscriptionCreate } from '@/lib/entitlements/professional-trial';
+import {
+  attachParticipantWorkspaceAttribution,
+  readSourceParticipantHint,
+} from '@/lib/participants/participant-workspace-attribution.server';
+import { log } from '@/lib/logger';
 
 const schema = z.object({
   workspaceName: z.string().min(2).max(255),
   defaultCurrency: z.string().length(3),
   industry: z.string().max(120).optional(),
   teamSize: z.string().max(64).optional(),
+  participantId: z.unknown().optional(),
+  sourceParticipantId: z.unknown().optional(),
 });
 
 /**
@@ -30,10 +37,6 @@ export async function POST(request: NextRequest) {
     return error;
   }
 
-  const currency = isWorkspaceCurrencyCode(body.defaultCurrency)
-    ? body.defaultCurrency
-    : DEFAULT_WORKSPACE_CURRENCY;
-
   const existingOrg = await getOrganizationForAuthenticatedUser(user.id);
   if (existingOrg) {
     const settings = await prisma.merchant_settings.findFirst({
@@ -41,36 +44,20 @@ export async function POST(request: NextRequest) {
       select: { id: true },
     });
 
-    await prisma.merchant_settings.updateMany({
-      where: { organization_id: existingOrg.id },
-      data: {
-        display_name: body.workspaceName.trim(),
-        default_currency: currency,
-      },
-    });
-
-    await saveOperatorOnboardingState(existingOrg.id, user.id, {
-      step: 'use_case',
-      workspace_name: body.workspaceName.trim(),
-      workspace_industry: body.industry,
-      workspace_team_size: body.teamSize,
-      organizationId: existingOrg.id,
-      merchantSettingsId: settings?.id,
-    }, { skipIfEquivalent: true });
-
-    const convergence = await runOperationalInitializationConvergence({
-      userId: user.id,
-      organizationId: existingOrg.id,
-      triggerSource: 'bootstrap-workspace',
-    });
-
     return apiResponse({
       organizationId: existingOrg.id,
       merchantSettingsId: settings?.id ?? null,
-      correlationId: convergence.correlationId,
-      operationalInitialization: convergence.snapshot,
     });
   }
+
+  const currency = isWorkspaceCurrencyCode(body.defaultCurrency)
+    ? body.defaultCurrency
+    : DEFAULT_WORKSPACE_CURRENCY;
+
+  const sourceParticipantHint = readSourceParticipantHint({
+    body,
+    searchParams: request.nextUrl.searchParams,
+  });
 
   const result = await prisma.$transaction(async (tx) => {
       const organization = await tx.organizations.create({
@@ -99,6 +86,20 @@ export async function POST(request: NextRequest) {
 
     return { organization, settings };
   });
+
+  try {
+    await attachParticipantWorkspaceAttribution({
+      userId: user.id,
+      newOrganizationId: result.organization.id,
+      hint: sourceParticipantHint,
+    });
+  } catch (error) {
+    log.warn('participant workspace attribution skipped after workspace create', {
+      userId: user.id,
+      organizationId: result.organization.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   await saveOperatorOnboardingState(result.organization.id, user.id, {
     step: 'use_case',

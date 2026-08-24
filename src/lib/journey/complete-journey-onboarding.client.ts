@@ -9,6 +9,10 @@ import {
   parseJourneyAssessmentContext,
   readJourneyAssessment,
 } from '@/lib/journey/journey-assessment-storage.client';
+import {
+  clearStoredSourceParticipantHint,
+  readStoredSourceParticipantHint,
+} from '@/lib/journey/journey-source-participant.client';
 import { DEFAULT_WORKSPACE_CURRENCY } from '@/lib/currency/workspace-currencies';
 
 type BootstrapWorkspaceResponse = {
@@ -27,6 +31,26 @@ type OnboardingGetResponse = {
 
 let inFlightCompletion: Promise<BootstrapWorkspaceResponse> | null = null;
 
+export type CompleteJourneyOnboardingOptions = {
+  /** Create-only. Ignored when the authenticated user already has an organization. */
+  confirmedWorkspaceName?: string;
+};
+
+function workspaceNameForBootstrap(
+  assessmentWorkspaceName: string,
+  hasOrganization: boolean,
+  confirmedWorkspaceName?: string
+): string {
+  if (hasOrganization) {
+    return assessmentWorkspaceName;
+  }
+  const confirmed = confirmedWorkspaceName?.trim() ?? '';
+  if (confirmed.length >= 2 && confirmed.length <= 255) {
+    return confirmed;
+  }
+  return assessmentWorkspaceName;
+}
+
 async function fetchExistingOnboarding(): Promise<OnboardingGetResponse> {
   const response = await fetch('/api/onboarding', { credentials: 'include' });
   if (!response.ok) {
@@ -35,16 +59,21 @@ async function fetchExistingOnboarding(): Promise<OnboardingGetResponse> {
   return (await response.json()) as OnboardingGetResponse;
 }
 
-async function runCompleteJourneyOnboarding(email?: string): Promise<BootstrapWorkspaceResponse> {
+async function runCompleteJourneyOnboarding(
+  email?: string,
+  options?: CompleteJourneyOnboardingOptions
+): Promise<BootstrapWorkspaceResponse> {
   const { objective, business } = readJourneyAssessment();
-  const workspaceName = journeyWorkspaceNameFromAssessment(business, email);
+  const assessmentWorkspaceName = journeyWorkspaceNameFromAssessment(business, email);
   const assessmentContext = journeyAssessmentContext(objective, business);
 
   const existing = await fetchExistingOnboarding();
-  if (existing.hasOrganization && existing.organizationId) {
+  const alreadyHadOrganization = Boolean(existing.hasOrganization && existing.organizationId);
+  if (alreadyHadOrganization && existing.organizationId) {
     const savedAssessment = parseJourneyAssessmentContext(existing.state?.onboarding_context);
     if (journeyAssessmentsMatch(savedAssessment, objective, business)) {
       clearJourneyProvisioningPending();
+      clearStoredSourceParticipantHint();
       return {
         organizationId: existing.organizationId,
         merchantSettingsId: existing.state?.merchantSettingsId ?? null,
@@ -52,6 +81,13 @@ async function runCompleteJourneyOnboarding(email?: string): Promise<BootstrapWo
     }
   }
 
+  const workspaceName = workspaceNameForBootstrap(
+    assessmentWorkspaceName,
+    alreadyHadOrganization,
+    options?.confirmedWorkspaceName
+  );
+
+  const sourceParticipantId = readStoredSourceParticipantHint();
   const bootstrapRes = await csrfAwareFetch('/api/onboarding/bootstrap-workspace', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -60,6 +96,7 @@ async function runCompleteJourneyOnboarding(email?: string): Promise<BootstrapWo
       defaultCurrency: DEFAULT_WORKSPACE_CURRENCY,
       industry: business?.industry,
       teamSize: business?.size,
+      ...(sourceParticipantId ? { sourceParticipantId } : {}),
     }),
   });
 
@@ -71,29 +108,33 @@ async function runCompleteJourneyOnboarding(email?: string): Promise<BootstrapWo
     throw new Error(bootstrapData.error || 'Failed to create workspace');
   }
 
-  const assessmentRes = await csrfAwareFetch('/api/onboarding', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      organizationId: bootstrapData.organizationId,
-      state: {
-        step: 'use_case',
-        workspace_name: workspaceName,
-        workspace_industry: business?.industry,
-        workspace_team_size: business?.size,
-        onboarding_context: assessmentContext,
+  const reusedExistingWorkspace = alreadyHadOrganization || bootstrapRes.status === 200;
+  if (!reusedExistingWorkspace) {
+    const assessmentRes = await csrfAwareFetch('/api/onboarding', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         organizationId: bootstrapData.organizationId,
-        merchantSettingsId: bootstrapData.merchantSettingsId ?? undefined,
-      },
-    }),
-  });
+        state: {
+          step: 'use_case',
+          workspace_name: workspaceName,
+          workspace_industry: business?.industry,
+          workspace_team_size: business?.size,
+          onboarding_context: assessmentContext,
+          organizationId: bootstrapData.organizationId,
+          merchantSettingsId: bootstrapData.merchantSettingsId ?? undefined,
+        },
+      }),
+    });
 
-  if (!assessmentRes.ok) {
-    const assessmentData = (await assessmentRes.json()) as { error?: string };
-    throw new Error(assessmentData.error || 'Failed to save assessment');
+    if (!assessmentRes.ok) {
+      const assessmentData = (await assessmentRes.json()) as { error?: string };
+      throw new Error(assessmentData.error || 'Failed to save assessment');
+    }
   }
 
   clearJourneyProvisioningPending();
+  clearStoredSourceParticipantHint();
 
   return {
     organizationId: bootstrapData.organizationId,
@@ -102,12 +143,15 @@ async function runCompleteJourneyOnboarding(email?: string): Promise<BootstrapWo
 }
 
 /** Idempotent journey provisioning — safe to call after OAuth return or page refresh. */
-export async function completeJourneyOnboarding(email?: string): Promise<BootstrapWorkspaceResponse> {
+export async function completeJourneyOnboarding(
+  email?: string,
+  options?: CompleteJourneyOnboardingOptions
+): Promise<BootstrapWorkspaceResponse> {
   if (inFlightCompletion) {
     return inFlightCompletion;
   }
 
-  inFlightCompletion = runCompleteJourneyOnboarding(email).finally(() => {
+  inFlightCompletion = runCompleteJourneyOnboarding(email, options).finally(() => {
     inFlightCompletion = null;
   });
 

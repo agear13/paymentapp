@@ -7,6 +7,8 @@ import { ParticipantCommercialWorkspaceView } from '@/components/participant-por
 import { ParticipantWorkspacePayoutPanel } from '@/components/participant-portal/participant-workspace-payout-panel';
 import { ParticipantWorkspaceOnboardingProgress } from '@/components/participant-portal/participant-workspace-onboarding-progress';
 import { ParticipantLogoutButton } from '@/components/participant-portal/participant-logout-button';
+import { ParticipantWorkspaceConversionCta } from '@/components/participant-portal/participant-workspace-conversion-cta';
+import { shouldShowParticipantWorkspaceConversionCta } from '@/lib/participants/source-participant-hint';
 import type { ParticipantCommercialWorkspaceModel } from '@/lib/participant-portal/participant-portal-data';
 import type { CommercialWorkspaceSection } from '@/lib/participant-portal/participant-portal-types';
 import type { ParticipantWorkspaceOnboarding } from '@/lib/participant-portal/participant-workspace-onboarding';
@@ -33,6 +35,7 @@ type Props = {
   portalToken: string;
   bootstrap: WorkspaceBootstrap;
   previewMode?: boolean;
+  sourceParticipantId?: string | null;
   signedInEmail?: string | null;
   onSignOut?: () => void;
   onRefresh: () => Promise<void>;
@@ -126,12 +129,14 @@ function PayoutSubmittedWaiting({
   signedInEmail,
   portalToken,
   onSignOut,
+  sourceParticipantId,
 }: {
   projectName: string;
   participantName: string;
   signedInEmail?: string | null;
   portalToken?: string;
   onSignOut?: () => void;
+  sourceParticipantId?: string | null;
 }) {
   return (
     <WorkspaceShell projectName={projectName} signedInEmail={signedInEmail} portalToken={portalToken} onSignOut={onSignOut}>
@@ -139,15 +144,22 @@ function PayoutSubmittedWaiting({
         currentStep="payout_submitted"
         nextRequiredAction={null}
       >
-        <Card className="max-w-xl mx-auto">
-          <CardHeader>
-            <CardTitle>Payout details received</CardTitle>
-            <CardDescription>
-              Thanks, {participantName}. Your organiser is verifying your payout and tax details.
-              You will stay in this workspace — no separate links required.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <div className="space-y-4">
+          <Card className="max-w-xl mx-auto">
+            <CardHeader>
+              <CardTitle>Payout details received</CardTitle>
+              <CardDescription>
+                Thanks, {participantName}. Your organiser is verifying your payout and tax details.
+                You will stay in this workspace — no separate links required.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+          {sourceParticipantId ? (
+            <div className="max-w-xl mx-auto">
+              <ParticipantWorkspaceConversionCta sourceParticipantId={sourceParticipantId} />
+            </div>
+          ) : null}
+        </div>
       </ParticipantWorkspaceOnboardingProgress>
     </WorkspaceShell>
   );
@@ -157,6 +169,7 @@ export function ParticipantWorkspaceGate({
   portalToken,
   bootstrap,
   previewMode = false,
+  sourceParticipantId = null,
   signedInEmail,
   onSignOut,
   onRefresh,
@@ -199,6 +212,13 @@ export function ParticipantWorkspaceGate({
   }, [onRefresh]);
 
   const projectName = workspace?.projectName ?? invitePayload?.deal.dealName ?? 'Your project';
+  const conversionParticipantId = shouldShowParticipantWorkspaceConversionCta({
+    onboardingComplete: onboarding.onboardingComplete,
+    previewMode,
+    sourceParticipantId,
+  })
+    ? sourceParticipantId
+    : null;
 
   if (onboarding.step === 'awaiting_agreement_send' && !previewMode) {
     return (
@@ -291,6 +311,7 @@ export function ParticipantWorkspaceGate({
         signedInEmail={signedInEmail}
         portalToken={portalToken}
         onSignOut={onSignOut}
+        sourceParticipantId={conversionParticipantId}
       />
     );
   }
@@ -314,6 +335,7 @@ export function ParticipantWorkspaceGate({
       signedInEmail={signedInEmail}
       portalToken={portalToken}
       onSignOut={onSignOut}
+      sourceParticipantId={conversionParticipantId}
     />
   );
 }

@@ -18,6 +18,7 @@ import {
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
+import { repairScalarCompensationProfile } from '@/lib/participants/repair-scalar-compensation-profile';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +52,9 @@ export async function POST(request: NextRequest) {
       );
     }
     const deals = Array.isArray(body.deals) ? body.deals : [];
-    const participants = Array.isArray(body.participants) ? body.participants : [];
+    const participants = (Array.isArray(body.participants) ? body.participants : []).map(
+      (participant) => repairScalarCompensationProfile(participant).participant
+    );
     await syncPilotSnapshotForUser(user.id, deals, participants);
     const operationalSync = await orchestrateOperationalMutation({
       userId: user.id,

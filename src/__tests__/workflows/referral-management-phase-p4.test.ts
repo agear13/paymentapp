@@ -43,6 +43,9 @@ jest.mock('@/lib/server/prisma', () => ({
     payouts: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    user_organizations: {
+      findUnique: jest.fn().mockResolvedValue({ id: 'mem-1' }),
+    },
   },
 }));
 
@@ -135,7 +138,11 @@ describe('P4 — Referral Management workflow', () => {
       lifecycle_status: 'ACTIVE',
       configuration: {},
     });
-    prisma.organization_workflows.findUnique.mockResolvedValue(null);
+    prisma.organization_workflows.findUnique.mockResolvedValue({
+      id: WF,
+      organization_id: ORG,
+    });
+    prisma.user_organizations.findUnique.mockResolvedValue({ id: 'mem-1' });
     prisma.organization_services.findMany.mockResolvedValue([{ id: SERVICE, name: 'Summer Launch Party' }]);
     getPilotSnapshotForUser.mockResolvedValue({ deals: [], participants: [] });
     createPilotParticipantForUser.mockImplementation((_userId: string, participant: DemoParticipant) =>
@@ -158,6 +165,11 @@ describe('P4 — Referral Management workflow', () => {
     expect(compensationKindOf(created.participant)).toBe('revenue_share');
     expect(created.participant.compensationProfile?.commissionServiceIds).toEqual([SERVICE]);
     expect(created.participant.referralCommerce?.enabledServiceIds).toEqual([SERVICE]);
+    expect(createPilotParticipantForUser).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ email: 'apex@example.com' }),
+      { sourceOrganizationId: ORG }
+    );
     expect(JSON.stringify(created)).not.toMatch(/execute payment|release payout/i);
 
     getPilotSnapshotForUser.mockResolvedValue({
@@ -186,6 +198,24 @@ describe('P4 — Referral Management workflow', () => {
         }),
       },
     });
+  });
+
+  it('leaves source organization null when workflow provenance cannot be proven', async () => {
+    prisma.organization_workflows.findUnique.mockResolvedValue(null);
+    await addReferralManagementPromoter({
+      organizationId: ORG,
+      workflowId: WF,
+      userId: USER,
+      name: 'Apex Promotions',
+      email: 'unproven@example.com',
+      role: 'Promoter',
+      compensation: { kind: 'revenue_share', percentage: 20, serviceId: SERVICE },
+    });
+    expect(createPilotParticipantForUser).toHaveBeenCalledWith(
+      USER,
+      expect.objectContaining({ email: 'unproven@example.com' }),
+      { sourceOrganizationId: null }
+    );
   });
 
   it('looks up an existing promoter by email before save', async () => {

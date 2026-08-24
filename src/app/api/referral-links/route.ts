@@ -16,6 +16,10 @@ import { applyRateLimit } from '@/lib/rate-limit';
 import { log } from '@/lib/logger';
 import { z } from 'zod';
 import { getBrandedAppOrigin } from '@/lib/runtime/customer-facing-url';
+import {
+  ReferralProgramResolutionError,
+  resolveReferralProgramIdForNewLink,
+} from '@/lib/referrals/referral-program.server';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -42,6 +46,7 @@ const SplitSchema = z.object({
 const CreateReferralLinkSchema = z
   .object({
     organizationId: z.string().uuid(),
+    programId: z.string().uuid().optional().nullable(),
     code: z.string().min(1).max(50).regex(/^[A-Za-z0-9_-]+$/),
     userType: z.enum(['BD_PARTNER', 'CONSULTANT']).optional(),
     consultantId: z.string().uuid().optional().nullable(),
@@ -107,6 +112,7 @@ export async function POST(request: NextRequest) {
 
     const {
       organizationId,
+      programId: requestedProgramId,
       code,
       userType,
       consultantId,
@@ -146,11 +152,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let programId: string;
+    try {
+      programId = await resolveReferralProgramIdForNewLink(
+        prisma,
+        organizationId,
+        requestedProgramId
+      );
+    } catch (error) {
+      if (error instanceof ReferralProgramResolutionError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+      throw error;
+    }
+
     if (splitsInput && splitsInput.length > 0) {
       const referralLink = await prisma.$transaction(async (tx) => {
         const link = await tx.referral_links.create({
           data: {
             organization_id: organizationId,
+            program_id: programId,
             created_by_user_id: user.id,
             code: normalizedCode,
             status,
@@ -244,6 +265,7 @@ export async function POST(request: NextRequest) {
       const link = await tx.referral_links.create({
         data: {
           organization_id: organizationId,
+          program_id: programId,
           created_by_user_id: user.id,
           code: normalizedCode,
           status,

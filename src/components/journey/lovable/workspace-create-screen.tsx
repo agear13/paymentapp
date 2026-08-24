@@ -10,6 +10,11 @@ import {
 } from '@/lib/journey/commercial-os-routes';
 import { createClient } from '@/lib/supabase/client';
 import { completeJourneyOnboarding } from '@/lib/journey/complete-journey-onboarding.client';
+import {
+  fetchAuthorizedParticipantWorkspacePrefill,
+  shouldOfferParticipantWorkspaceNameConfirm,
+  usableSuggestedWorkspaceName,
+} from '@/lib/journey/journey-participant-prefill.client';
 import { TurnstileWidget } from '@/components/auth/turnstile-widget';
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth/password-policy';
 import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from '@/lib/auth/disposable-email';
@@ -34,6 +39,10 @@ export function WorkspaceCreateScreen() {
   const [showEmailAuth, setShowEmailAuth] = useState(false);
   const [loading, setLoading] = useState(false);
   const [bootstrapping, setBootstrapping] = useState(false);
+  const [checkingPrefill, setCheckingPrefill] = useState(false);
+  const [awaitingNameConfirm, setAwaitingNameConfirm] = useState(false);
+  const [workspaceNameDraft, setWorkspaceNameDraft] = useState('');
+  const [pendingEmail, setPendingEmail] = useState<string | undefined>();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [turnstileRequired, setTurnstileRequired] = useState(false);
@@ -65,17 +74,69 @@ export function WorkspaceCreateScreen() {
     return false;
   };
 
-  const finishOnboarding = async (userEmail?: string) => {
+  const finishOnboarding = async (userEmail?: string, confirmedWorkspaceName?: string) => {
+    const restoreNameConfirm = Boolean(confirmedWorkspaceName);
+    setAwaitingNameConfirm(false);
     setBootstrapping(true);
     setError(null);
     try {
-      await completeJourneyOnboarding(userEmail ?? email);
+      await completeJourneyOnboarding(userEmail ?? email, {
+        confirmedWorkspaceName,
+      });
       router.replace(COMMERCIAL_OS_ROUTES.workspace);
       router.refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to set up workspace';
       setError(message);
       setBootstrapping(false);
+      if (restoreNameConfirm) {
+        setAwaitingNameConfirm(true);
+      }
+    }
+  };
+
+  const proceedAfterAuthentication = async (userEmail?: string) => {
+    setError(null);
+    setCheckingPrefill(true);
+    try {
+      let hasOrganization = false;
+      try {
+        const existing = await fetch('/api/onboarding', {
+          credentials: 'include',
+          cache: 'no-store',
+        });
+        if (existing.ok) {
+          const data = (await existing.json()) as { hasOrganization?: boolean };
+          hasOrganization = Boolean(data.hasOrganization);
+        }
+      } catch {
+        /* bootstrap remains the source of truth if this check fails */
+      }
+
+      if (!hasOrganization) {
+        try {
+          const prefill = await fetchAuthorizedParticipantWorkspacePrefill();
+          if (shouldOfferParticipantWorkspaceNameConfirm(hasOrganization, prefill)) {
+            const suggestion = usableSuggestedWorkspaceName(prefill);
+            if (suggestion) {
+              setPendingEmail(userEmail);
+              setWorkspaceNameDraft(suggestion);
+              setAwaitingNameConfirm(true);
+              setCheckingPrefill(false);
+              return;
+            }
+          }
+        } catch {
+          /* prefill failure must not block workspace creation */
+        }
+      }
+
+      setCheckingPrefill(false);
+      await finishOnboarding(userEmail);
+    } catch (err: unknown) {
+      setCheckingPrefill(false);
+      const message = err instanceof Error ? err.message : 'Failed to set up workspace';
+      setError(message);
     }
   };
 
@@ -85,7 +146,7 @@ export function WorkspaceCreateScreen() {
     async function resumeAuthenticatedOnboarding() {
       const { data } = await supabase.auth.getSession();
       if (!data.session || cancelled) return;
-      await finishOnboarding(data.session.user.email ?? undefined);
+      await proceedAfterAuthentication(data.session.user.email ?? undefined);
     }
 
     void resumeAuthenticatedOnboarding();
@@ -152,7 +213,7 @@ export function WorkspaceCreateScreen() {
       });
 
       markJourneyProvisioningPending();
-      await finishOnboarding(email);
+      await proceedAfterAuthentication(email);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to sign in';
       setError(message);
@@ -222,7 +283,7 @@ export function WorkspaceCreateScreen() {
 
       await waitForSession();
       markJourneyProvisioningPending();
-      await finishOnboarding(email);
+      await proceedAfterAuthentication(email);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to create account';
       setError(message);
@@ -250,18 +311,29 @@ export function WorkspaceCreateScreen() {
     }
   };
 
-  const busy = loading || bootstrapping;
+  const confirmWorkspaceName = () => {
+    const nextName = workspaceNameDraft.trim();
+    if (nextName.length < 2) {
+      setError('Enter a workspace name of at least 2 characters');
+      return;
+    }
+    void finishOnboarding(pendingEmail ?? email, nextName.slice(0, 255));
+  };
+
+  const busy = loading || bootstrapping || checkingPrefill;
 
   return (
     <section className="relative px-6 pt-14 pb-24 animate-fade-up">
       <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[1fr_1fr]">
         <div>
-          <Link
-            href="/journey/assessment/business"
-            className="mb-6 inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-foreground"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back
-          </Link>
+          {awaitingNameConfirm ? null : (
+            <Link
+              href="/journey/assessment/business"
+              className="mb-6 inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-foreground"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Back
+            </Link>
+          )}
           <div className="mb-4 inline-flex items-center gap-2 rounded-full glass px-3 py-1.5 text-[12px] text-ink-soft shadow-soft">
             <Sparkles className="h-3 w-3 text-primary" />
             30-day Professional trial
@@ -304,7 +376,7 @@ export function WorkspaceCreateScreen() {
             </div>
           </div>
 
-          {bootstrapping ? (
+          {bootstrapping || checkingPrefill ? (
             <div className="mt-8 flex flex-col items-center gap-3 py-8 text-center">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <div className="text-[14px] font-medium text-foreground">Setting up your workspace</div>
@@ -312,6 +384,49 @@ export function WorkspaceCreateScreen() {
                 Saving your assessment and preparing Commercial OS…
               </div>
             </div>
+          ) : awaitingNameConfirm ? (
+            <form
+              className="mt-6 space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                confirmWorkspaceName();
+              }}
+            >
+              <div>
+                <div className="text-[13px] font-semibold text-foreground">
+                  Confirm your workspace name
+                </div>
+                <p className="mt-1 text-[12px] text-ink-soft">
+                  You can accept this suggestion or edit it before creating the workspace.
+                </p>
+              </div>
+              <div>
+                <label className="text-[12px] font-medium text-foreground" htmlFor="workspace-name">
+                  Workspace name
+                </label>
+                <input
+                  id="workspace-name"
+                  type="text"
+                  value={workspaceNameDraft}
+                  onChange={(event) => setWorkspaceNameDraft(event.target.value)}
+                  maxLength={255}
+                  disabled={busy}
+                  className="mt-2 w-full rounded-xl border border-border bg-background px-3 py-2.5 text-[14px] text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              {error ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-700">
+                  {error}
+                </div>
+              ) : null}
+              <button
+                type="submit"
+                disabled={busy || workspaceNameDraft.trim().length < 2}
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-[13px] font-medium text-primary-foreground transition-transform hover:scale-[1.01] disabled:opacity-60"
+              >
+                Create workspace <ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            </form>
           ) : (
             <>
               <div className="mt-6">

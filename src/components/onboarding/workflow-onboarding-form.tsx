@@ -521,11 +521,7 @@ export function WorkflowOnboardingForm() {
       collection_preference: collectionPreference ?? undefined,
     };
 
-    if (plan) {
-      nextState.pending_billing_plan = plan;
-    } else {
-      delete nextState.pending_billing_plan;
-    }
+    nextState.pending_billing_plan = plan;
 
     await csrfAwareFetch('/api/onboarding', {
       method: 'PATCH',

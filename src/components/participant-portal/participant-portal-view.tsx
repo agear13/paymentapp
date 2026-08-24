@@ -17,6 +17,8 @@ import { SettlementExplanationCard } from '@/components/commercial/workspace/set
 import { CommercialWorkspaceNav } from '@/components/commercial/workspace/commercial-workspace-nav';
 import { Button } from '@/components/ui/button';
 import { ParticipantLogoutButton } from '@/components/participant-portal/participant-logout-button';
+import { ParticipantWorkspaceConversionCta } from '@/components/participant-portal/participant-workspace-conversion-cta';
+import { shouldShowParticipantWorkspaceConversionCta } from '@/lib/participants/source-participant-hint';
 
 type Props = {
   workspace: ParticipantCommercialWorkspaceModel;
@@ -28,6 +30,7 @@ type Props = {
   signedInEmail?: string | null;
   portalToken?: string;
   onSignOut?: () => void;
+  sourceParticipantId?: string | null;
 };
 
 function formatSyncedAt(iso: string): string {
@@ -137,6 +140,7 @@ export function ParticipantCommercialWorkspaceView({
   signedInEmail,
   portalToken,
   onSignOut,
+  sourceParticipantId = null,
 }: Props) {
   return (
     <div className="min-h-screen bg-muted/30">
@@ -173,6 +177,14 @@ export function ParticipantCommercialWorkspaceView({
             Onboarding complete. This is your permanent workspace for agreement, earnings, and
             settlement activity.
           </div>
+        ) : null}
+
+        {shouldShowParticipantWorkspaceConversionCta({
+          onboardingComplete: Boolean(onboarding?.onboardingComplete),
+          previewMode: false,
+          sourceParticipantId,
+        }) && sourceParticipantId ? (
+          <ParticipantWorkspaceConversionCta sourceParticipantId={sourceParticipantId} />
         ) : null}
 
         <section className="space-y-4">

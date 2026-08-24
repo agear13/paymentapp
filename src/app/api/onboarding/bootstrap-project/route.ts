@@ -6,10 +6,17 @@ import { apiError, apiResponse, validateBody } from '@/lib/api/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { buildOnboardingProjectWithId } from '@/lib/onboarding/build-onboarding-project';
 import {
-  getPilotSnapshotForUser,
-  syncPilotSnapshotForUser,
+  findOnboardingDealIdByName,
+  persistPilotDealForUser,
 } from '@/lib/deal-network-demo/pilot-snapshot.server';
-import { saveOperatorOnboardingState } from '@/lib/onboarding/operator-onboarding.server';
+import {
+  getOperatorOnboardingState,
+  saveOperatorOnboardingState,
+} from '@/lib/onboarding/operator-onboarding.server';
+import {
+  mergeOperatorOnboardingState,
+  type OperatorOnboardingPatch,
+} from '@/lib/onboarding/operator-onboarding-merge';
 import type { OnboardingUseCaseId } from '@/lib/onboarding/operator-onboarding-types';
 import {
   createOperationId,
@@ -88,9 +95,7 @@ async function persistProjectForUser(
   operationId: string
 ): Promise<{ warning?: string }> {
   try {
-    const snapshot = await getPilotSnapshotForUser(userId);
-    const deals = [...snapshot.deals.filter((d) => d.id !== project.id), project];
-    await syncPilotSnapshotForUser(userId, deals, snapshot.participants);
+    await persistPilotDealForUser(userId, project);
     return {};
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -113,11 +118,7 @@ async function runBootstrap(
   let existingProjectId = body.existingProjectId?.trim() || undefined;
   if (!existingProjectId) {
     try {
-      const snapshot = await getPilotSnapshotForUser(userId);
-      const match = snapshot.deals.find(
-        (d) => d.dealName === body.projectName.trim() && d.id.startsWith('onb-deal-')
-      );
-      if (match) existingProjectId = match.id;
+      existingProjectId = await findOnboardingDealIdByName(userId, body.projectName);
     } catch {
       /* ignore */
     }
@@ -145,30 +146,26 @@ async function runBootstrap(
       select: { id: true },
     });
 
-    if (settings) {
-      await prisma.merchant_settings.update({
-        where: { id: settings.id },
-        data: { default_currency: body.defaultCurrency },
-      });
-    } else {
-      await prisma.merchant_settings.create({
-        data: {
-          organization_id: existingOrg.id,
-          display_name: 'Workspace',
-          default_currency: body.defaultCurrency,
-        },
-      });
-    }
-
     try {
-      await saveOperatorOnboardingState(existingOrg.id, userId, {
-        step: 'participants',
-        onboarding_use_case: useCaseLabel,
-        onboarding_context: body.onboarding_context,
+      const current = await getOperatorOnboardingState(existingOrg.id);
+      const incoming: OperatorOnboardingPatch = {
         organizationId: existingOrg.id,
-        merchantSettingsId: settings?.id,
         projectId: project.id,
-      });
+        ...(settings?.id ? { merchantSettingsId: settings.id } : {}),
+      };
+      if (current?.completed !== true) {
+        incoming.step = 'participants';
+        if (useCaseLabel !== undefined) incoming.onboarding_use_case = useCaseLabel;
+        if (body.onboarding_context !== undefined) {
+          incoming.onboarding_context = body.onboarding_context;
+        }
+      }
+      await saveOperatorOnboardingState(
+        existingOrg.id,
+        userId,
+        mergeOperatorOnboardingState(current, incoming),
+        { skipIfEquivalent: true }
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       logBootstrap(operationId, 'onboarding_state_save_failed', { message });
@@ -298,7 +295,9 @@ export async function POST(request: NextRequest) {
       logBootstrap(opId, mutation.status, { projectId: mutation.data?.projectId });
 
       let convergence;
+      const createdWorkspace = httpStatus === 201;
       if (
+        createdWorkspace &&
         (mutation.status === 'SUCCESS' || mutation.status === 'PARTIAL_SUCCESS') &&
         mutation.data?.projectId
       ) {
@@ -315,9 +314,13 @@ export async function POST(request: NextRequest) {
         {
           ...mutation.data,
           mutation: clientMutation,
-          correlationId: convergence?.correlationId,
-          operationalInitialization: convergence?.snapshot,
-          operationalOnboarding: convergence?.onboarding,
+          ...(convergence
+            ? {
+                correlationId: convergence.correlationId,
+                operationalInitialization: convergence.snapshot,
+                operationalOnboarding: convergence.onboarding,
+              }
+            : {}),
         },
         httpStatus
       );

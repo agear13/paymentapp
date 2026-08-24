@@ -7,6 +7,10 @@ import { Check, Loader2, Sparkles } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { createClient } from '@/lib/supabase/client';
 import { completeJourneyOnboarding } from '@/lib/journey/complete-journey-onboarding.client';
+import {
+  fetchAuthorizedParticipantWorkspacePrefill,
+  shouldOfferParticipantWorkspaceNameConfirm,
+} from '@/lib/journey/journey-participant-prefill.client';
 import { restoreJourneyAssessment } from '@/lib/journey/journey-assessment-storage.client';
 
 const STEPS = [
@@ -44,6 +48,32 @@ export function WorkspaceProvisioningScreen() {
         if (!data.session) {
           router.replace(COMMERCIAL_OS_ROUTES.provisioning);
           return;
+        }
+
+        let hasOrganization = false;
+        try {
+          const existing = await fetch('/api/onboarding', {
+            credentials: 'include',
+            cache: 'no-store',
+          });
+          if (existing.ok) {
+            const payload = (await existing.json()) as { hasOrganization?: boolean };
+            hasOrganization = Boolean(payload.hasOrganization);
+          }
+        } catch {
+          /* continue; bootstrap remains authoritative */
+        }
+
+        if (!hasOrganization) {
+          try {
+            const prefill = await fetchAuthorizedParticipantWorkspacePrefill();
+            if (shouldOfferParticipantWorkspaceNameConfirm(hasOrganization, prefill)) {
+              router.replace(COMMERCIAL_OS_ROUTES.provisioning);
+              return;
+            }
+          } catch {
+            /* prefill failure must not block workspace creation */
+          }
         }
 
         await completeJourneyOnboarding(data.session.user.email ?? undefined);

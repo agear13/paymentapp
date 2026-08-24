@@ -221,6 +221,7 @@ model organizations {
   payment_lifecycle_events     payment_lifecycle_events[]
   payment_settlements          payment_settlements[]
   referral_links               referral_links[]
+  referral_programs            referral_programs[]
   xero_connections             xero_connections?
   notifications                notifications[]
   notification_preferences     notification_preferences[]
@@ -242,6 +243,8 @@ model organizations {
   treasury_manual_reconciliations    treasury_manual_reconciliations[]
   organization_workflows             organization_workflows[]
   organization_workflow_agreements   organization_workflow_agreements[]
+  sourced_participants               deal_network_pilot_participants[]  @relation("ParticipantSourceOrganization")
+  converted_participants             deal_network_pilot_participants[]  @relation("ParticipantConvertedOrganization")
 }
 
 /// Immutable operational onboarding / bootstrap / graph initialization transitions.
@@ -895,6 +898,12 @@ enum ReferralLinkStatus {
   INACTIVE
 }
 
+enum ReferralProgramStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
 /// Participant-facing referral code row (1:1 with commission `referral_links` definition).
 enum ReferralCodeStatus {
   ACTIVE
@@ -1048,9 +1057,26 @@ model multi_currency_invoices {
 // Commission-enabled referral links (Option B)
 // ============================================================================
 
+/// Tenant-scoped referral program. Links remain the economic/settlement container.
+model referral_programs {
+  id              String                 @id @default(uuid()) @db.Uuid
+  organization_id String                 @db.Uuid
+  slug            String                 @db.VarChar(64)
+  name            String                 @db.VarChar(255)
+  status          ReferralProgramStatus  @default(ACTIVE)
+  created_at      DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime               @updatedAt @db.Timestamptz(6)
+  organizations   organizations          @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  referral_links  referral_links[]
+
+  @@unique([organization_id, slug])
+  @@index([organization_id, status])
+}
+
 model referral_links {
   id                     String                   @id @default(uuid()) @db.Uuid
   organization_id        String                   @db.Uuid
+  program_id             String?                  @db.Uuid
   created_by_user_id     String?                  @db.VarChar(255)
   code                   String                   @unique @db.VarChar(50)
   status                 ReferralLinkStatus       @default(ACTIVE)
@@ -1061,6 +1087,7 @@ model referral_links {
   created_at             DateTime                 @default(now()) @db.Timestamptz(6)
   updated_at             DateTime                 @updatedAt @db.Timestamptz(6)
   organizations          organizations            @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  referral_programs      referral_programs?       @relation(fields: [program_id], references: [id], onDelete: SetNull)
   referral_rules         referral_rules[]
   referral_link_splits   referral_link_splits[]
   commission_obligations commission_obligations[]
@@ -1068,6 +1095,7 @@ model referral_links {
   referral_code          referral_codes?
 
   @@index([organization_id])
+  @@index([program_id])
   @@index([code])
   @@index([status])
 }
@@ -1368,12 +1396,21 @@ model deal_network_pilot_participants {
   participant_payload  Json
   /** Supabase auth.users.id bound after the invited email authenticates. */
   authenticated_user_id String? @db.VarChar(255)
+  /** Proven organization_workflows.organization_id that invited this participant. Null if unproven. */
+  source_organization_id String? @db.Uuid
+  /** Workspace created later by this bound participant. Written only on genuine org insert. */
+  converted_organization_id String? @unique @db.Uuid
+  converted_at DateTime? @db.Timestamptz(6)
 
   deal         deal_network_pilot_deals          @relation(fields: [deal_id], references: [id], onDelete: Cascade)
   obligations  deal_network_pilot_obligations[]
+  source_organization organizations? @relation("ParticipantSourceOrganization", fields: [source_organization_id], references: [id], onDelete: SetNull)
+  converted_organization organizations? @relation("ParticipantConvertedOrganization", fields: [converted_organization_id], references: [id], onDelete: SetNull)
 
   @@index([deal_id])
   @@index([authenticated_user_id])
+  @@index([source_organization_id])
+  @@index([authenticated_user_id, converted_organization_id])
 }
 
 // ============================================================================

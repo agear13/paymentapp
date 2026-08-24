@@ -33,6 +33,9 @@ jest.mock('@/lib/server/prisma', () => ({
     organization_services: {
       findMany: jest.fn().mockResolvedValue([]),
     },
+    user_organizations: {
+      findUnique: jest.fn().mockResolvedValue({ id: 'mem-1' }),
+    },
   },
 }));
 
@@ -304,6 +307,7 @@ describe('Phase P3-C — Agreement Intelligence commercial bootstrap', () => {
     getPilotSnapshotForUser.mockResolvedValue({ deals: [], participants: [] });
     syncPilotSnapshotForUser.mockResolvedValue(undefined);
     refreshProjectObligationsAfterParticipantPersist.mockResolvedValue(undefined);
+    prisma.user_organizations.findUnique.mockResolvedValue({ id: 'mem-1' });
     prisma.deal_network_pilot_obligations.count.mockResolvedValue(4);
     prisma.deal_network_pilot_obligations.findMany.mockResolvedValue([
       { id: 'ob-1', obligation_type: 'PARTICIPANT', amount_owed: 0, currency: 'AUD', status: 'DRAFT' },
@@ -632,5 +636,82 @@ describe('Phase P3-C — Agreement Intelligence commercial bootstrap', () => {
     expect(syncedParticipants.find((row) => row.email === 'apex@example.com')?.id).not.toBe(
       'rm-same-name'
     );
+  });
+
+  it('stamps the workflow organization on newly created bootstrap participants', async () => {
+    prisma.organization_workflows.findUnique.mockResolvedValue({
+      id: WF_ID,
+      organization_id: ORG_A,
+    });
+    prisma.organization_workflows.findMany.mockResolvedValue([{ id: WF_ID }]);
+    prisma.user_organizations.findUnique.mockResolvedValue({ id: 'mem-1' });
+
+    await bootstrapAgreementIntelligenceCommercialGraph({
+      userId: USER_ID,
+      organizationWorkflowId: WF_ID,
+      approvedStructure: approvedStructure(),
+    });
+
+    const stamp = syncPilotSnapshotForUser.mock.calls[0]?.[3] as {
+      sourceOrganizationIdForNewIds?: { organizationId: string; participantIds: Set<string> };
+    };
+    expect(stamp?.sourceOrganizationIdForNewIds?.organizationId).toBe(ORG_A);
+    expect(stamp?.sourceOrganizationIdForNewIds?.participantIds.size).toBeGreaterThan(0);
+  });
+
+  it('does not backfill source organization on reused participant rows', async () => {
+    const rmWorkflowId = 'wf-rm-33333333-3333-3333-3333-333333333333';
+    const rmDealId = referralManagementDealId(rmWorkflowId);
+    const existingId = 'rm-apex-existing';
+    const structure = approvedStructure();
+    structure.reviewForm.parties[1] = {
+      ...structure.reviewForm.parties[1],
+      name: 'Apex Promotions',
+      email: 'apex@example.com',
+    };
+    structure.extractionResult.parties[1] = {
+      ...structure.extractionResult.parties[1],
+      name: { value: 'Apex Promotions', confidence: 'high' },
+      email: { value: 'apex@example.com', confidence: 'high' },
+    };
+
+    prisma.organization_workflows.findUnique.mockResolvedValue({
+      id: WF_ID,
+      organization_id: ORG_A,
+    });
+    prisma.organization_workflows.findMany.mockResolvedValue([{ id: WF_ID }, { id: rmWorkflowId }]);
+    getPilotSnapshotForUser
+      .mockResolvedValueOnce({
+        deals: [{ id: rmDealId, name: 'Referral Management' }],
+        participants: [
+          {
+            id: existingId,
+            dealId: rmDealId,
+            name: 'Apex Promotions',
+            email: 'apex@example.com',
+            role: 'Promoter',
+            inviteToken: 'invite-existing',
+            referralCode: 'APEX20',
+            commissionKind: 'pct_deal_value',
+            commissionValue: 20,
+            compensationProfile: { compensationType: 'REVENUE_SHARE', percentage: 20 },
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        deals: [{ id: PILOT_DEAL_ID }],
+        participants: [{ id: existingId, dealId: PILOT_DEAL_ID }],
+      });
+
+    await bootstrapAgreementIntelligenceCommercialGraph({
+      userId: USER_ID,
+      organizationWorkflowId: WF_ID,
+      approvedStructure: structure,
+    });
+
+    const stamp = syncPilotSnapshotForUser.mock.calls[0]?.[3] as {
+      sourceOrganizationIdForNewIds?: { organizationId: string; participantIds: Set<string> };
+    };
+    expect(stamp?.sourceOrganizationIdForNewIds?.participantIds.has(existingId)).toBe(false);
   });
 });

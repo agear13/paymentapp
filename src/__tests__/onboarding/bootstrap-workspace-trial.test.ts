@@ -25,6 +25,14 @@ jest.mock('@/lib/operations/onboarding/run-operational-initialization-convergenc
   }),
 }));
 
+jest.mock('@/lib/participants/participant-workspace-attribution.server', () => ({
+  attachParticipantWorkspaceAttribution: jest.fn().mockResolvedValue({
+    attached: false,
+    participantId: null,
+  }),
+  readSourceParticipantHint: jest.fn().mockReturnValue({ kind: 'absent' }),
+}));
+
 const mockCreate = jest.fn();
 const mockUserOrgCreate = jest.fn();
 const mockSettingsCreate = jest.fn();
@@ -117,6 +125,18 @@ describe('POST /api/onboarding/bootstrap-workspace trial assignment', () => {
 
     expect(response.status).toBe(200);
     expect(mockCreate).not.toHaveBeenCalled();
+    const { prisma } = jest.requireMock('@/lib/server/prisma') as {
+      prisma: { merchant_settings: { updateMany: jest.Mock } };
+    };
+    const { saveOperatorOnboardingState } = jest.requireMock(
+      '@/lib/onboarding/operator-onboarding.server'
+    ) as { saveOperatorOnboardingState: jest.Mock };
+    const { runOperationalInitializationConvergence } = jest.requireMock(
+      '@/lib/operations/onboarding/run-operational-initialization-convergence.server'
+    ) as { runOperationalInitializationConvergence: jest.Mock };
+    expect(prisma.merchant_settings.updateMany).not.toHaveBeenCalled();
+    expect(saveOperatorOnboardingState).not.toHaveBeenCalled();
+    expect(runOperationalInitializationConvergence).not.toHaveBeenCalled();
   });
 
   it('uses the shared journey trial payload helper', () => {

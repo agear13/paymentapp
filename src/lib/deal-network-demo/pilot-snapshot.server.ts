@@ -35,6 +35,10 @@ import {
   syncCantonParticipantApproval,
   syncCantonProposalOnAgreementShare,
 } from '@/lib/commercial-network/server/canton-workflow-sync.server';
+import {
+  resolveCreateTimeSourceOrganizationId,
+  resolveSyncCreateSourceOrganizationId,
+} from '@/lib/participants/participant-workspace-attribution.server';
 
 export interface PilotSnapshotPayload {
   deals: RecentDeal[];
@@ -410,34 +414,19 @@ export async function getPilotSnapshotForUser(userId: string): Promise<PilotSnap
     where: { deal_id: { in: dealIds } },
   });
 
-  const participants = await Promise.all(
-    participantRows.map(async (row) => {
-      const payload = row.participant_payload as unknown as DemoParticipant;
-      const { participant: repaired, repaired: didRepair } = repairScalarCompensationProfile({
-        ...payload,
-        id: row.id,
-        dealId: row.deal_id,
-        inviteToken: row.invite_token,
-      });
-      if (didRepair) {
-        await prisma.deal_network_pilot_participants.update({
-          where: { id: row.id },
-          data: {
-            participant_payload: {
-              ...repaired,
-              id: row.id,
-              dealId: row.deal_id,
-              inviteToken: row.invite_token,
-            } as unknown as Prisma.InputJsonValue,
-          },
-        });
-      }
-      return participantRowToDemo({
-        ...row,
-        participant_payload: repaired as unknown as Prisma.JsonValue,
-      });
-    })
-  );
+  const participants = participantRows.map((row) => {
+    const payload = row.participant_payload as unknown as DemoParticipant;
+    const { participant: repaired } = repairScalarCompensationProfile({
+      ...payload,
+      id: row.id,
+      dealId: row.deal_id,
+      inviteToken: row.invite_token,
+    });
+    return participantRowToDemo({
+      ...row,
+      participant_payload: repaired as unknown as Prisma.JsonValue,
+    });
+  });
 
   return {
     deals: deals.map((row) =>
@@ -447,10 +436,16 @@ export async function getPilotSnapshotForUser(userId: string): Promise<PilotSnap
   };
 }
 
+export type SyncPilotSnapshotSourceStamp = {
+  organizationId: string;
+  participantIds: ReadonlySet<string>;
+};
+
 export async function syncPilotSnapshotForUser(
   userId: string,
   deals: RecentDeal[],
-  participants: DemoParticipant[]
+  participants: DemoParticipant[],
+  options?: { sourceOrganizationIdForNewIds?: SyncPilotSnapshotSourceStamp }
 ): Promise<void> {
   const incomingDealIds = new Set(deals.map((d) => d.id));
 
@@ -494,6 +489,7 @@ export async function syncPilotSnapshotForUser(
       where: { deal: { user_id: userId } },
       select: { id: true },
     });
+    const existingPartIds = new Set(existingParts.map((row) => row.id));
     for (const ep of existingParts) {
       if (!incomingPartIds.has(ep.id)) {
         await tx.deal_network_pilot_participants.delete({ where: { id: ep.id } });
@@ -502,9 +498,19 @@ export async function syncPilotSnapshotForUser(
 
     for (const p of relevantParticipants) {
       const data = participantToPrismaData(p);
+      const sourceOrganizationId = resolveSyncCreateSourceOrganizationId({
+        participantId: p.id,
+        alreadyPersisted: existingPartIds.has(p.id),
+        provenSourceOrganizationId: options?.sourceOrganizationIdForNewIds?.organizationId,
+        stampParticipantIds: options?.sourceOrganizationIdForNewIds?.participantIds ?? null,
+      });
       await tx.deal_network_pilot_participants.upsert({
         where: { id: p.id },
-        create: { id: p.id, ...data },
+        create: {
+          id: p.id,
+          ...data,
+          ...(sourceOrganizationId ? { source_organization_id: sourceOrganizationId } : {}),
+        },
         update: data,
       });
     }
@@ -520,9 +526,61 @@ export function upsertPilotDealForUser(userId: string, deal: RecentDeal) {
   });
 }
 
+/** Newest onboarding deal with this name — deals-only, no participant hydration. */
+export async function findOnboardingDealIdByName(
+  userId: string,
+  projectName: string
+): Promise<string | undefined> {
+  const trimmed = projectName.trim();
+  if (!trimmed) return undefined;
+
+  const row = await prisma.deal_network_pilot_deals.findFirst({
+    where: {
+      user_id: userId,
+      id: { startsWith: 'onb-deal-' },
+      name: trimmed,
+    },
+    orderBy: { created_at: 'desc' },
+    select: { id: true },
+  });
+
+  return row?.id;
+}
+
+/**
+ * Persist one deal: incoming payload replaces stored project fields;
+ * conversation/import history is merged from the caller's existing row.
+ */
+export async function persistPilotDealForUser(
+  userId: string,
+  incoming: RecentDeal
+): Promise<RecentDeal> {
+  const existingRow = await prisma.deal_network_pilot_deals.findFirst({
+    where: { id: incoming.id, user_id: userId },
+    select: { id: true, deal_payload: true },
+  });
+  const existingDeal = existingRow
+    ? materializeConversationImportHistoryForDeal(
+        dealRowToRecentDeal({
+          id: existingRow.id,
+          deal_payload: existingRow.deal_payload,
+        })
+      )
+    : null;
+  const merged = mergeConversationImportHistoryOnDeal(existingDeal, incoming);
+  const data = dealToPrismaData(merged, userId);
+  await prisma.deal_network_pilot_deals.upsert({
+    where: { id: incoming.id },
+    create: { id: incoming.id, ...data },
+    update: data,
+  });
+  return merged;
+}
+
 export async function createPilotParticipantForUser(
   userId: string,
-  participant: DemoParticipant
+  participant: DemoParticipant,
+  options?: { sourceOrganizationId?: string | null }
 ): Promise<DemoParticipant> {
   if (!participant.id || !participant.dealId || !participant.inviteToken) {
     throw new Error('Participant id, dealId, and inviteToken are required');
@@ -541,10 +599,12 @@ export async function createPilotParticipantForUser(
   if (existing) {
     throw new Error('Participant already exists');
   }
+  const sourceOrganizationId = resolveCreateTimeSourceOrganizationId(options?.sourceOrganizationId);
   const row = await prisma.deal_network_pilot_participants.create({
     data: {
       id: participant.id,
       ...participantToPrismaData(participant),
+      ...(sourceOrganizationId ? { source_organization_id: sourceOrganizationId } : {}),
     },
   });
   return participantRowToDemo(row);

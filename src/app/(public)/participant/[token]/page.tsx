@@ -34,6 +34,7 @@ type WorkspacePayload = {
   onboarding?: ParticipantWorkspaceOnboarding;
   paymentSetupToken?: string | null;
   inviteToken?: string;
+  participant?: { id?: string } | null;
 };
 
 const REFRESH_INTERVAL_MS = 30_000;
@@ -191,6 +192,9 @@ export default function ParticipantWorkspacePage() {
       <CsrfBootstrap />
       <ParticipantWorkspaceGate
       portalToken={token}
+      sourceParticipantId={
+        typeof payload.participant?.id === 'string' ? payload.participant.id : null
+      }
       bootstrap={{
         onboarding: payload.onboarding,
         inviteToken: payload.inviteToken,

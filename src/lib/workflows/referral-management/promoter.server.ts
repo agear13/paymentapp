@@ -32,6 +32,7 @@ import {
   type ReferralPromoterRole,
 } from '@/lib/workflows/referral-management/constants';
 import { getReferralManagementContext } from '@/lib/workflows/referral-management/hub.server';
+import { proveSourceOrganizationFromWorkflow } from '@/lib/workflows/prove-source-organization.server';
 import {
   buildExistingPromoterRelationship,
   DUPLICATE_PROMOTER_MESSAGE,
@@ -247,7 +248,13 @@ export async function addReferralManagementPromoter(input: {
         }),
   };
 
-  const persisted = await createPilotParticipantForUser(input.userId, participant);
+  const sourceOrganizationId = await proveSourceOrganizationFromWorkflow(
+    scoped.workflow.id,
+    input.userId
+  );
+  const persisted = await createPilotParticipantForUser(input.userId, participant, {
+    sourceOrganizationId,
+  });
   await orchestrateOperationalMutation({
     userId: input.userId,
     mutation: 'snapshot_persist',

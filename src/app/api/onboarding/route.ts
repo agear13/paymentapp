@@ -8,8 +8,8 @@ import {
   getOperatorOnboardingState,
   saveOperatorOnboardingState,
 } from '@/lib/onboarding/operator-onboarding.server';
+import { resolveOperatorOnboardingPatch } from '@/lib/onboarding/operator-onboarding-merge';
 import { resumeOperationalInitialization } from '@/lib/operations/onboarding/run-operational-initialization-convergence.server';
-import type { OperatorOnboardingState } from '@/lib/onboarding/operator-onboarding-types';
 import { COLLECTION_PREFERENCE_VALUES } from '@/lib/onboarding/collection-preference';
 
 const patchSchema = z.object({
@@ -35,7 +35,7 @@ const patchSchema = z.object({
     projectId: z.string().optional(),
     completed: z.boolean().optional(),
     completedAt: z.string().optional(),
-    pending_billing_plan: z.enum(['professional', 'growth']).optional(),
+    pending_billing_plan: z.enum(['professional', 'growth']).nullable().optional(),
   }),
 });
 
@@ -75,12 +75,14 @@ export async function PATCH(request: NextRequest) {
     return apiError('Forbidden', 403);
   }
 
-  const persisted = await saveOperatorOnboardingState(org.id, user.id, body.state as OperatorOnboardingState, {
+  const current = await getOperatorOnboardingState(org.id);
+  const merged = resolveOperatorOnboardingPatch(current, body.state);
+  const persisted = await saveOperatorOnboardingState(org.id, user.id, merged, {
     skipIfEquivalent: true,
   });
 
   let operationalInitialization;
-  if (body.state.step === 'complete' || body.state.completed) {
+  if (persisted && (merged.step === 'complete' || merged.completed)) {
     const convergence = await resumeOperationalInitialization({
       userId: user.id,
       organizationId: org.id,
