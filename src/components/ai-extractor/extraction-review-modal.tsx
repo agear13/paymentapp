@@ -103,6 +103,8 @@ interface ExtractionReviewModalProps {
   onComplete: (dealId?: string, participants?: DemoParticipant[]) => void;
   /** Required for workflow_agreement — installed workflow instance id. */
   workflowId?: string;
+  /** Required when reviewing a specific Agreement Intelligence record. */
+  agreementId?: string;
 }
 
 export function ExtractionReviewModal({
@@ -115,6 +117,7 @@ export function ExtractionReviewModal({
   existingDeal,
   existingParticipants,
   workflowId,
+  agreementId,
   onComplete,
 }: ExtractionReviewModalProps) {
   const { currency: workspaceCurrency } = useOrganizationCurrency();
@@ -455,6 +458,7 @@ export function ExtractionReviewModal({
           body: JSON.stringify({
             reviewForm: form,
             extractionResult: approvedResult,
+            ...(agreementId ? { agreementId } : {}),
           }),
         });
 

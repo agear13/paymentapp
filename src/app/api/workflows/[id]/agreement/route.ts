@@ -8,6 +8,7 @@ import {
   refreshWorkflowActivation,
   retryWorkflowAgreementBootstrap,
   runWorkflowAgreementExtraction,
+  startNewWorkflowAgreement,
   submitPastedAgreement,
   submitUploadedAgreement,
 } from '@/lib/workflows/agreement-intelligence/agreement-service.server';
@@ -43,9 +44,15 @@ export async function GET(
   if (!access.ok) return access.response;
 
   const { id } = await context.params;
+  const agreementId = request.nextUrl.searchParams.get('agreementId')?.trim() || undefined;
 
   try {
-    const contextData = await getWorkflowAgreementContext(access.organizationId, id, access.userId);
+    const contextData = await getWorkflowAgreementContext(
+      access.organizationId,
+      id,
+      access.userId,
+      agreementId
+    );
     return apiResponse({
       ...contextData,
       operatorEmail: access.userEmail,
@@ -114,6 +121,7 @@ export async function PUT(
     const body = (await request.json()) as {
       reviewForm?: ReviewFormState;
       extractionResult?: ExtractionResult;
+      agreementId?: string;
     };
     if (!body.reviewForm || !body.extractionResult) {
       return apiError('reviewForm and extractionResult are required', 400);
@@ -125,6 +133,7 @@ export async function PUT(
       userId: access.userId,
       reviewForm: body.reviewForm,
       extractionResult: body.extractionResult,
+      agreementId: typeof body.agreementId === 'string' ? body.agreementId.trim() || undefined : undefined,
     });
     return apiResponse(contextData);
   } catch (error) {
@@ -142,7 +151,13 @@ export async function PATCH(
   const { id } = await context.params;
 
   try {
-    const body = (await request.json()) as { action?: string; force?: boolean };
+    const body = (await request.json()) as {
+      action?: string;
+      force?: boolean;
+      agreementId?: string;
+    };
+    const agreementId =
+      typeof body.agreementId === 'string' ? body.agreementId.trim() || undefined : undefined;
     if (body.action === 'extract') {
       const entitlementBlock = await requireAiImportEntitlement(
         access.organizationId,
@@ -154,7 +169,7 @@ export async function PATCH(
       const contextData = await runWorkflowAgreementExtraction(
         access.organizationId,
         id,
-        undefined,
+        agreementId,
         { force: body.force === true }
       );
       return apiResponse(contextData);
@@ -164,6 +179,7 @@ export async function PATCH(
         organizationId: access.organizationId,
         workflowId: id,
         userId: access.userId,
+        agreementId,
       });
       return apiResponse(contextData);
     }
@@ -172,7 +188,12 @@ export async function PATCH(
         organizationId: access.organizationId,
         workflowId: id,
         userId: access.userId,
+        agreementId,
       });
+      return apiResponse(contextData);
+    }
+    if (body.action === 'start_new') {
+      const contextData = await startNewWorkflowAgreement(access.organizationId, id);
       return apiResponse(contextData);
     }
     return apiError('Unsupported action', 400);

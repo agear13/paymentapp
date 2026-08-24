@@ -2,12 +2,14 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Brain,
   CheckCircle2,
   FileText,
   Loader2,
+  Plus,
   RefreshCw,
   Settings2,
   Upload,
@@ -46,7 +48,8 @@ function MetricCard({ label, value }: { label: string; value: React.ReactNode })
   );
 }
 
-export function AgreementIntelligenceHubScreen() {
+export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: string }) {
+  const router = useRouter();
   const { getBySlug, loading: workflowsLoading } = useDeployedWorkflows();
   const template = getWorkflowBySlug('agreement-intelligence');
   const installed = getBySlug('agreement-intelligence');
@@ -65,7 +68,8 @@ export function AgreementIntelligenceHubScreen() {
     updateConfiguration,
     coordinateParticipant,
     shareExtraction,
-  } = useWorkflowAgreement(installed?.id ?? null);
+    startNew,
+  } = useWorkflowAgreement(installed?.id ?? null, agreementId);
 
   const [inputOpen, setInputOpen] = React.useState(false);
   const [reviewOpen, setReviewOpen] = React.useState(false);
@@ -165,13 +169,14 @@ export function AgreementIntelligenceHubScreen() {
     lifecycleStatus === 'BOOTSTRAPPING';
 
   return (
-    <div className="animate-fade-up space-y-8 pb-16">
+    <div className="animate-fade-up space-y-8 pb-16" data-testid="agreement-intelligence-detail">
       <Link
-        href={COMMERCIAL_OS_ROUTES.workspace}
+        href={COMMERCIAL_OS_ROUTES.workflowInstance('agreement-intelligence')}
         className="inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-foreground"
+        data-testid="all-agreements-back"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        Back to Workspace
+        All agreements
       </Link>
 
       <div className="overflow-hidden rounded-3xl border border-border bg-card shadow-card">
@@ -198,10 +203,31 @@ export function AgreementIntelligenceHubScreen() {
               )}
             </div>
           </div>
-          <Button type="button" variant="outline" size="sm" onClick={() => setConfigOpen((v) => !v)}>
-            <Settings2 className="mr-2 h-4 w-4" />
-            Configuration
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={submitting}
+              data-testid="new-extraction"
+              onClick={() => {
+                void startNew().then((ok) => {
+                  if (ok) {
+                    router.push(
+                      `${COMMERCIAL_OS_ROUTES.workflowInstance('agreement-intelligence')}?new=1`
+                    );
+                  }
+                });
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              New extraction
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => setConfigOpen((v) => !v)}>
+              <Settings2 className="mr-2 h-4 w-4" />
+              Configuration
+            </Button>
+          </div>
         </div>
 
         {configOpen && context?.configuration && (
@@ -730,6 +756,7 @@ export function AgreementIntelligenceHubScreen() {
           sourceType="other"
           rawConversationText={agreement?.sourceText ?? undefined}
           workflowId={installed.id}
+          agreementId={agreement?.id ?? agreementId}
           onComplete={() => {
             void refresh();
           }}

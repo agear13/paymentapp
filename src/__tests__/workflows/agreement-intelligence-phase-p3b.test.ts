@@ -12,8 +12,8 @@ import { deployWorkflowToOrganization } from '@/lib/workflows/deploy-workflow';
 import type { ExtractionResult } from '@/lib/ai-extractor/extraction-types';
 import type { ReviewFormState } from '@/lib/ai-extractor/review-form-types';
 
-jest.mock('@/lib/server/prisma', () => ({
-  prisma: {
+jest.mock('@/lib/server/prisma', () => {
+  const prisma = {
     organization_workflows: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
@@ -26,9 +26,17 @@ jest.mock('@/lib/server/prisma', () => ({
       findFirst: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
-  },
-}));
+    deal_network_pilot_obligations: {
+      count: jest.fn().mockResolvedValue(0),
+    },
+    $queryRaw: jest.fn().mockResolvedValue([]),
+    $transaction: jest.fn(),
+  };
+  prisma.$transaction.mockImplementation(async (fn: (tx: typeof prisma) => unknown) => fn(prisma));
+  return { prisma };
+});
 
 jest.mock('@/lib/entitlements/resolve-context.server', () => ({
   resolveEntitlementContext: jest.fn().mockResolvedValue({
@@ -127,6 +135,7 @@ function agreementRow(overrides: Record<string, unknown> = {}) {
     extracted_at: null,
     approved_at: null,
     approved_by_user_id: null,
+    is_current: true,
     created_at: new Date('2026-08-17T10:00:00Z'),
     updated_at: new Date('2026-08-17T10:00:00Z'),
     ...overrides,
@@ -279,6 +288,7 @@ describe('Phase P3-B — Agreement Intelligence workflow workspace', () => {
     prisma.organization_workflow_agreements.findFirst.mockReset();
     prisma.organization_workflow_agreements.create.mockReset();
     prisma.organization_workflow_agreements.update.mockReset();
+    prisma.organization_workflow_agreements.updateMany.mockReset();
     extractAgreementFromText.mockReset();
     extractAgreementFromText.mockResolvedValue(sampleExtraction());
     getOrganizationWorkflowById.mockReset();
@@ -302,6 +312,7 @@ describe('Phase P3-B — Agreement Intelligence workflow workspace', () => {
         template: { version: '1.0.0', category: 'agreement_intelligence', deployable: true },
       },
     });
+    prisma.$transaction.mockImplementation(async (fn: (tx: typeof prisma) => unknown) => fn(prisma));
   });
 
   describe('deployment → input', () => {
@@ -327,7 +338,9 @@ describe('Phase P3-B — Agreement Intelligence workflow workspace', () => {
 
     it('upload associates agreement with correct workflow', async () => {
       prisma.organization_workflows.findFirst.mockResolvedValue(workflowRow());
-      prisma.organization_workflow_agreements.findUnique.mockResolvedValue(null);
+      prisma.organization_workflows.findUnique.mockResolvedValue({ lifecycle_status: 'AWAITING_INPUT' });
+      prisma.organization_workflow_agreements.findFirst.mockResolvedValueOnce(null);
+      prisma.organization_workflow_agreements.updateMany.mockResolvedValue({ count: 0 });
       prisma.organization_workflow_agreements.create.mockResolvedValue(agreementRow());
       prisma.organization_workflows.update.mockResolvedValue(workflowRow({ lifecycle_status: 'EXTRACTING' }));
       prisma.organization_workflow_agreements.update.mockResolvedValue(
@@ -353,16 +366,324 @@ describe('Phase P3-B — Agreement Intelligence workflow workspace', () => {
         text: agreementRow().source_text,
       });
 
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(prisma.organization_workflow_agreements.updateMany).toHaveBeenCalledWith({
+        where: { organization_workflow_id: WF_ID, is_current: true },
+        data: { is_current: false },
+      });
       expect(prisma.organization_workflow_agreements.create).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
             organization_id: ORG_A,
             organization_workflow_id: WF_ID,
+            is_current: true,
           }),
         })
       );
       expect(context.lifecycleStatus).toBe('READY_FOR_REVIEW');
       expect(context.agreement?.organizationWorkflowId).toBe(WF_ID);
+    });
+
+    it('demotes the previous current agreement and creates the new one in one transaction', async () => {
+      const previous = agreementRow({
+        extraction_status: 'READY_FOR_REVIEW',
+        extraction_result: sampleExtraction(),
+      });
+      const created = agreementRow({
+        id: 'agr-new-4444-4444-4444-444444444444',
+        is_current: true,
+        extraction_status: 'PENDING',
+      });
+      prisma.organization_workflows.findFirst.mockResolvedValue(
+        workflowRow({
+          lifecycle_status: 'AWAITING_INPUT',
+          agreement: previous,
+          agreements: [previous],
+        })
+      );
+      prisma.organization_workflows.findUnique.mockResolvedValue({
+        lifecycle_status: 'AWAITING_INPUT',
+      });
+      prisma.organization_workflow_agreements.findFirst.mockResolvedValue(previous);
+      prisma.organization_workflow_agreements.updateMany.mockResolvedValue({ count: 1 });
+      prisma.organization_workflow_agreements.create.mockResolvedValue(created);
+      prisma.organization_workflows.update.mockResolvedValue(
+        workflowRow({ lifecycle_status: 'EXTRACTING' })
+      );
+      prisma.organization_workflow_agreements.update.mockResolvedValue(
+        created
+      );
+      extractAgreementFromText.mockResolvedValue(sampleExtraction());
+      prisma.organization_workflows.findFirst.mockResolvedValue(
+        workflowRow({
+          lifecycle_status: 'READY_FOR_REVIEW',
+          agreements: [
+            { ...previous, is_current: false },
+            {
+              ...created,
+              extraction_status: 'READY_FOR_REVIEW',
+              extraction_result: sampleExtraction(),
+              is_current: true,
+            },
+          ],
+        })
+      );
+
+      await submitPastedAgreement({
+        organizationId: ORG_A,
+        workflowId: WF_ID,
+        text: 'Venue pays Promoter 25%.',
+      });
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      const updateManyOrder = prisma.organization_workflow_agreements.updateMany.mock.invocationCallOrder[0];
+      const createOrder = prisma.organization_workflow_agreements.create.mock.invocationCallOrder[0];
+      expect(updateManyOrder).toBeLessThan(createOrder);
+      expect(prisma.organization_workflow_agreements.updateMany).toHaveBeenCalledWith({
+        where: { organization_workflow_id: WF_ID, is_current: true },
+        data: { is_current: false },
+      });
+      expect(prisma.organization_workflow_agreements.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            is_current: true,
+            source_text: 'Venue pays Promoter 25%.',
+          }),
+        })
+      );
+    });
+
+    it('creates a new current row after explicit New extraction from an approved agreement', async () => {
+      const previous = agreementRow({
+        extraction_status: 'APPROVED',
+        extraction_result: sampleExtraction(),
+        approved_structure: { reviewForm: sampleReviewForm() },
+        approved_at: new Date('2026-08-17T12:00:00Z'),
+        bootstrapped_at: new Date('2026-08-17T12:05:00Z'),
+        pilot_deal_id: `aiwf-${AGREEMENT_ID}`,
+        is_current: true,
+      });
+      const created = agreementRow({
+        id: 'agr-new-5555-5555-5555-555555555555',
+        is_current: true,
+        extraction_status: 'PENDING',
+        source_text: 'Saturday Beach Event. Venue pays Promoter 30%.',
+      });
+      prisma.organization_workflows.findFirst.mockResolvedValue(
+        workflowRow({
+          lifecycle_status: 'AWAITING_INPUT',
+          agreement: previous,
+          agreements: [previous],
+        })
+      );
+      prisma.organization_workflows.findUnique.mockResolvedValue({
+        lifecycle_status: 'AWAITING_INPUT',
+      });
+      prisma.organization_workflow_agreements.findFirst.mockResolvedValue(previous);
+      prisma.organization_workflow_agreements.updateMany.mockResolvedValue({ count: 1 });
+      prisma.organization_workflow_agreements.create.mockResolvedValue(created);
+      prisma.organization_workflows.update.mockResolvedValue(
+        workflowRow({ lifecycle_status: 'EXTRACTING' })
+      );
+      prisma.organization_workflow_agreements.update.mockResolvedValue(created);
+      extractAgreementFromText.mockResolvedValue(sampleExtraction());
+      prisma.organization_workflows.findFirst.mockResolvedValue(
+        workflowRow({
+          lifecycle_status: 'READY_FOR_REVIEW',
+          agreements: [
+            { ...previous, is_current: false },
+            {
+              ...created,
+              extraction_status: 'READY_FOR_REVIEW',
+              extraction_result: sampleExtraction(),
+              is_current: true,
+            },
+          ],
+        })
+      );
+
+      await submitPastedAgreement({
+        organizationId: ORG_A,
+        workflowId: WF_ID,
+        text: 'Saturday Beach Event. Venue pays Promoter 30%.',
+      });
+
+      expect(prisma.organization_workflow_agreements.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: AGREEMENT_ID } })
+      );
+      expect(prisma.organization_workflow_agreements.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            organization_workflow_id: WF_ID,
+            is_current: true,
+            source_text: 'Saturday Beach Event. Venue pays Promoter 30%.',
+          }),
+        })
+      );
+      expect(prisma.organization_workflow_agreements.updateMany).toHaveBeenCalledWith({
+        where: { organization_workflow_id: WF_ID, is_current: true },
+        data: { is_current: false },
+      });
+    });
+
+    it('keeps an approved agreement current when new-row creation fails inside the transaction', async () => {
+      const previous = agreementRow({
+        extraction_status: 'APPROVED',
+        extraction_result: sampleExtraction(),
+        approved_at: new Date('2026-08-17T12:00:00Z'),
+        is_current: true,
+      });
+      const store = new Map([[previous.id, { ...previous }]]);
+
+      prisma.organization_workflows.findFirst.mockResolvedValue(
+        workflowRow({
+          lifecycle_status: 'AWAITING_INPUT',
+          agreement: previous,
+          agreements: [previous],
+        })
+      );
+
+      prisma.$transaction.mockImplementation(async (fn: (tx: typeof prisma) => unknown) => {
+        const snapshot = new Map(
+          [...store.entries()].map(([id, row]) => [id, { ...row }])
+        );
+        const tx = {
+          $queryRaw: jest.fn().mockResolvedValue([]),
+          organization_workflows: {
+            findUnique: jest.fn().mockResolvedValue({ lifecycle_status: 'AWAITING_INPUT' }),
+          },
+          organization_workflow_agreements: {
+            findFirst: jest.fn(async () => [...store.values()].find((row) => row.is_current) ?? null),
+            updateMany: jest.fn(
+              async ({
+                where,
+                data,
+              }: {
+                where: { organization_workflow_id: string; is_current: boolean };
+                data: { is_current: boolean };
+              }) => {
+                let count = 0;
+                for (const [id, row] of store) {
+                  if (
+                    row.organization_workflow_id === where.organization_workflow_id &&
+                    row.is_current === true
+                  ) {
+                    store.set(id, { ...row, ...data });
+                    count += 1;
+                  }
+                }
+                return { count };
+              }
+            ),
+            create: jest.fn(async () => {
+              throw new Error('insert failed');
+            }),
+            update: jest.fn(),
+          },
+        };
+        try {
+          return await fn(tx as typeof prisma);
+        } catch (error) {
+          store.clear();
+          for (const [id, row] of snapshot) store.set(id, row);
+          throw error;
+        }
+      });
+
+      await expect(
+        submitPastedAgreement({
+          organizationId: ORG_A,
+          workflowId: WF_ID,
+          text: 'Saturday Beach Event. Venue pays Promoter 30%.',
+        })
+      ).rejects.toThrow('insert failed');
+
+      expect(store.get(previous.id)?.is_current).toBe(true);
+      expect(store.get(previous.id)?.extraction_status).toBe('APPROVED');
+    });
+
+    it('rejects overwrite of an approved agreement unless New extraction put the workflow in AWAITING_INPUT', async () => {
+      const previous = agreementRow({
+        extraction_status: 'APPROVED',
+        extraction_result: sampleExtraction(),
+        is_current: true,
+      });
+      prisma.organization_workflows.findFirst.mockResolvedValue(
+        workflowRow({
+          lifecycle_status: 'ACTIVE',
+          agreement: previous,
+          agreements: [previous],
+        })
+      );
+
+      await expect(
+        submitPastedAgreement({
+          organizationId: ORG_A,
+          workflowId: WF_ID,
+          text: 'Saturday Beach Event. Venue pays Promoter 30%.',
+        })
+      ).rejects.toMatchObject({
+        code: 'INVALID_STATE',
+        message: expect.stringMatching(/already approved or active/i),
+      });
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.organization_workflow_agreements.create).not.toHaveBeenCalled();
+      expect(prisma.organization_workflow_agreements.update).not.toHaveBeenCalled();
+    });
+
+    it('retries a failed extraction in place instead of creating a duplicate row', async () => {
+      const failed = agreementRow({
+        extraction_status: 'FAILED',
+        extraction_error: 'Model error',
+        is_current: true,
+      });
+      prisma.organization_workflows.findFirst.mockResolvedValue(
+        workflowRow({
+          lifecycle_status: 'EXTRACTION_FAILED',
+          agreement: failed,
+          agreements: [failed],
+        })
+      );
+      prisma.organization_workflows.findUnique.mockResolvedValue({
+        lifecycle_status: 'EXTRACTION_FAILED',
+      });
+      prisma.organization_workflow_agreements.findFirst.mockResolvedValue(failed);
+      prisma.organization_workflow_agreements.update.mockResolvedValue(
+        agreementRow({
+          extraction_status: 'PENDING',
+          source_text: 'Venue pays Promoter 20%. Retry.',
+        })
+      );
+      prisma.organization_workflows.update.mockResolvedValue(
+        workflowRow({ lifecycle_status: 'EXTRACTING' })
+      );
+      extractAgreementFromText.mockResolvedValue(sampleExtraction());
+      prisma.organization_workflows.findFirst.mockResolvedValue(
+        workflowRow({
+          lifecycle_status: 'READY_FOR_REVIEW',
+          agreement: agreementRow({
+            extraction_status: 'READY_FOR_REVIEW',
+            extraction_result: sampleExtraction(),
+          }),
+        })
+      );
+
+      await submitPastedAgreement({
+        organizationId: ORG_A,
+        workflowId: WF_ID,
+        text: 'Venue pays Promoter 20%. Retry.',
+      });
+
+      expect(prisma.organization_workflow_agreements.create).not.toHaveBeenCalled();
+      expect(prisma.organization_workflow_agreements.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: AGREEMENT_ID },
+          data: expect.objectContaining({
+            source_text: 'Venue pays Promoter 20%. Retry.',
+            extraction_status: 'PENDING',
+          }),
+        })
+      );
     });
   });
 
@@ -483,7 +804,7 @@ describe('Phase P3-B — Agreement Intelligence workflow workspace', () => {
               extraction_result: extraction,
               approved_at: new Date('2026-08-17T11:00:00Z'),
               approved_by_user_id: 'user-1',
-              pilot_deal_id: `aiwf-${WF_ID}`,
+              pilot_deal_id: `aiwf-${AGREEMENT_ID}`,
               bootstrapped_at: new Date('2026-08-17T11:00:00Z'),
             }),
           })
@@ -506,7 +827,7 @@ describe('Phase P3-B — Agreement Intelligence workflow workspace', () => {
           data: expect.objectContaining({
             extraction_status: 'APPROVED',
             approved_by_user_id: 'user-1',
-            pilot_deal_id: `aiwf-${WF_ID}`,
+            pilot_deal_id: `aiwf-${AGREEMENT_ID}`,
           }),
         })
       );

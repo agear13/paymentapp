@@ -1,6 +1,6 @@
 jest.mock('@/lib/server/prisma', () => ({
   prisma: {
-    organization_workflow_agreements: { findUnique: jest.fn() },
+    organization_workflow_agreements: { findUnique: jest.fn(), findFirst: jest.fn() },
   },
 }));
 
@@ -28,7 +28,7 @@ describe('shareWorkflowAgreementExtraction', () => {
       id: WF,
       templateSlug: 'agreement-intelligence',
     });
-    prisma.organization_workflow_agreements.findUnique.mockResolvedValue({
+    prisma.organization_workflow_agreements.findFirst.mockResolvedValue({
       title: 'Festival Revenue Share',
       extraction_result: {
         projectName: field('Festival Revenue Share'),
@@ -105,7 +105,7 @@ describe('shareWorkflowAgreementExtraction', () => {
   });
 
   it('refuses to share when no extraction exists', async () => {
-    prisma.organization_workflow_agreements.findUnique.mockResolvedValue(null);
+    prisma.organization_workflow_agreements.findFirst.mockResolvedValue(null);
     await expect(
       shareWorkflowAgreementExtraction({
         organizationId: ORG,

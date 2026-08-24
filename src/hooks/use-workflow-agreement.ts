@@ -21,12 +21,21 @@ export type WorkflowAgreementContext = {
   operatorEmail?: string | null;
 };
 
-export function useWorkflowAgreement(workflowId: string | null) {
+export function useWorkflowAgreement(
+  workflowId: string | null,
+  agreementId?: string | null,
+  options?: { skipInitialFetch?: boolean }
+) {
+  const skipInitialFetch = options?.skipInitialFetch === true;
   const [context, setContext] = useState<WorkflowAgreementContext | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!skipInitialFetch);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [coordinating, setCoordinating] = useState(false);
+
+  const agreementQuery = agreementId
+    ? `?agreementId=${encodeURIComponent(agreementId)}`
+    : '';
 
   const refresh = useCallback(async () => {
     if (!workflowId) {
@@ -38,7 +47,9 @@ export function useWorkflowAgreement(workflowId: string | null) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/workflows/${workflowId}/agreement`, { credentials: 'include' });
+      const res = await fetch(`/api/workflows/${workflowId}/agreement${agreementQuery}`, {
+        credentials: 'include',
+      });
       if (!res.ok) {
         const payload = (await res.json().catch(() => null)) as { error?: string } | null;
         setError(payload?.error ?? 'Failed to load agreement workflow');
@@ -53,11 +64,12 @@ export function useWorkflowAgreement(workflowId: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [workflowId]);
+  }, [workflowId, agreementQuery]);
 
   useEffect(() => {
+    if (skipInitialFetch) return;
     void refresh();
-  }, [refresh]);
+  }, [refresh, skipInitialFetch]);
 
   const submitPaste = useCallback(
     async (text: string, title?: string) => {
@@ -78,7 +90,7 @@ export function useWorkflowAgreement(workflowId: string | null) {
         }
         const data = (await res.json()) as WorkflowAgreementContext;
         setContext(data);
-        return true;
+        return data.agreement?.id ?? false;
       } catch {
         setError('Failed to submit agreement');
         return false;
@@ -109,7 +121,7 @@ export function useWorkflowAgreement(workflowId: string | null) {
         }
         const data = (await res.json()) as WorkflowAgreementContext;
         setContext(data);
-        return true;
+        return data.agreement?.id ?? false;
       } catch {
         setError('Failed to upload agreement');
         return false;
@@ -129,7 +141,11 @@ export function useWorkflowAgreement(workflowId: string | null) {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ action: 'extract', force: true }),
+        body: JSON.stringify({
+          action: 'extract',
+          force: true,
+          ...(agreementId ? { agreementId } : {}),
+        }),
       });
       if (!res.ok) {
         const payload = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -146,7 +162,7 @@ export function useWorkflowAgreement(workflowId: string | null) {
     } finally {
       setSubmitting(false);
     }
-  }, [workflowId, refresh]);
+  }, [workflowId, agreementId, refresh]);
 
   const updateConfiguration = useCallback(
     async (configuration: AgreementIntelligenceConfiguration) => {
@@ -186,7 +202,10 @@ export function useWorkflowAgreement(workflowId: string | null) {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ action: 'bootstrap' }),
+        body: JSON.stringify({
+          action: 'bootstrap',
+          ...(agreementId ? { agreementId } : {}),
+        }),
       });
       if (!res.ok) {
         const payload = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -203,7 +222,7 @@ export function useWorkflowAgreement(workflowId: string | null) {
     } finally {
       setSubmitting(false);
     }
-  }, [workflowId, refresh]);
+  }, [workflowId, agreementId, refresh]);
 
   const shareExtraction = useCallback(
     async (to: string): Promise<{ ok: true } | { ok: false; error: string }> => {
@@ -213,7 +232,7 @@ export function useWorkflowAgreement(workflowId: string | null) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ to }),
+          body: JSON.stringify({ to, ...(agreementId ? { agreementId } : {}) }),
         });
         const payload = (await res.json().catch(() => null)) as
           | { sent?: boolean; error?: string }
@@ -229,8 +248,35 @@ export function useWorkflowAgreement(workflowId: string | null) {
         return { ok: false, error: 'Could not send the extraction email.' };
       }
     },
-    [workflowId]
+    [workflowId, agreementId]
   );
+
+  const startNew = useCallback(async () => {
+    if (!workflowId) return false;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await csrfAwareFetch(`/api/workflows/${workflowId}/agreement`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: 'start_new' }),
+      });
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        setError(payload?.error ?? 'Could not start a new extraction');
+        return false;
+      }
+      const data = (await res.json()) as WorkflowAgreementContext;
+      setContext(data);
+      return true;
+    } catch {
+      setError('Could not start a new extraction');
+      return false;
+    } finally {
+      setSubmitting(false);
+    }
+  }, [workflowId]);
 
   const coordinateParticipant = useCallback(
     async (
@@ -248,7 +294,11 @@ export function useWorkflowAgreement(workflowId: string | null) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
-            body: JSON.stringify({ action, ...extra }),
+            body: JSON.stringify({
+              action,
+              ...extra,
+              ...(agreementId ? { agreementId } : {}),
+            }),
           }
         );
         const payload = (await res.json().catch(() => null)) as
@@ -270,10 +320,8 @@ export function useWorkflowAgreement(workflowId: string | null) {
         setCoordinating(false);
       }
     },
-    [workflowId]
+    [workflowId, agreementId]
   );
-
-  return {
     context,
     loading,
     error,
@@ -287,5 +335,6 @@ export function useWorkflowAgreement(workflowId: string | null) {
     updateConfiguration,
     coordinateParticipant,
     shareExtraction,
+    startNew,
   };
 }

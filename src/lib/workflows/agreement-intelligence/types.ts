@@ -47,8 +47,28 @@ export type WorkflowAgreementRecord = {
   pilotDealId: string | null;
   bootstrapError: string | null;
   bootstrappedAt: string | null;
+  isCurrent: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+export type AgreementCollectionFilter =
+  | 'all'
+  | 'processing'
+  | 'ready_for_review'
+  | 'approved_active'
+  | 'failed';
+
+export type AgreementCollectionItem = {
+  id: string;
+  title: string;
+  statusFilter: Exclude<AgreementCollectionFilter, 'all'>;
+  statusLabel: string;
+  extractionStatus: WorkflowAgreementExtractionStatus;
+  participantCount: number | null;
+  updatedAt: string;
+  isCurrent: boolean;
+  href: string;
 };
 
 export type WorkflowOperationalPartyKind =

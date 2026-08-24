@@ -87,7 +87,7 @@ const ORG_B = 'org-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 const WF_ID = 'wf-11111111-1111-1111-1111-111111111111';
 const AGREEMENT_ID = 'agr-22222222-2222-2222-2222-222222222222';
 const USER_ID = 'user-1';
-const PILOT_DEAL_ID = agreementIntelligencePilotDealId(WF_ID);
+const PILOT_DEAL_ID = agreementIntelligencePilotDealId(AGREEMENT_ID);
 
 function compensatedParticipant(overrides: Partial<DemoParticipant> = {}): DemoParticipant {
   return {

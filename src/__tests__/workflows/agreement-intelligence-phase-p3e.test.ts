@@ -18,6 +18,9 @@ jest.mock('@/lib/server/prisma', () => ({
     organization_workflows: {
       findFirst: jest.fn(),
     },
+    organization_workflow_agreements: {
+      findFirst: jest.fn(),
+    },
     organization_services: {
       findMany: jest.fn(),
     },
@@ -116,7 +119,7 @@ function workflowRow() {
     status: 'DEPLOYED',
     lifecycle_status: 'PARTICIPANT_SETUP',
     configuration: { operatorApprovalRequired: true, defaultSettlementCurrency: 'AUD' },
-    agreement: { pilot_deal_id: DEAL },
+    agreements: [{ pilot_deal_id: DEAL, is_current: true }],
   };
 }
 

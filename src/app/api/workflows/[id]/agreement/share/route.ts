@@ -7,6 +7,7 @@ import { WorkflowAgreementError } from '@/lib/workflows/agreement-intelligence/t
 
 const bodySchema = z.object({
   to: z.string().trim().email(),
+  agreementId: z.string().trim().uuid().optional(),
 });
 
 export async function POST(
@@ -24,6 +25,7 @@ export async function POST(
       workflowId: id,
       to: body.to,
       senderName: access.userEmail,
+      agreementId: body.agreementId,
     });
     if (!result.sent) {
       return apiError(result.error, 502, 'EMAIL_NOT_SENT');

@@ -24,6 +24,7 @@ export async function shareWorkflowAgreementExtraction(input: {
   workflowId: string;
   to: string;
   senderName?: string | null;
+  agreementId?: string | null;
 }): Promise<{ sent: true; emailId: string } | { sent: false; error: string }> {
   const workflow = await getOrganizationWorkflowById(input.organizationId, input.workflowId);
   if (workflow.templateSlug !== AGREEMENT_INTELLIGENCE_SLUG) {
@@ -34,9 +35,18 @@ export async function shareWorkflowAgreementExtraction(input: {
     );
   }
 
-  const row = await prisma.organization_workflow_agreements.findUnique({
-    where: { organization_workflow_id: input.workflowId },
-  });
+  const row = input.agreementId
+    ? await prisma.organization_workflow_agreements.findFirst({
+        where: {
+          id: input.agreementId,
+          organization_id: input.organizationId,
+          organization_workflow_id: input.workflowId,
+        },
+      })
+    : await prisma.organization_workflow_agreements.findFirst({
+        where: { organization_workflow_id: input.workflowId, is_current: true },
+        orderBy: { updated_at: 'desc' },
+      });
   const extraction = asExtractionResult(row?.extraction_result);
   if (!row || !extraction) {
     throw new WorkflowAgreementError(

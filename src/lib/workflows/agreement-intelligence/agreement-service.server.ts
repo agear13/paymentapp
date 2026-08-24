@@ -1,6 +1,7 @@
 import type {
   organization_workflow_agreements,
   OrganizationWorkflowLifecycleStatus,
+  Prisma,
   WorkflowAgreementExtractionStatus,
   WorkflowAgreementSourceType,
 } from '@prisma/client';
@@ -33,7 +34,16 @@ import {
   resolvePostBootstrapLifecycle,
 } from '@/lib/workflows/agreement-intelligence/participant-setup.server';
 import { isWorkflowLockedForInput } from '@/lib/workflows/agreement-intelligence/lifecycle';
+import {
+  agreementDrivesWorkflowLifecycle,
+  canStartNewExtraction,
+  lifecycleForAgreementView,
+  pickCurrentAgreement,
+  shouldCreateNewCurrentAgreement,
+  toAgreementCollectionItem,
+} from '@/lib/workflows/agreement-intelligence/agreement-collection';
 import type {
+  AgreementCollectionItem,
   ApprovedAgreementStructure,
   WorkflowAgreementRecord,
   WorkflowOperationalHubSummary,
@@ -72,9 +82,88 @@ function serializeAgreement(row: organization_workflow_agreements): WorkflowAgre
     pilotDealId: row.pilot_deal_id,
     bootstrapError: row.bootstrap_error,
     bootstrappedAt: row.bootstrapped_at?.toISOString() ?? null,
+    isCurrent: row.is_current ?? true,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
+}
+
+const WORKFLOW_AGREEMENTS_INCLUDE = {
+  agreements: {
+    orderBy: [{ is_current: 'desc' as const }, { updated_at: 'desc' as const }],
+  },
+};
+
+function attachedAgreements(row: {
+  agreements?: organization_workflow_agreements[] | null;
+  agreement?: organization_workflow_agreements | null;
+}): organization_workflow_agreements[] {
+  if (Array.isArray(row.agreements)) return row.agreements;
+  if (row.agreement) return [{ ...row.agreement, is_current: row.agreement.is_current ?? true }];
+  return [];
+}
+
+function resolveCurrentAgreement(row: {
+  agreements?: organization_workflow_agreements[] | null;
+  agreement?: organization_workflow_agreements | null;
+}): organization_workflow_agreements | null {
+  return pickCurrentAgreement(attachedAgreements(row));
+}
+
+async function resolveTargetAgreement(
+  row: {
+    agreements?: organization_workflow_agreements[] | null;
+    agreement?: organization_workflow_agreements | null;
+  },
+  organizationId: string,
+  workflowId: string,
+  agreementId?: string | null
+): Promise<organization_workflow_agreements | null> {
+  if (!agreementId) {
+    return resolveCurrentAgreement(row);
+  }
+
+  const attached = attachedAgreements(row).find((item) => item.id === agreementId);
+  if (attached) return attached;
+
+  return prisma.organization_workflow_agreements.findFirst({
+    where: {
+      id: agreementId,
+      organization_id: organizationId,
+      organization_workflow_id: workflowId,
+    },
+  });
+}
+
+async function lockWorkflowRow(tx: Prisma.TransactionClient, workflowId: string) {
+  await tx.$queryRaw`
+    SELECT id FROM organization_workflows
+    WHERE id = ${workflowId}::uuid
+    FOR UPDATE
+  `;
+}
+
+const CURRENT_AGREEMENT_LOOKUP = {
+  is_current: true as const,
+};
+
+async function findCurrentAgreementRow(
+  client: Prisma.TransactionClient | typeof prisma,
+  workflowId: string
+) {
+  return client.organization_workflow_agreements.findFirst({
+    where: { organization_workflow_id: workflowId, ...CURRENT_AGREEMENT_LOOKUP },
+    orderBy: { updated_at: 'desc' },
+  });
+}
+
+async function setWorkflowLifecycleIfCurrent(
+  workflowId: string,
+  lifecycleStatus: OrganizationWorkflowLifecycleStatus,
+  drivesWorkflow: boolean
+) {
+  if (!drivesWorkflow) return;
+  await setWorkflowLifecycle(workflowId, lifecycleStatus);
 }
 
 async function requireAgreementIntelligenceWorkflow(
@@ -95,7 +184,7 @@ async function requireAgreementIntelligenceWorkflow(
 async function getWorkflowRow(organizationId: string, workflowId: string) {
   const row = await prisma.organization_workflows.findFirst({
     where: { id: workflowId, organization_id: organizationId },
-    include: { agreement: true },
+    include: WORKFLOW_AGREEMENTS_INCLUDE,
   });
   if (!row) {
     throw new WorkflowAgreementError('Workflow not found', 'NOT_FOUND', 404);
@@ -107,7 +196,10 @@ async function getWorkflowRow(organizationId: string, workflowId: string) {
       400
     );
   }
-  return row;
+  return {
+    ...row,
+    agreement: resolveCurrentAgreement(row),
+  };
 }
 
 async function setWorkflowLifecycle(
@@ -126,6 +218,7 @@ async function finalizeWorkflowActivation(input: {
   userId: string;
   pilotDealId: string;
   operatorApprovalRequired: boolean;
+  syncWorkflowLifecycle?: boolean;
 }): Promise<OrganizationWorkflowLifecycleStatus> {
   const snapshot = await getPilotSnapshotForUser(input.userId);
   const compensatedParticipants = filterCompensatedParticipants(
@@ -143,7 +236,11 @@ async function finalizeWorkflowActivation(input: {
       bootstrap_error: null,
     },
   });
-  await setWorkflowLifecycle(input.workflowId, lifecycleStatus);
+  await setWorkflowLifecycleIfCurrent(
+    input.workflowId,
+    lifecycleStatus,
+    input.syncWorkflowLifecycle !== false
+  );
   return lifecycleStatus;
 }
 
@@ -184,14 +281,44 @@ function buildStorageKey(organizationId: string, workflowId: string, filename: s
 async function buildAgreementContextResponse(
   organizationId: string,
   workflowId: string,
-  userId?: string
+  userId?: string,
+  agreementId?: string
 ) {
   const row = await getWorkflowRow(organizationId, workflowId);
   const configuration = parseAgreementIntelligenceConfiguration(row.configuration);
   let lifecycleStatus = row.lifecycle_status;
-  const agreementRecord = row.agreement;
+  const currentRecord = resolveCurrentAgreement(row);
+  let agreementRecord = currentRecord;
 
-  if (userId && lifecycleStatus === 'PARTICIPANT_SETUP' && agreementRecord?.pilot_deal_id) {
+  if (agreementId) {
+    agreementRecord =
+      attachedAgreements(row).find((item) => item.id === agreementId) ??
+      (await prisma.organization_workflow_agreements.findFirst({
+        where: {
+          id: agreementId,
+          organization_id: organizationId,
+          organization_workflow_id: workflowId,
+        },
+      }));
+    if (!agreementRecord) {
+      throw new WorkflowAgreementError('Agreement not found', 'NOT_FOUND', 404);
+    }
+  }
+
+  const viewLifecycle = lifecycleForAgreementView({
+    isCurrent: agreementDrivesWorkflowLifecycle(agreementRecord, currentRecord),
+    workflowLifecycle: lifecycleStatus,
+    extractionStatus: agreementRecord?.extraction_status ?? 'PENDING',
+    bootstrappedAt: agreementRecord?.bootstrapped_at?.toISOString() ?? null,
+    bootstrapError: agreementRecord?.bootstrap_error ?? null,
+  });
+
+  if (
+    userId &&
+    viewLifecycle === 'PARTICIPANT_SETUP' &&
+    agreementRecord?.pilot_deal_id &&
+    (agreementRecord.is_current ?? true)
+  ) {
     lifecycleStatus = await maybeAdvanceParticipantSetupToActive({
       workflowId,
       userId,
@@ -203,17 +330,20 @@ async function buildAgreementContextResponse(
 
   const agreement = agreementRecord ? serializeAgreement(agreementRecord) : null;
   const hubSummary = buildWorkflowAgreementHubSummary({
-    lifecycleStatus,
+    lifecycleStatus: agreement ? viewLifecycle : lifecycleStatus,
     configuration: row.configuration,
     agreement,
   });
+  if (agreement && !agreement.isCurrent) {
+    hubSummary.canUpload = false;
+  }
 
   let operationalSummary: WorkflowOperationalHubSummary | null = null;
   if (userId) {
     const approvedStructure = agreement?.approvedStructure ?? null;
     operationalSummary = await buildWorkflowOperationalHubSummary({
       userId,
-      lifecycleStatus,
+      lifecycleStatus: agreement ? viewLifecycle : lifecycleStatus,
       pilotDealId: agreement?.pilotDealId ?? null,
       agreementTitle: agreement?.title ?? agreement?.extractionResult?.projectName.value ?? null,
       extractionSettlement: hubSummary.settlementSchedule,
@@ -237,7 +367,7 @@ async function buildAgreementContextResponse(
 
   return {
     workflowId: row.id,
-    lifecycleStatus,
+    lifecycleStatus: agreement && !agreement.isCurrent ? viewLifecycle : lifecycleStatus,
     configuration,
     agreement,
     hubSummary,
@@ -248,9 +378,62 @@ async function buildAgreementContextResponse(
 export async function getWorkflowAgreementContext(
   organizationId: string,
   workflowId: string,
-  userId?: string
+  userId?: string,
+  agreementId?: string
 ) {
-  return buildAgreementContextResponse(organizationId, workflowId, userId);
+  return buildAgreementContextResponse(organizationId, workflowId, userId, agreementId);
+}
+
+export async function listWorkflowAgreements(
+  organizationId: string,
+  workflowId: string
+): Promise<{
+  workflowId: string;
+  lifecycleStatus: OrganizationWorkflowLifecycleStatus;
+  currentAgreementId: string | null;
+  canStartNew: boolean;
+  agreements: AgreementCollectionItem[];
+}> {
+  const row = await getWorkflowRow(organizationId, workflowId);
+  const current = resolveCurrentAgreement(row);
+  return {
+    workflowId: row.id,
+    lifecycleStatus: row.lifecycle_status,
+    currentAgreementId: current?.id ?? null,
+    canStartNew: canStartNewExtraction({
+      current: current ? serializeAgreement(current) : null,
+      workflowLifecycle: row.lifecycle_status,
+    }),
+    agreements: attachedAgreements(row)
+      .slice()
+      .sort((a, b) => b.updated_at.getTime() - a.updated_at.getTime())
+      .map(toAgreementCollectionItem),
+  };
+}
+
+export async function startNewWorkflowAgreement(
+  organizationId: string,
+  workflowId: string
+) {
+  const row = await getWorkflowRow(organizationId, workflowId);
+  const current = resolveCurrentAgreement(row);
+  if (
+    !canStartNewExtraction({
+      current: current ? serializeAgreement(current) : null,
+      workflowLifecycle: row.lifecycle_status,
+    })
+  ) {
+    throw new WorkflowAgreementError(
+      'Finish the extraction already in progress before starting a new one.',
+      'INVALID_STATE',
+      409
+    );
+  }
+
+  // Intent signal only: AWAITING_INPUT + preserved current row. Do not demote
+  // or insert until paste/upload succeeds inside upsertAgreementInput.
+  await setWorkflowLifecycle(workflowId, 'AWAITING_INPUT');
+  return buildAgreementContextResponse(organizationId, workflowId);
 }
 
 export async function updateWorkflowConfiguration(
@@ -264,10 +447,11 @@ export async function updateWorkflowConfiguration(
   const row = await prisma.organization_workflows.update({
     where: { id: workflowId },
     data: { configuration: parsed },
-    include: { agreement: true },
+    include: WORKFLOW_AGREEMENTS_INCLUDE,
   });
 
-  const agreement = row.agreement ? serializeAgreement(row.agreement) : null;
+  const agreementRow = resolveCurrentAgreement(row);
+  const agreement = agreementRow ? serializeAgreement(agreementRow) : null;
   return {
     workflowId: row.id,
     lifecycleStatus: row.lifecycle_status,
@@ -292,61 +476,28 @@ async function upsertAgreementInput(input: {
   storageKey?: string | null;
   sourceText: string;
 }) {
-  const existing = await prisma.organization_workflow_agreements.findUnique({
-    where: { organization_workflow_id: input.workflowId },
-  });
+  return prisma.$transaction(async (tx) => {
+    await lockWorkflowRow(tx, input.workflowId);
 
-  if (existing?.extraction_status === 'APPROVED') {
-    throw new WorkflowAgreementError(
-      'Agreement structure is already approved. Upload a new agreement after resetting in a future phase.',
-      'INVALID_STATE',
-      409
-    );
-  }
-
-  const workflow = await prisma.organization_workflows.findUnique({
-    where: { id: input.workflowId },
-    select: { lifecycle_status: true },
-  });
-  if (workflow && isWorkflowLockedForInput(workflow.lifecycle_status)) {
-    throw new WorkflowAgreementError(
-      'Agreement cannot be replaced while the workflow is active or activating.',
-      'INVALID_STATE',
-      409
-    );
-  }
-
-  if (existing) {
-    const row = await prisma.organization_workflow_agreements.update({
-      where: { id: existing.id },
-      data: {
-        source_type: input.sourceType,
-        title: input.title,
-        original_filename: input.originalFilename ?? null,
-        mime_type: input.mimeType ?? null,
-        file_size_bytes: input.fileSizeBytes ?? null,
-        storage_key: input.storageKey ?? null,
-        source_text: input.sourceText,
-        extraction_status: 'PENDING',
-        extraction_result: null,
-        commercial_graph: null,
-        approved_structure: null,
-        extraction_error: null,
-        extracted_at: null,
-        approved_at: null,
-        approved_by_user_id: null,
-        pilot_deal_id: null,
-        bootstrap_error: null,
-        bootstrapped_at: null,
-      },
+    const workflow = await tx.organization_workflows.findUnique({
+      where: { id: input.workflowId },
+      select: { lifecycle_status: true },
     });
-    return serializeAgreement(row);
-  }
+    if (workflow && isWorkflowLockedForInput(workflow.lifecycle_status)) {
+      throw new WorkflowAgreementError(
+        'Agreement cannot be replaced while the workflow is active or activating.',
+        'INVALID_STATE',
+        409
+      );
+    }
 
-  const row = await prisma.organization_workflow_agreements.create({
-    data: {
-      organization_id: input.organizationId,
-      organization_workflow_id: input.workflowId,
+    const existing = await findCurrentAgreementRow(tx, input.workflowId);
+    const openNewRow = shouldCreateNewCurrentAgreement({
+      current: existing,
+      workflowLifecycle: workflow?.lifecycle_status ?? 'AWAITING_INPUT',
+    });
+
+    const replacementFields = {
       source_type: input.sourceType,
       title: input.title,
       original_filename: input.originalFilename ?? null,
@@ -354,10 +505,56 @@ async function upsertAgreementInput(input: {
       file_size_bytes: input.fileSizeBytes ?? null,
       storage_key: input.storageKey ?? null,
       source_text: input.sourceText,
-      extraction_status: 'PENDING',
-    },
+      extraction_status: 'PENDING' as const,
+      extraction_result: null,
+      commercial_graph: null,
+      approved_structure: null,
+      extraction_error: null,
+      extracted_at: null,
+      approved_at: null,
+      approved_by_user_id: null,
+      pilot_deal_id: null,
+      bootstrap_error: null,
+      bootstrapped_at: null,
+      is_current: true,
+    };
+
+    if (!openNewRow && existing) {
+      if (existing.extraction_status === 'APPROVED') {
+        throw new WorkflowAgreementError(
+          'Agreement structure is already approved. Start a new extraction to keep this agreement and add another.',
+          'INVALID_STATE',
+          409
+        );
+      }
+      await tx.organization_workflow_agreements.updateMany({
+        where: {
+          organization_workflow_id: input.workflowId,
+          is_current: true,
+          id: { not: existing.id },
+        },
+        data: { is_current: false },
+      });
+      const row = await tx.organization_workflow_agreements.update({
+        where: { id: existing.id },
+        data: replacementFields,
+      });
+      return serializeAgreement(row);
+    }
+
+    await tx.organization_workflow_agreements.updateMany({
+      where: { organization_workflow_id: input.workflowId, is_current: true },
+      data: { is_current: false },
+    });
+    const row = await tx.organization_workflow_agreements.create({
+      data: {
+        organization_id: input.organizationId,
+        organization_workflow_id: input.workflowId,
+        ...replacementFields,
+      },
+    });
+    return serializeAgreement(row);
   });
-  return serializeAgreement(row);
 }
 
 export async function submitPastedAgreement(input: {
@@ -479,16 +676,19 @@ export async function runWorkflowAgreementExtraction(
   options?: { force?: boolean }
 ) {
   const row = await getWorkflowRow(organizationId, workflowId);
-  const agreementRow =
-    agreementId != null
-      ? await prisma.organization_workflow_agreements.findFirst({
-          where: { id: agreementId, organization_id: organizationId, organization_workflow_id: workflowId },
-        })
-      : row.agreement;
+  const current = resolveCurrentAgreement(row);
+  const agreementRow = await resolveTargetAgreement(
+    row,
+    organizationId,
+    workflowId,
+    agreementId
+  );
 
   if (!agreementRow) {
     throw new WorkflowAgreementError('No agreement has been provided yet', 'INVALID_STATE', 400);
   }
+
+  const drivesWorkflow = agreementDrivesWorkflowLifecycle(agreementRow, current);
 
   if (agreementRow.extraction_status === 'APPROVED') {
     throw new WorkflowAgreementError('Agreement structure is already approved', 'INVALID_STATE', 409);
@@ -499,7 +699,7 @@ export async function runWorkflowAgreementExtraction(
     agreementRow.extraction_status === 'READY_FOR_REVIEW' &&
     agreementRow.extraction_result
   ) {
-    return getWorkflowAgreementContext(organizationId, workflowId);
+    return getWorkflowAgreementContext(organizationId, workflowId, undefined, agreementRow.id);
   }
 
   if (
@@ -507,17 +707,18 @@ export async function runWorkflowAgreementExtraction(
     (row.lifecycle_status === 'ACTIVE' ||
       row.lifecycle_status === 'BOOTSTRAPPING' ||
       row.lifecycle_status === 'BOOTSTRAP_FAILED') &&
-    agreementRow.approved_structure
+    agreementRow.approved_structure &&
+    drivesWorkflow
   ) {
-    return getWorkflowAgreementContext(organizationId, workflowId);
+    return getWorkflowAgreementContext(organizationId, workflowId, undefined, agreementRow.id);
   }
 
   if (
     !options?.force &&
     agreementRow.extraction_status === 'EXTRACTING' &&
-    row.lifecycle_status === 'EXTRACTING'
+    (drivesWorkflow ? row.lifecycle_status === 'EXTRACTING' : true)
   ) {
-    return getWorkflowAgreementContext(organizationId, workflowId);
+    return getWorkflowAgreementContext(organizationId, workflowId, undefined, agreementRow.id);
   }
 
   const sourceText = agreementRow.source_text?.trim();
@@ -532,7 +733,7 @@ export async function runWorkflowAgreementExtraction(
       extraction_error: null,
     },
   });
-  await setWorkflowLifecycle(workflowId, 'EXTRACTING');
+  await setWorkflowLifecycleIfCurrent(workflowId, 'EXTRACTING', drivesWorkflow);
 
   try {
     const extractionResult = await extractAgreementFromText(sourceText);
@@ -556,9 +757,9 @@ export async function runWorkflowAgreementExtraction(
           agreementRow.original_filename,
       },
     });
-    await setWorkflowLifecycle(workflowId, 'READY_FOR_REVIEW');
+    await setWorkflowLifecycleIfCurrent(workflowId, 'READY_FOR_REVIEW', drivesWorkflow);
 
-    return getWorkflowAgreementContext(organizationId, workflowId);
+    return getWorkflowAgreementContext(organizationId, workflowId, undefined, agreementRow.id);
   } catch (error) {
     const message =
       error instanceof ExtractionResponseError
@@ -574,7 +775,7 @@ export async function runWorkflowAgreementExtraction(
         extraction_error: message,
       },
     });
-    await setWorkflowLifecycle(workflowId, 'EXTRACTION_FAILED');
+    await setWorkflowLifecycleIfCurrent(workflowId, 'EXTRACTION_FAILED', drivesWorkflow);
 
     throw new WorkflowAgreementError(message, 'EXTRACTION_FAILED', 422);
   }
@@ -586,19 +787,22 @@ export async function approveWorkflowAgreementStructure(input: {
   userId: string;
   reviewForm: ReviewFormState;
   extractionResult: ExtractionResult;
+  agreementId?: string;
 }) {
   const row = await getWorkflowRow(input.organizationId, input.workflowId);
-  if (row.lifecycle_status !== 'READY_FOR_REVIEW') {
-    throw new WorkflowAgreementError(
-      'Agreement structure can only be approved after extraction review',
-      'INVALID_STATE',
-      409
-    );
-  }
-  if (!row.agreement) {
+  const current = resolveCurrentAgreement(row);
+  const targetAgreement = await resolveTargetAgreement(
+    row,
+    input.organizationId,
+    input.workflowId,
+    input.agreementId
+  );
+  const drivesWorkflow = agreementDrivesWorkflowLifecycle(targetAgreement, current);
+
+  if (!targetAgreement) {
     throw new WorkflowAgreementError('No agreement found for this workflow', 'NOT_FOUND', 404);
   }
-  if (row.agreement.extraction_status !== 'READY_FOR_REVIEW') {
+  if (targetAgreement.extraction_status !== 'READY_FOR_REVIEW') {
     throw new WorkflowAgreementError(
       'Agreement extraction is not ready for approval',
       'INVALID_STATE',
@@ -622,11 +826,11 @@ export async function approveWorkflowAgreementStructure(input: {
   };
 
   const pilotDealId =
-    row.agreement.pilot_deal_id?.trim() ||
-    agreementIntelligencePilotDealId(input.workflowId);
+    targetAgreement.pilot_deal_id?.trim() ||
+    agreementIntelligencePilotDealId(targetAgreement.id);
 
   await prisma.organization_workflow_agreements.update({
-    where: { id: row.agreement.id },
+    where: { id: targetAgreement.id },
     data: {
       extraction_status: 'APPROVED',
       approved_structure: approvedStructure,
@@ -638,7 +842,7 @@ export async function approveWorkflowAgreementStructure(input: {
       bootstrap_error: null,
     },
   });
-  await setWorkflowLifecycle(input.workflowId, 'BOOTSTRAPPING');
+  await setWorkflowLifecycleIfCurrent(input.workflowId, 'BOOTSTRAPPING', drivesWorkflow);
 
   try {
     await bootstrapAgreementIntelligenceCommercialGraph({
@@ -651,47 +855,66 @@ export async function approveWorkflowAgreementStructure(input: {
     const configuration = parseAgreementIntelligenceConfiguration(row.configuration);
     await finalizeWorkflowActivation({
       workflowId: input.workflowId,
-      agreementId: row.agreement.id,
+      agreementId: targetAgreement.id,
       userId: input.userId,
       pilotDealId,
       operatorApprovalRequired: configuration.operatorApprovalRequired,
+      syncWorkflowLifecycle: drivesWorkflow,
     });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Failed to bootstrap commercial workflow';
     await prisma.organization_workflow_agreements.update({
-      where: { id: row.agreement.id },
+      where: { id: targetAgreement.id },
       data: { bootstrap_error: message },
     });
-    await setWorkflowLifecycle(input.workflowId, 'BOOTSTRAP_FAILED');
+    await setWorkflowLifecycleIfCurrent(input.workflowId, 'BOOTSTRAP_FAILED', drivesWorkflow);
   }
 
-  return getWorkflowAgreementContext(input.organizationId, input.workflowId, input.userId);
+  return getWorkflowAgreementContext(
+    input.organizationId,
+    input.workflowId,
+    input.userId,
+    targetAgreement.id
+  );
 }
 
 export async function retryWorkflowAgreementBootstrap(input: {
   organizationId: string;
   workflowId: string;
   userId: string;
+  agreementId?: string;
 }) {
   const row = await getWorkflowRow(input.organizationId, input.workflowId);
-  if (
-    row.lifecycle_status !== 'BOOTSTRAP_FAILED' &&
-    row.lifecycle_status !== 'ACTIVE' &&
-    row.lifecycle_status !== 'PARTICIPANT_SETUP'
-  ) {
-    throw new WorkflowAgreementError(
-      'Commercial bootstrap can only be retried after a failed activation or on an active workflow',
-      'INVALID_STATE',
-      409
-    );
-  }
-  if (!row.agreement) {
+  const current = resolveCurrentAgreement(row);
+  const targetAgreement = await resolveTargetAgreement(
+    row,
+    input.organizationId,
+    input.workflowId,
+    input.agreementId
+  );
+  if (!targetAgreement) {
     throw new WorkflowAgreementError('No agreement found for this workflow', 'NOT_FOUND', 404);
   }
 
+  const drivesWorkflow = agreementDrivesWorkflowLifecycle(targetAgreement, current);
+
+  if (drivesWorkflow) {
+    if (
+      row.lifecycle_status !== 'BOOTSTRAP_FAILED' &&
+      row.lifecycle_status !== 'ACTIVE' &&
+      row.lifecycle_status !== 'PARTICIPANT_SETUP'
+    ) {
+      throw new WorkflowAgreementError(
+        'Commercial bootstrap can only be retried after a failed activation or on an active workflow',
+        'INVALID_STATE',
+        409
+      );
+    }
+  }
+
   const approvedStructure = parseJsonField<ApprovedAgreementStructure>(
-    row.agreement.approved_structure
+    targetAgreement.approved_structure
   );
   if (!approvedStructure) {
     throw new WorkflowAgreementError(
@@ -702,10 +925,10 @@ export async function retryWorkflowAgreementBootstrap(input: {
   }
 
   const pilotDealId =
-    row.agreement.pilot_deal_id?.trim() ||
-    agreementIntelligencePilotDealId(input.workflowId);
+    targetAgreement.pilot_deal_id?.trim() ||
+    agreementIntelligencePilotDealId(targetAgreement.id);
 
-  await setWorkflowLifecycle(input.workflowId, 'BOOTSTRAPPING');
+  await setWorkflowLifecycleIfCurrent(input.workflowId, 'BOOTSTRAPPING', drivesWorkflow);
 
   try {
     await bootstrapAgreementIntelligenceCommercialGraph({
@@ -719,49 +942,72 @@ export async function retryWorkflowAgreementBootstrap(input: {
     const configuration = parseAgreementIntelligenceConfiguration(row.configuration);
     await finalizeWorkflowActivation({
       workflowId: input.workflowId,
-      agreementId: row.agreement.id,
+      agreementId: targetAgreement.id,
       userId: input.userId,
       pilotDealId,
       operatorApprovalRequired: configuration.operatorApprovalRequired,
+      syncWorkflowLifecycle: drivesWorkflow,
     });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : 'Failed to bootstrap commercial workflow';
     await prisma.organization_workflow_agreements.update({
-      where: { id: row.agreement.id },
+      where: { id: targetAgreement.id },
       data: { bootstrap_error: message },
     });
-    await setWorkflowLifecycle(input.workflowId, 'BOOTSTRAP_FAILED');
+    await setWorkflowLifecycleIfCurrent(input.workflowId, 'BOOTSTRAP_FAILED', drivesWorkflow);
   }
 
-  return getWorkflowAgreementContext(input.organizationId, input.workflowId, input.userId);
+  return getWorkflowAgreementContext(
+    input.organizationId,
+    input.workflowId,
+    input.userId,
+    targetAgreement.id
+  );
 }
 
 export async function refreshWorkflowActivation(input: {
   organizationId: string;
   workflowId: string;
   userId: string;
+  agreementId?: string;
 }) {
   const row = await getWorkflowRow(input.organizationId, input.workflowId);
-  if (
-    row.lifecycle_status !== 'PARTICIPANT_SETUP' &&
-    row.lifecycle_status !== 'ACTIVE'
-  ) {
-    throw new WorkflowAgreementError(
-      'Activation refresh is only available after commercial bootstrap',
-      'INVALID_STATE',
-      409
-    );
+  const current = resolveCurrentAgreement(row);
+  const targetAgreement = await resolveTargetAgreement(
+    row,
+    input.organizationId,
+    input.workflowId,
+    input.agreementId
+  );
+  const drivesWorkflow = agreementDrivesWorkflowLifecycle(targetAgreement, current);
+
+  if (drivesWorkflow) {
+    if (
+      row.lifecycle_status !== 'PARTICIPANT_SETUP' &&
+      row.lifecycle_status !== 'ACTIVE'
+    ) {
+      throw new WorkflowAgreementError(
+        'Activation refresh is only available after commercial bootstrap',
+        'INVALID_STATE',
+        409
+      );
+    }
+
+    const configuration = parseAgreementIntelligenceConfiguration(row.configuration);
+    await maybeAdvanceParticipantSetupToActive({
+      workflowId: input.workflowId,
+      userId: input.userId,
+      lifecycleStatus: row.lifecycle_status,
+      pilotDealId: targetAgreement?.pilot_deal_id ?? null,
+      operatorApprovalRequired: configuration.operatorApprovalRequired,
+    });
   }
 
-  const configuration = parseAgreementIntelligenceConfiguration(row.configuration);
-  await maybeAdvanceParticipantSetupToActive({
-    workflowId: input.workflowId,
-    userId: input.userId,
-    lifecycleStatus: row.lifecycle_status,
-    pilotDealId: row.agreement?.pilot_deal_id ?? null,
-    operatorApprovalRequired: configuration.operatorApprovalRequired,
-  });
-
-  return getWorkflowAgreementContext(input.organizationId, input.workflowId, input.userId);
+  return getWorkflowAgreementContext(
+    input.organizationId,
+    input.workflowId,
+    input.userId,
+    targetAgreement?.id ?? input.agreementId
+  );
 }

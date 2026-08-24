@@ -189,6 +189,10 @@ async function waitForAgreementHub(page: Page): Promise<void> {
   await expect(page.getByRole('heading', { name: /Agreement Intelligence/i })).toBeVisible({
     timeout: 120_000,
   });
+  const listed = page.getByTestId('agreement-card').first();
+  if ((await listed.count()) > 0 && (await page.getByRole('button', { name: 'Review Agreement' }).count()) === 0) {
+    await listed.click();
+  }
 }
 
 async function pasteExtractApprove(page: Page, workflowId: string): Promise<void> {
@@ -199,7 +203,7 @@ async function pasteExtractApprove(page: Page, workflowId: string): Promise<void
     await ensureCookieBannerDismissed(page);
     await page
       .getByRole('button', {
-        name: /Upload Agreement|Paste Agreement Text|Replace agreement|Upload different agreement/i,
+        name: /Upload Agreement|Paste Agreement Text|Replace agreement|Upload different agreement|New extraction|Create your first extraction/i,
       })
       .first()
       .click();

@@ -224,6 +224,11 @@ async function waitForAgreementHub(
     timeout: 30_000,
   });
 
+  const listed = page.getByTestId('agreement-card').first();
+  if ((await listed.count()) > 0 && (await page.getByRole('button', { name: 'Review Agreement' }).count()) === 0) {
+    await listed.click();
+  }
+
   let resolved: 'empty' | 'review' | 'active' | 'extracting' | 'bootstrap_failed' = 'empty';
   await expect
     .poll(async () => {
@@ -231,7 +236,7 @@ async function waitForAgreementHub(
       if (state === 'empty') {
         const hasButtons =
           (await page.getByRole('button', {
-            name: /Upload Agreement|Paste Agreement Text|Upload different agreement/i,
+            name: /Upload Agreement|Paste Agreement Text|Upload different agreement|New extraction|Create your first extraction/i,
           }).count()) > 0;
         return hasButtons ? 'empty' : 'pending';
       }
@@ -257,7 +262,7 @@ async function pasteAndExtractToReview(page: Page): Promise<void> {
   await ensureCookieBannerDismissed(page);
   const uploadBtn = page
     .getByRole('button', {
-      name: /Upload Agreement|Paste Agreement Text|Replace agreement|Upload different agreement/i,
+      name: /Upload Agreement|Paste Agreement Text|Replace agreement|Upload different agreement|New extraction|Create your first extraction/i,
     })
     .first();
   await uploadBtn.scrollIntoViewIfNeeded();

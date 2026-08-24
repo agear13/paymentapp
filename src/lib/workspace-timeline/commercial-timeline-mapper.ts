@@ -392,7 +392,7 @@ function mapAgreements(sources: CommercialTimelineSources): CommercialTimelineEv
       'Agreement';
     const source = workflowTitle(agreement.workflowSlug);
     const href = agreement.workflowSlug
-      ? COMMERCIAL_OS_ROUTES.workflowInstance(agreement.workflowSlug)
+      ? COMMERCIAL_OS_ROUTES.workflowAgreement(agreement.workflowSlug, agreement.id)
       : COMMERCIAL_OS_ROUTES.workflows;
     const detail = joinDetail([name, source]);
 

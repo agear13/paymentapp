@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { AgreementIntelligenceHubScreen } from '@/components/journey/lovable/agreement-intelligence-hub-screen';
+import { AgreementIntelligenceIndexScreen } from '@/components/journey/lovable/agreement-intelligence-index-screen';
 import { ReferralManagementHubScreen } from '@/components/journey/lovable/referral-management-hub-screen';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { getWorkflowBySlug } from '@/lib/journey/workflow-library-catalog';
@@ -37,7 +37,7 @@ export function WorkflowInstanceScreen({ slug }: { slug: string }) {
   }
 
   if (slug === 'agreement-intelligence') {
-    return <AgreementIntelligenceHubScreen />;
+    return <AgreementIntelligenceIndexScreen />;
   }
 
   if (slug === 'referral-management') {

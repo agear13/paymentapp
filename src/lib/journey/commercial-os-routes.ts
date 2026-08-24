@@ -33,6 +33,9 @@ export const COMMERCIAL_OS_ROUTES = {
   workflowDetail: (slug: string) => `/workspace/workflows/${slug}/preview`,
   /** Installed workflow operating surface. */
   workflowInstance: (slug: string) => `/workspace/workflows/${slug}`,
+  /** Persisted Agreement Intelligence record (extraction + structured commercial result). */
+  workflowAgreement: (slug: string, agreementId: string) =>
+    `/workspace/workflows/${slug}/${encodeURIComponent(agreementId)}`,
   /** Native participant coordination inside an installed workflow hub. */
   workflowParticipant: (slug: string, participantId: string) =>
     `/workspace/workflows/${slug}?participant=${encodeURIComponent(participantId)}`,

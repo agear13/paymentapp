@@ -21,8 +21,8 @@ type AgreementIntelligenceInputModalProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   submitting: boolean;
-  onUpload: (file: File) => Promise<boolean>;
-  onPaste: (text: string) => Promise<boolean>;
+  onUpload: (file: File) => Promise<boolean | string>;
+  onPaste: (text: string) => Promise<boolean | string>;
   title?: string;
   uploadDescription?: string;
   pasteLabel?: string;

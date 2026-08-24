@@ -48,6 +48,12 @@ describe('Workspace information architecture', () => {
     expect(COMMERCIAL_OS_ROUTES.workflowInstance('agreement-intelligence')).toBe(
       '/workspace/workflows/agreement-intelligence'
     );
+    expect(COMMERCIAL_OS_ROUTES.workflowAgreement('agreement-intelligence', 'agr-1')).toBe(
+      '/workspace/workflows/agreement-intelligence/agr-1'
+    );
+    expect(COMMERCIAL_OS_ROUTES.workflowAgreement('agreement-intelligence', 'agr-1').startsWith(
+      `${COMMERCIAL_OS_ROUTES.workflowInstance('agreement-intelligence')}/`
+    )).toBe(true);
     expect(COMMERCIAL_OS_ROUTES.workflowInstance('referral-management')).toBe(
       '/workspace/workflows/referral-management'
     );

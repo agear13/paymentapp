@@ -254,7 +254,7 @@ describe('mapCommercialTimeline', () => {
     expect(result.events.some((event) => event.action === 'obligations_generated')).toBe(false);
     expect(result.events.find((event) => event.action === 'agreement_extracted')).toMatchObject({
       occurredAt: '2026-08-20T01:10:00.000Z',
-      href: '/workspace/workflows/agreement-intelligence',
+      href: '/workspace/workflows/agreement-intelligence/ag-1',
     });
   });
 
@@ -852,7 +852,7 @@ describe('mapCommercialTimeline', () => {
     expect(result.events.some((event) => /ready for payout/i.test(event.title))).toBe(false);
     expect(byAction.agreement_uploaded).toMatchObject({
       importance: 'primary',
-      href: '/workspace/workflows/agreement-intelligence',
+      href: '/workspace/workflows/agreement-intelligence/ag-1',
     });
     expect(byAction.agreement_extracted.importance).toBe('supporting');
     expect(byAction.participant_added).toMatchObject({

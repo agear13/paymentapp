@@ -25,8 +25,8 @@ export type AgreementIntelligenceBootstrapResult = {
   obligationCount: number;
 };
 
-export function agreementIntelligencePilotDealId(organizationWorkflowId: string): string {
-  return `aiwf-${organizationWorkflowId}`;
+export function agreementIntelligencePilotDealId(agreementOrWorkflowId: string): string {
+  return `aiwf-${agreementOrWorkflowId}`;
 }
 
 /** Consumed once per dev-server process — used by Playwright golden-path verification only. */

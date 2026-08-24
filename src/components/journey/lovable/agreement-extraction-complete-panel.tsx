@@ -155,6 +155,12 @@ export function AgreementExtractionCompletePanel({
             Continue in Referral Management
           </Link>
           <Link
+            href={COMMERCIAL_OS_ROUTES.workflowInstance('agreement-intelligence')}
+            className="inline-flex h-10 items-center rounded-md px-4 text-[13px] font-medium text-ink-soft hover:text-foreground"
+          >
+            Back to Agreement Intelligence
+          </Link>
+          <Link
             href={COMMERCIAL_OS_ROUTES.workspace}
             className="inline-flex h-10 items-center rounded-md px-4 text-[13px] font-medium text-ink-soft hover:text-foreground"
           >
