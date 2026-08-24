@@ -20,6 +20,7 @@ import { useDeployedWorkflows } from '@/hooks/use-deployed-workflows';
 import { useWorkflowAgreement } from '@/hooks/use-workflow-agreement';
 import { WORKFLOW_LIFECYCLE_LABELS } from '@/lib/workflows/agreement-intelligence/lifecycle';
 import { AgreementIntelligenceInputModal } from '@/components/journey/lovable/agreement-intelligence-input-modal';
+import { AgreementExtractionCompletePanel } from '@/components/journey/lovable/agreement-extraction-complete-panel';
 import { ExtractionReviewModal } from '@/components/ai-extractor/extraction-review-modal';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -63,12 +64,16 @@ export function AgreementIntelligenceHubScreen() {
     retryBootstrap,
     updateConfiguration,
     coordinateParticipant,
+    shareExtraction,
   } = useWorkflowAgreement(installed?.id ?? null);
 
   const [inputOpen, setInputOpen] = React.useState(false);
   const [reviewOpen, setReviewOpen] = React.useState(false);
   const [configOpen, setConfigOpen] = React.useState(false);
   const [selectedParticipantId, setSelectedParticipantId] = React.useState<string | null>(null);
+  const [sharingExtraction, setSharingExtraction] = React.useState(false);
+  const [shareError, setShareError] = React.useState<string | null>(null);
+  const [shareSuccess, setShareSuccess] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -581,9 +586,37 @@ export function AgreementIntelligenceHubScreen() {
                 <p className="mt-1 text-[13px] text-ink-soft">
                   {isBootstrapFailed
                     ? 'Structure was approved but activation failed. Retry to create the commercial workflow.'
-                    : 'Review AI-extracted terms before approving. Extracted data is not automatically correct.'}
+                    : hub.extractionComplete
+                      ? 'Extraction finished. Download the structured result, send it to an operator, or continue into a Provvy workflow.'
+                      : 'Review AI-extracted terms before approving. Extracted data is not automatically correct.'}
                 </p>
               </div>
+
+              {hub.extractionComplete && extraction ? (
+                <AgreementExtractionCompletePanel
+                  extraction={extraction}
+                  hub={hub}
+                  operatorEmail={context?.operatorEmail}
+                  sharing={sharingExtraction}
+                  shareError={shareError}
+                  shareSuccess={shareSuccess}
+                  onReview={() => setReviewOpen(true)}
+                  onShare={async (to) => {
+                    setSharingExtraction(true);
+                    setShareError(null);
+                    setShareSuccess(null);
+                    const result = await shareExtraction(to);
+                    setSharingExtraction(false);
+                    if (result.ok) {
+                      setShareSuccess(`Extraction sent to ${to.trim()}.`);
+                      toast.success('Extraction emailed');
+                      return;
+                    }
+                    setShareError(result.error);
+                    toast.error(result.error);
+                  }}
+                />
+              ) : null}
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <MetricCard label="Participants" value={hub.participantCount} />

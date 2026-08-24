@@ -18,6 +18,7 @@ export type WorkflowAgreementContext = {
   agreement: WorkflowAgreementRecord | null;
   hubSummary: WorkflowAgreementHubSummary;
   operationalSummary: WorkflowOperationalHubSummary | null;
+  operatorEmail?: string | null;
 };
 
 export function useWorkflowAgreement(workflowId: string | null) {
@@ -204,6 +205,33 @@ export function useWorkflowAgreement(workflowId: string | null) {
     }
   }, [workflowId, refresh]);
 
+  const shareExtraction = useCallback(
+    async (to: string): Promise<{ ok: true } | { ok: false; error: string }> => {
+      if (!workflowId) return { ok: false, error: 'Workflow is not available.' };
+      try {
+        const res = await csrfAwareFetch(`/api/workflows/${workflowId}/agreement/share`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ to }),
+        });
+        const payload = (await res.json().catch(() => null)) as
+          | { sent?: boolean; error?: string }
+          | null;
+        if (!res.ok || payload?.sent !== true) {
+          return {
+            ok: false,
+            error: payload?.error ?? 'Could not send the extraction email.',
+          };
+        }
+        return { ok: true };
+      } catch {
+        return { ok: false, error: 'Could not send the extraction email.' };
+      }
+    },
+    [workflowId]
+  );
+
   const coordinateParticipant = useCallback(
     async (
       participantId: string,
@@ -258,5 +286,6 @@ export function useWorkflowAgreement(workflowId: string | null) {
     retryBootstrap,
     updateConfiguration,
     coordinateParticipant,
+    shareExtraction,
   };
 }

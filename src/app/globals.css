@@ -210,6 +210,23 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+
+  input, textarea, select {
+    color: rgb(var(--foreground));
+  }
+
+  input::placeholder, textarea::placeholder {
+    color: rgb(var(--muted-foreground));
+  }
+
+  input:-webkit-autofill,
+  textarea:-webkit-autofill,
+  select:-webkit-autofill {
+    -webkit-text-fill-color: rgb(var(--foreground));
+    caret-color: rgb(var(--foreground));
+    box-shadow: 0 0 0 1000px rgb(var(--background)) inset;
+    transition: background-color 99999s ease-out 0s;
+  }
   
   /* Typography hierarchy */
   h1 {

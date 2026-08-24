@@ -89,7 +89,7 @@ export function ReferralImportReview({
                 placeholder="Phone (optional)"
               />
               <select
-                className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
                 value={candidate.role}
                 onChange={(event) =>
                   updateCandidate(candidate.partyId, {
@@ -103,7 +103,7 @@ export function ReferralImportReview({
                 <option>Other</option>
               </select>
               <select
-                className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
                 value={candidate.serviceId ?? ''}
                 onChange={(event) =>
                   updateCandidate(candidate.partyId, {

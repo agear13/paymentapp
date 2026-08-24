@@ -2,12 +2,16 @@ import { testParty, field } from '@/lib/ai-extractor/test-helpers/party-fixture'
 import type { ExtractionResult } from '@/lib/ai-extractor/extraction-types';
 import {
   buildReferralExtractionSuccessSummary,
+  canPersistReferralPreview,
   candidateToPromoterInput,
   isReferralRelationshipParty,
   mapExtractionToReferralPreview,
   matchOrganizationService,
   NEW_PROMOTER_EXTRACTION_STATUS,
+  persistSelectedReferralCandidates,
   referralExtractionNextStep,
+  referralManagementParticipantHref,
+  resolvePersistedPromoterId,
   selectedReferralCandidates,
 } from '@/lib/workflows/referral-management/import-from-extraction';
 
@@ -219,5 +223,107 @@ describe('Referral Management import-from-extraction adapter', () => {
       })
     ).toBe("Activate Sarah's referral so they can start referring.");
     expect(referralExtractionNextStep('Sarah', { nextActionKind: 'none' })).toBeNull();
+  });
+
+  it('uses the API-returned participant id for the exact participant route', () => {
+    expect(
+      resolvePersistedPromoterId({
+        ok: true,
+        participantId: 'created-from-api-7f3c',
+      })
+    ).toBe('created-from-api-7f3c');
+    expect(
+      referralManagementParticipantHref('created-from-api-7f3c')
+    ).toBe('/workspace/workflows/referral-management?participant=created-from-api-7f3c');
+    expect(
+      resolvePersistedPromoterId({
+        ok: false,
+        existing: { participantId: 'existing-promoter' },
+      })
+    ).toBe('existing-promoter');
+    expect(resolvePersistedPromoterId({ ok: true, participantId: '  ' })).toBeNull();
+    expect(resolvePersistedPromoterId({ ok: false })).toBeNull();
+  });
+
+  it('creates a participant from a complete extraction and returns that id', async () => {
+    const preview = mapExtractionToReferralPreview({
+      extraction: extraction([apex]),
+      catalog,
+      sourceLabel: 'Pasted agreement or conversation',
+    });
+    const persist = jest.fn().mockResolvedValue({
+      ok: true,
+      participantId: 'persisted-apex-id',
+    });
+
+    const result = await persistSelectedReferralCandidates({ preview, persist });
+
+    expect(result).toEqual({
+      ok: true,
+      participantId: 'persisted-apex-id',
+      candidate: expect.objectContaining({ name: 'Apex Promotions', email: 'apex@example.com' }),
+      coordination: null,
+    });
+    expect(persist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'apex@example.com',
+        reuseExisting: true,
+        compensation: expect.objectContaining({ serviceId: SERVICE_A }),
+      })
+    );
+  });
+
+  it('persists a contract extraction to the returned participant id', async () => {
+    const preview = mapExtractionToReferralPreview({
+      extraction: extraction([apex]),
+      catalog,
+      sourceLabel: 'Uploaded agreement',
+    });
+    const result = await persistSelectedReferralCandidates({
+      preview,
+      persist: async () => ({ ok: true, participantId: 'created-from-contract-id' }),
+    });
+    expect(result).toMatchObject({ ok: true, participantId: 'created-from-contract-id' });
+    expect(preview.sourceLabel).toBe('Uploaded agreement');
+  });
+
+  it('keeps the extraction for review when creation fails or the API omits an id', async () => {
+    const preview = mapExtractionToReferralPreview({
+      extraction: extraction([apex]),
+      catalog,
+      sourceLabel: 'Uploaded agreement',
+    });
+
+    await expect(
+      persistSelectedReferralCandidates({
+        preview,
+        persist: async () => ({ ok: false, error: 'Could not save the extracted participant.' }),
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: 'Could not save the extracted participant.',
+    });
+
+    await expect(
+      persistSelectedReferralCandidates({
+        preview,
+        persist: async () => ({ ok: true, participantId: undefined }),
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: 'Could not save the extracted participant.',
+    });
+  });
+
+  it('does not persist when extracted participant data is incomplete', () => {
+    const preview = mapExtractionToReferralPreview({
+      extraction: extraction([{ ...apex, email: field(null, 'absent') }]),
+      catalog,
+      sourceLabel: 'Pasted agreement or conversation',
+    });
+    expect(canPersistReferralPreview(preview)).toEqual({
+      ok: false,
+      error: 'Email is required before this referral relationship can be created.',
+    });
   });
 });

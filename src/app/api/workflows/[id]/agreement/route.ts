@@ -46,7 +46,10 @@ export async function GET(
 
   try {
     const contextData = await getWorkflowAgreementContext(access.organizationId, id, access.userId);
-    return apiResponse(contextData);
+    return apiResponse({
+      ...contextData,
+      operatorEmail: access.userEmail,
+    });
   } catch (error) {
     return mapAgreementError(error);
   }

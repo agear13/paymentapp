@@ -224,6 +224,8 @@ export type WorkflowAgreementHubSummary = {
   canRetryBootstrap: boolean;
   isOperational: boolean;
   showsOperationalHub: boolean;
+  extractionComplete: boolean;
+  oneLiner: string | null;
 };
 
 export class WorkflowAgreementError extends Error {

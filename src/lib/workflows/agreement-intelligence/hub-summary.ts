@@ -71,5 +71,7 @@ export function buildWorkflowAgreementHubSummary(input: {
     canRetryBootstrap: canRetryBootstrap(input.lifecycleStatus),
     isOperational: isOperationalWorkflow(input.lifecycleStatus),
     showsOperationalHub: showsOperationalHub(input.lifecycleStatus),
+    extractionComplete: input.lifecycleStatus === 'READY_FOR_REVIEW',
+    oneLiner: summary?.oneLiner ?? null,
   };
 }

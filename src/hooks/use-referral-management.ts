@@ -27,6 +27,7 @@ export type AddPromoterResult = {
   reused?: boolean;
   existing?: ExistingPromoterRelationship | null;
   coordination?: ReferralExtractionCoordination | null;
+  error?: string;
 };
 
 export function useReferralManagement(workflowId: string | null) {
@@ -87,11 +88,17 @@ export function useReferralManagement(workflowId: string | null) {
           if (res.status === 409 && existing) {
             return { ok: false, existing };
           }
-          setError(payload?.error ?? 'Could not add promoter');
-          return { ok: false };
+          const errorMessage = payload?.error ?? 'Could not add promoter';
+          setError(errorMessage);
+          return { ok: false, error: errorMessage };
         }
         if (payload?.context) setContext(payload.context);
-        const participantId = payload?.participant?.id;
+        const participantId = payload?.participant?.id?.trim();
+        if (!participantId) {
+          const errorMessage = 'Promoter was saved but no participant id was returned.';
+          setError(errorMessage);
+          return { ok: false, error: errorMessage };
+        }
         const created = payload?.context?.promoters.find((row) => row.id === participantId);
         return {
           ok: true,

@@ -1,10 +1,12 @@
 /**
  * Thin adapter: map existing AI Extractor results into Referral Management
- * review candidates. Does not persist participants or run extraction.
+ * review candidates. Persistence is performed by a caller-supplied function;
+ * this module does not write participants itself.
  */
 
 import type { ExtractedParty, ExtractionResult } from '@/lib/ai-extractor/extraction-types';
 import { hasFixedFeeAmount, hasRevenueSharePct } from '@/lib/ai-extractor/party-obligation-metrics';
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import type {
   WorkflowCoordinationAgreementStatus,
   WorkflowCoordinationNextActionKind,
@@ -374,4 +376,94 @@ export function candidateToPromoterInput(candidate: ReferralImportCandidate): {
       serviceId: candidate.serviceId,
     },
   };
+}
+
+export function resolvePersistedPromoterId(result: {
+  ok: boolean;
+  participantId?: string | null;
+  existing?: { participantId?: string | null } | null;
+}): string | null {
+  const id = (result.participantId ?? result.existing?.participantId ?? '').trim();
+  if (!id) return null;
+  if (!result.ok && !result.existing) return null;
+  return id;
+}
+
+export function referralManagementParticipantHref(participantId: string): string {
+  return COMMERCIAL_OS_ROUTES.workflowParticipant('referral-management', participantId);
+}
+
+export function canPersistReferralPreview(
+  preview: ReferralImportPreview
+): { ok: true } | { ok: false; error: string } {
+  const selected = selectedReferralCandidates(preview);
+  if (selected.length === 0) {
+    return {
+      ok: false,
+      error:
+        preview.candidates.length === 0
+          ? 'No referral or commission relationship was found in this conversation.'
+          : 'Select at least one referral relationship to add.',
+    };
+  }
+  for (const candidate of selected) {
+    const mapped = candidateToPromoterInput(candidate);
+    if ('error' in mapped) return { ok: false, error: mapped.error };
+  }
+  return { ok: true };
+}
+
+export async function persistSelectedReferralCandidates(input: {
+  preview: ReferralImportPreview;
+  persist: (body: {
+    name: string;
+    email: string;
+    phone?: string;
+    role: ReferralPromoterRole;
+    compensation: ReferralCompensationInput;
+    reuseExisting: true;
+  }) => Promise<{
+    ok: boolean;
+    participantId?: string | null;
+    existing?: { participantId?: string | null } | null;
+    error?: string;
+    coordination?: ReferralExtractionCoordination | null;
+  }>;
+}): Promise<
+  | {
+      ok: true;
+      participantId: string;
+      candidate: ReferralImportCandidate;
+      coordination: ReferralExtractionCoordination | null;
+    }
+  | { ok: false; error: string }
+> {
+  const ready = canPersistReferralPreview(input.preview);
+  if (!ready.ok) return ready;
+
+  let last:
+    | {
+        participantId: string;
+        candidate: ReferralImportCandidate;
+        coordination: ReferralExtractionCoordination | null;
+      }
+    | null = null;
+
+  for (const candidate of selectedReferralCandidates(input.preview)) {
+    const mapped = candidateToPromoterInput(candidate);
+    if ('error' in mapped) return { ok: false, error: mapped.error };
+    const result = await input.persist({ ...mapped, reuseExisting: true });
+    const participantId = resolvePersistedPromoterId(result);
+    if (!participantId) {
+      return { ok: false, error: result.error ?? 'Could not save the extracted participant.' };
+    }
+    last = {
+      participantId,
+      candidate,
+      coordination: result.coordination ?? null,
+    };
+  }
+
+  if (!last) return { ok: false, error: 'Could not save the extracted participant.' };
+  return { ok: true, ...last };
 }

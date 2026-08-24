@@ -569,6 +569,8 @@ describe('Phase P3-B — Agreement Intelligence workflow workspace', () => {
       expect(summary.revenueShareCount).toBe(2);
       expect(summary.settlementSchedule).toBe('Every Friday');
       expect(summary.canReview).toBe(true);
+      expect(summary.extractionComplete).toBe(true);
+      expect(summary.oneLiner).toEqual(expect.any(String));
     });
   });
 });

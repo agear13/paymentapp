@@ -24,8 +24,7 @@ import { AgreementIntelligenceInputModal } from '@/components/journey/lovable/ag
 import { ReferralImportReview } from '@/components/journey/lovable/referral-import-review';
 import {
   buildReferralExtractionSuccessSummary,
-  candidateToPromoterInput,
-  selectedReferralCandidates,
+  persistSelectedReferralCandidates,
 } from '@/lib/workflows/referral-management/import-from-extraction';
 import type {
   ReferralExtractionSuccessSummary,
@@ -61,7 +60,7 @@ function MetricCard({ label, value }: { label: string; value: React.ReactNode })
   );
 }
 
-function AddPromoterForm({
+export function AddPromoterForm({
   catalog,
   busy,
   error,
@@ -69,7 +68,7 @@ function AddPromoterForm({
   onLookupEmail,
   onExtract,
   onImported,
-  onReturnedToList,
+  onReturnedToList: _onReturnedToList,
   promoters,
   onManageServices,
   onOpenExisting,
@@ -172,62 +171,39 @@ function AddPromoterForm({
     const persistPreview = async (
       next: ReferralImportPreview
     ): Promise<ReferralExtractionSuccessSummary | null> => {
-      const selected = selectedReferralCandidates(next);
-      if (selected.length === 0) {
+      const persisted = await persistSelectedReferralCandidates({
+        preview: next,
+        persist: (body) => onSubmit(body),
+      });
+      if (!persisted.ok) {
         setPreview(next);
-        setImportError(
-          next.candidates.length === 0
-            ? 'No referral or commission relationship was found in this conversation.'
-            : 'Select at least one referral relationship to add.'
-        );
+        setImportError(persisted.error);
         return null;
       }
 
-      let lastSummary: ReferralExtractionSuccessSummary | null = null;
-      for (const candidate of selected) {
-        const mapped = candidateToPromoterInput(candidate);
-        if ('error' in mapped) {
-          setPreview(next);
-          setImportError(mapped.error);
-          return null;
-        }
-        const result = await onSubmit({ ...mapped, reuseExisting: true });
-        const participantId = result.participantId ?? result.existing?.participantId;
-        if ((!result.ok && !result.existing) || !participantId) {
-          setPreview(next);
-          setImportError(error ?? 'Could not save the extracted participant.');
-          return null;
-        }
-        const existingPromoter = promoters.find((row) => row.id === participantId);
-        lastSummary = buildReferralExtractionSuccessSummary({
-          candidate,
-          catalog,
-          participantId,
-          coordination:
-            result.coordination ??
-            (existingPromoter
-              ? {
-                  nextActionKind: existingPromoter.nextActionKind,
-                  nextActionLabel: existingPromoter.nextActionLabel,
-                  agreementStatus: existingPromoter.agreementStatus,
-                  payoutSetupStatus: existingPromoter.payoutSetupStatus,
-                  referralStatus: existingPromoter.referralStatus,
-                  statusLabel: existingPromoter.statusLabel,
-                }
-              : result.existing
-                ? { statusLabel: result.existing.statusLabel, nextActionKind: 'request_approval' }
-                : undefined),
-        });
-      }
+      const existingPromoter = promoters.find((row) => row.id === persisted.participantId);
+      const lastSummary = buildReferralExtractionSuccessSummary({
+        candidate: persisted.candidate,
+        catalog,
+        participantId: persisted.participantId,
+        coordination:
+          persisted.coordination ??
+          (existingPromoter
+            ? {
+                nextActionKind: existingPromoter.nextActionKind,
+                nextActionLabel: existingPromoter.nextActionLabel,
+                agreementStatus: existingPromoter.agreementStatus,
+                payoutSetupStatus: existingPromoter.payoutSetupStatus,
+                referralStatus: existingPromoter.referralStatus,
+                statusLabel: existingPromoter.statusLabel,
+              }
+            : undefined),
+      });
 
-      if (!lastSummary) {
-        setPreview(next);
-        setImportError('Could not save the extracted participant.');
-        return null;
-      }
       setPreview(null);
       setExtractionSuccess(lastSummary);
       setImportError(null);
+      onImported(lastSummary.participantId);
       return lastSummary;
     };
 
@@ -250,23 +226,15 @@ function AddPromoterForm({
       }
     };
 
-    const reviewExtracted = () => {
+    const openCreatedParticipant = (options?: { invite?: boolean }) => {
       const participantId = extractionSuccess?.participantId;
       reset();
-      if (participantId) onImported(participantId);
+      if (participantId) onImported(participantId, options);
     };
 
-    const inviteExtracted = () => {
-      const participantId = extractionSuccess?.participantId;
-      reset();
-      if (participantId) onImported(participantId, { invite: true });
-    };
-
-    const returnToList = () => {
-      const participantId = extractionSuccess?.participantId;
-      reset();
-      if (participantId) onReturnedToList(participantId);
-    };
+    const reviewExtracted = () => openCreatedParticipant();
+    const inviteExtracted = () => openCreatedParticipant({ invite: true });
+    const returnToCreatedParticipant = () => openCreatedParticipant();
 
     return (
       <>
@@ -275,7 +243,7 @@ function AddPromoterForm({
           onOpenChange={(next) => {
             if (!next) {
               if (extractionSuccess) {
-                returnToList();
+                returnToCreatedParticipant();
                 return;
               }
               if (!preview) reset();
@@ -295,7 +263,7 @@ function AddPromoterForm({
           success={extractionSuccess}
           onReviewParticipant={reviewExtracted}
           onInviteParticipant={inviteExtracted}
-          onDone={returnToList}
+          onDone={returnToCreatedParticipant}
           review={
             preview && !extractionSuccess ? (
               <ReferralImportReview
@@ -449,7 +417,7 @@ function AddPromoterForm({
       <Input name="phone" placeholder="Phone (optional)" />
       <select
         name="role"
-        className="h-10 w-full rounded-md border border-input bg-transparent px-3 text-sm"
+        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
         defaultValue="Promoter"
       >
         <option>Promoter</option>
@@ -556,6 +524,18 @@ export function ReferralManagementHubScreen() {
     setJustAdded(null);
     syncUrl({ participantId, view: 'overview' });
   }, [syncUrl]);
+
+  const missingPromoterRefresh = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!selectedParticipantId || !context) return;
+    if (context.promoters.some((row) => row.id === selectedParticipantId)) {
+      missingPromoterRefresh.current = null;
+      return;
+    }
+    if (missingPromoterRefresh.current === selectedParticipantId) return;
+    missingPromoterRefresh.current = selectedParticipantId;
+    void refresh();
+  }, [selectedParticipantId, context, refresh]);
 
   const scrollToPromoter = React.useCallback((participantId: string) => {
     const tryScroll = () => {
