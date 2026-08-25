@@ -83,5 +83,10 @@ describe('Commercial Workspaces collection', () => {
     expect(await screen.findByTestId('commercial-workspace-detail')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Saturday Beach Event' })).toBeInTheDocument();
     expect(screen.getByText('Agreement Intelligence')).toBeInTheDocument();
+    expect(screen.getByText(/You are in the Commercial Workspace/i)).toBeInTheDocument();
+    expect(screen.getByTestId('source-agreement-intelligence')).toHaveAttribute(
+      'href',
+      '/workspace/workflows/agreement-intelligence'
+    );
   });
 });

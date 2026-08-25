@@ -15,12 +15,14 @@ import {
   Upload,
   AlertTriangle,
   Clock3,
+  ArrowRight,
 } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { getWorkflowBySlug } from '@/lib/journey/workflow-library-catalog';
 import { useDeployedWorkflows } from '@/hooks/use-deployed-workflows';
 import { useWorkflowAgreement } from '@/hooks/use-workflow-agreement';
 import { WORKFLOW_LIFECYCLE_LABELS } from '@/lib/workflows/agreement-intelligence/lifecycle';
+import { agreementWorkspaceHandoff } from '@/lib/workflows/agreement-intelligence/commercial-workspace-handoff';
 import { AgreementIntelligenceInputModal } from '@/components/journey/lovable/agreement-intelligence-input-modal';
 import { AgreementExtractionCompletePanel } from '@/components/journey/lovable/agreement-extraction-complete-panel';
 import { ExtractionReviewModal } from '@/components/ai-extractor/extraction-review-modal';
@@ -136,6 +138,7 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
   const extraction = agreement?.extractionResult;
   const lifecycleStatus = context?.lifecycleStatus ?? installed.lifecycleStatus ?? 'AWAITING_INPUT';
   const statusLabel = WORKFLOW_LIFECYCLE_LABELS[lifecycleStatus] ?? lifecycleStatus;
+  const workspaceHandoff = agreementWorkspaceHandoff(agreement);
   const hasPersistedExtraction =
     Boolean(extraction) ||
     Boolean(agreement?.approvedStructure) ||
@@ -212,6 +215,14 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {workspaceHandoff.kind === 'open' ? (
+              <Button asChild size="sm" data-testid="open-commercial-workspace">
+                <Link href={workspaceHandoff.href}>
+                  Open Commercial Workspace
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="outline"
@@ -338,14 +349,25 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
 
           {hub?.hasAgreement && !showEmptyState && !isExtracting && showsOperationalHub && operational && (
             <div className="space-y-6">
-              <div>
-                <h2 className="text-lg font-semibold">
-                  {operational.agreementTitle ?? hub.title ?? 'Agreement'}
-                </h2>
-                <p className="mt-1 text-[13px] text-ink-soft">
-                  Commercial structure is active. Payments are not executed automatically — use
-                  existing funding and release flows when ready.
-                </p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h2 className="text-lg font-semibold">
+                    {operational.agreementTitle ?? hub.title ?? 'Agreement'}
+                  </h2>
+                  <p className="mt-1 text-[13px] text-ink-soft">
+                    Commercial structure is active. Continue in the Commercial Workspace for
+                    participants, obligations, funding, and settlement. Payments are not executed
+                    automatically.
+                  </p>
+                </div>
+                {workspaceHandoff.kind === 'open' ? (
+                  <Button asChild data-testid="open-commercial-workspace-operational">
+                    <Link href={workspaceHandoff.href}>
+                      Open Commercial Workspace
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
+                ) : null}
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -721,6 +743,16 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
                 {hub.canReview && extraction && (
                   <Button type="button" onClick={() => setReviewOpen(true)}>
                     Review Agreement
+                  </Button>
+                )}
+                {workspaceHandoff.kind === 'activate' && (
+                  <Button
+                    type="button"
+                    disabled={submitting}
+                    onClick={() => void retryBootstrap()}
+                    data-testid="create-commercial-workspace-from-agreement"
+                  >
+                    Create Commercial Workspace
                   </Button>
                 )}
                 {hub.canRetryBootstrap && (

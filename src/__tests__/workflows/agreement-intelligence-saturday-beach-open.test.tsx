@@ -211,6 +211,10 @@ describe('Production path: Saturday Beach Event opens existing extraction', () =
     expect(screen.getByRole('button', { name: 'Review Agreement' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Review structured result' })).toBeInTheDocument();
     expect(screen.getByText('Apex Promotions')).toBeInTheDocument();
+    expect(screen.queryByTestId('open-commercial-workspace')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Create Commercial Workspace' })
+    ).not.toBeInTheDocument();
 
     expect(
       screen.queryByText(/Upload or paste a commercial agreement/i)

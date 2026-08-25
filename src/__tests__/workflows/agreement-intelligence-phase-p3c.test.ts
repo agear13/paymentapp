@@ -515,6 +515,55 @@ describe('Phase P3-C — Agreement Intelligence commercial bootstrap', () => {
     );
   });
 
+  it('retry bootstrap persists missing pilot_deal_id for an approved agreement', async () => {
+    const approved = agreementRow({
+      extraction_status: 'APPROVED',
+      approved_structure: approvedStructure(),
+      pilot_deal_id: null,
+      bootstrapped_at: null,
+    });
+    prisma.organization_workflows.findFirst
+      .mockResolvedValueOnce(
+        workflowRow({
+          lifecycle_status: 'APPROVED',
+          agreement: approved,
+          agreements: [approved],
+        })
+      )
+      .mockResolvedValueOnce(
+        workflowRow({
+          lifecycle_status: 'PARTICIPANT_SETUP',
+          agreement: {
+            ...approved,
+            pilot_deal_id: agreementIntelligencePilotDealId(AGREEMENT_ID),
+            bootstrapped_at: new Date('2026-08-24T12:05:00Z'),
+          },
+        })
+      );
+    prisma.organization_workflows.update.mockResolvedValue({});
+    prisma.organization_workflow_agreements.update.mockResolvedValue(approved);
+    getPilotSnapshotForUser.mockResolvedValue({
+      deals: [{ id: agreementIntelligencePilotDealId(AGREEMENT_ID), payoutTrigger: 'Every Friday' }],
+      participants: compensatedPilotParticipants(),
+    });
+
+    await retryWorkflowAgreementBootstrap({
+      organizationId: ORG_A,
+      workflowId: WF_ID,
+      userId: USER_ID,
+    });
+
+    expect(prisma.organization_workflow_agreements.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: AGREEMENT_ID },
+        data: expect.objectContaining({
+          pilot_deal_id: agreementIntelligencePilotDealId(AGREEMENT_ID),
+        }),
+      })
+    );
+    expect(syncPilotSnapshotForUser).toHaveBeenCalled();
+  });
+
   it('operational hub summary exposes participants and settlement when ACTIVE', async () => {
     getPilotSnapshotForUser.mockResolvedValue({
       deals: [{ id: PILOT_DEAL_ID, payoutTrigger: 'Every Friday' }],

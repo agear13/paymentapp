@@ -908,12 +908,17 @@ export async function retryWorkflowAgreementBootstrap(input: {
   }
 
   const drivesWorkflow = agreementDrivesWorkflowLifecycle(targetAgreement, current);
+  const approvedWithoutWorkspace =
+    targetAgreement.extraction_status === 'APPROVED' &&
+    Boolean(targetAgreement.approved_structure) &&
+    !targetAgreement.bootstrapped_at;
 
   if (drivesWorkflow) {
     if (
       row.lifecycle_status !== 'BOOTSTRAP_FAILED' &&
       row.lifecycle_status !== 'ACTIVE' &&
-      row.lifecycle_status !== 'PARTICIPANT_SETUP'
+      row.lifecycle_status !== 'PARTICIPANT_SETUP' &&
+      !approvedWithoutWorkspace
     ) {
       throw new WorkflowAgreementError(
         'Commercial bootstrap can only be retried after a failed activation or on an active workflow',
@@ -937,6 +942,14 @@ export async function retryWorkflowAgreementBootstrap(input: {
   const pilotDealId =
     targetAgreement.pilot_deal_id?.trim() ||
     agreementIntelligencePilotDealId(targetAgreement.id);
+
+  await prisma.organization_workflow_agreements.update({
+    where: { id: targetAgreement.id },
+    data: {
+      pilot_deal_id: pilotDealId,
+      bootstrap_error: null,
+    },
+  });
 
   await setWorkflowLifecycleIfCurrent(input.workflowId, 'BOOTSTRAPPING', drivesWorkflow);
 

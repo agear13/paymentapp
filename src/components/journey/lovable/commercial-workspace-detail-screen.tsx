@@ -78,13 +78,23 @@ export function CommercialWorkspaceDetailScreen({ workspaceId }: { workspaceId: 
         </div>
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-            Commercial Workspace
+            Operational workspace
           </div>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight">{item.name}</h1>
           <p className="mt-2 max-w-2xl text-[14px] text-ink-soft">
-            This is the operational workspace for this arrangement. Participant, obligation, and
-            settlement data stay on the existing deal graph — they are not duplicated here.
+            You are in the Commercial Workspace for this arrangement — not the Agreement
+            Intelligence extraction. Participants, obligations, funding, and settlement stay on
+            this operational graph.
           </p>
+          {item.source === 'agreement_intelligence' ? (
+            <Link
+              href={COMMERCIAL_OS_ROUTES.workflowInstance('agreement-intelligence')}
+              className="mt-3 inline-flex text-[13px] font-medium text-primary hover:underline"
+              data-testid="source-agreement-intelligence"
+            >
+              View source in Agreement Intelligence
+            </Link>
+          ) : null}
         </div>
       </div>
 
