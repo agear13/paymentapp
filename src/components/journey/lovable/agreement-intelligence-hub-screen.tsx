@@ -136,7 +136,15 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
   const extraction = agreement?.extractionResult;
   const lifecycleStatus = context?.lifecycleStatus ?? installed.lifecycleStatus ?? 'AWAITING_INPUT';
   const statusLabel = WORKFLOW_LIFECYCLE_LABELS[lifecycleStatus] ?? lifecycleStatus;
-  const showEmptyState = !hub?.hasAgreement || lifecycleStatus === 'AWAITING_INPUT';
+  const hasPersistedExtraction =
+    Boolean(extraction) ||
+    Boolean(agreement?.approvedStructure) ||
+    agreement?.extractionStatus === 'READY_FOR_REVIEW' ||
+    agreement?.extractionStatus === 'APPROVED' ||
+    agreement?.extractionStatus === 'FAILED';
+  const showEmptyState =
+    !hasPersistedExtraction &&
+    (!hub?.hasAgreement || lifecycleStatus === 'AWAITING_INPUT');
   const isExtracting =
     lifecycleStatus === 'EXTRACTING' ||
     lifecycleStatus === 'BOOTSTRAPPING' ||

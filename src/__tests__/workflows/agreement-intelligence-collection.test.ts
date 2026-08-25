@@ -8,7 +8,7 @@ import {
   toAgreementCollectionItem,
 } from '@/lib/workflows/agreement-intelligence/agreement-collection';
 import type { organization_workflow_agreements } from '@prisma/client';
-import { startNewWorkflowAgreement } from '@/lib/workflows/agreement-intelligence/agreement-service.server';
+import { startNewWorkflowAgreement, getWorkflowAgreementContext } from '@/lib/workflows/agreement-intelligence/agreement-service.server';
 
 jest.mock('@/lib/server/prisma', () => ({
   prisma: {
@@ -241,5 +241,75 @@ describe('Agreement Intelligence collection', () => {
         bootstrapError: 'Sync failed',
       })
     ).toBe('BOOTSTRAP_FAILED');
+  });
+
+  it('opens a current persisted agreement instead of New extraction after start_new', () => {
+    expect(
+      lifecycleForAgreementView({
+        isCurrent: true,
+        workflowLifecycle: 'AWAITING_INPUT',
+        extractionStatus: 'READY_FOR_REVIEW',
+        bootstrappedAt: null,
+      })
+    ).toBe('READY_FOR_REVIEW');
+    expect(
+      lifecycleForAgreementView({
+        isCurrent: true,
+        workflowLifecycle: 'AWAITING_INPUT',
+        extractionStatus: 'APPROVED',
+        bootstrappedAt: '2026-08-17T12:05:00Z',
+      })
+    ).toBe('ACTIVE');
+    expect(
+      lifecycleForAgreementView({
+        isCurrent: true,
+        workflowLifecycle: 'AWAITING_INPUT',
+        extractionStatus: 'FAILED',
+        bootstrappedAt: null,
+      })
+    ).toBe('EXTRACTION_FAILED');
+  });
+
+  it('keeps workflow operational lifecycle for a current agreement that is still driving the workflow', () => {
+    expect(
+      lifecycleForAgreementView({
+        isCurrent: true,
+        workflowLifecycle: 'PARTICIPANT_SETUP',
+        extractionStatus: 'APPROVED',
+        bootstrappedAt: '2026-08-17T12:05:00Z',
+      })
+    ).toBe('PARTICIPANT_SETUP');
+    expect(
+      lifecycleForAgreementView({
+        isCurrent: true,
+        workflowLifecycle: 'AWAITING_INPUT',
+        extractionStatus: 'PENDING',
+        bootstrappedAt: null,
+      })
+    ).toBe('AWAITING_INPUT');
+  });
+
+  it('returns the viewed agreement lifecycle when loading a current row after start_new', async () => {
+    const existing = agreementRow({
+      extraction_status: 'READY_FOR_REVIEW',
+      extraction_result: null,
+    });
+    prisma.organization_workflows.findFirst.mockResolvedValue({
+      id: WF,
+      organization_id: ORG,
+      template_slug: 'agreement-intelligence',
+      lifecycle_status: 'AWAITING_INPUT',
+      status: 'DEPLOYED',
+      configuration: {},
+      agreements: [existing],
+    });
+
+    const context = await getWorkflowAgreementContext(ORG, WF, undefined, AGR);
+
+    expect(context.lifecycleStatus).toBe('READY_FOR_REVIEW');
+    expect(context.agreement?.id).toBe(AGR);
+    expect(context.hubSummary.hasAgreement).toBe(true);
+    expect(context.hubSummary.extractionComplete).toBe(true);
+    expect(context.hubSummary.canReview).toBe(true);
   });
 });

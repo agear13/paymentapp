@@ -305,7 +305,7 @@ async function buildAgreementContextResponse(
     }
   }
 
-  const viewLifecycle = lifecycleForAgreementView({
+  let viewLifecycle = lifecycleForAgreementView({
     isCurrent: agreementDrivesWorkflowLifecycle(agreementRecord, currentRecord),
     workflowLifecycle: lifecycleStatus,
     extractionStatus: agreementRecord?.extraction_status ?? 'PENDING',
@@ -319,13 +319,23 @@ async function buildAgreementContextResponse(
     agreementRecord?.pilot_deal_id &&
     (agreementRecord.is_current ?? true)
   ) {
-    lifecycleStatus = await maybeAdvanceParticipantSetupToActive({
+    const advanced = await maybeAdvanceParticipantSetupToActive({
       workflowId,
       userId,
       lifecycleStatus,
       pilotDealId: agreementRecord.pilot_deal_id,
       operatorApprovalRequired: configuration.operatorApprovalRequired,
     });
+    if (advanced !== lifecycleStatus) {
+      lifecycleStatus = advanced;
+      viewLifecycle = lifecycleForAgreementView({
+        isCurrent: agreementDrivesWorkflowLifecycle(agreementRecord, currentRecord),
+        workflowLifecycle: lifecycleStatus,
+        extractionStatus: agreementRecord?.extraction_status ?? 'PENDING',
+        bootstrappedAt: agreementRecord?.bootstrapped_at?.toISOString() ?? null,
+        bootstrapError: agreementRecord?.bootstrap_error ?? null,
+      });
+    }
   }
 
   const agreement = agreementRecord ? serializeAgreement(agreementRecord) : null;
@@ -367,7 +377,7 @@ async function buildAgreementContextResponse(
 
   return {
     workflowId: row.id,
-    lifecycleStatus: agreement && !agreement.isCurrent ? viewLifecycle : lifecycleStatus,
+    lifecycleStatus: agreementId && agreement ? viewLifecycle : lifecycleStatus,
     configuration,
     agreement,
     hubSummary,

@@ -85,10 +85,26 @@ export function lifecycleForAgreementView(input: {
   bootstrappedAt: string | null;
   bootstrapError?: string | null;
 }): OrganizationWorkflowLifecycleStatus {
-  if (input.isCurrent) {
+  const fromRow = lifecycleFromExtractionStatus(input);
+
+  // Workflow AWAITING_INPUT is the New extraction intake signal. A persisted
+  // row with its own extraction/approval state must still open as that
+  // agreement, even when it is still is_current.
+  const workflowIntakeHidesPersistedRow =
+    input.workflowLifecycle === 'AWAITING_INPUT' && input.extractionStatus !== 'PENDING';
+
+  if (input.isCurrent && !workflowIntakeHidesPersistedRow) {
     return input.workflowLifecycle;
   }
 
+  return fromRow;
+}
+
+function lifecycleFromExtractionStatus(input: {
+  extractionStatus: WorkflowAgreementExtractionStatus;
+  bootstrappedAt: string | null;
+  bootstrapError?: string | null;
+}): OrganizationWorkflowLifecycleStatus {
   switch (input.extractionStatus) {
     case 'PENDING':
       return 'AWAITING_INPUT';
