@@ -1,11 +1,15 @@
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
+  agreementIdFromPilotDealId,
+  commercialWorkspaceShowsAgreementTab,
   commercialWorkspaceSourceOf,
   listCommercialWorkspaces,
+  sourceAgreementHref,
   stampManualCommercialWorkspace,
   toCommercialWorkspaceListItem,
 } from '@/lib/commercial-os/commercial-workspace-collection';
+import { commercialWorkspaceNextStep } from '@/lib/commercial-os/commercial-workspace-next-step';
 
 function deal(overrides: Partial<RecentDeal> = {}): RecentDeal {
   return {
@@ -89,5 +93,27 @@ describe('Commercial Workspace collection mapping', () => {
     expect(items[0]?.id).toBe('keep-1');
     expect(items[0]?.participantCount).toBe(2);
     expect(items[0]?.href).toBe('/workspace/arrangements/keep-1');
+  });
+
+  it('derives Agreement Intelligence detail href from the aiwf- pilot deal convention', () => {
+    expect(agreementIdFromPilotDealId('aiwf-saturday-beach')).toBe('saturday-beach');
+    expect(sourceAgreementHref('saturday-beach')).toBe(
+      '/workspace/workflows/agreement-intelligence/saturday-beach'
+    );
+    expect(commercialWorkspaceShowsAgreementTab('agreement_intelligence', null)).toBe(true);
+    expect(commercialWorkspaceShowsAgreementTab('manual', null)).toBe(false);
+    expect(commercialWorkspaceShowsAgreementTab('manual', 'agr-1')).toBe(true);
+  });
+
+  it('points empty workspaces at People as the next operational step', () => {
+    const step = commercialWorkspaceNextStep({
+      workspaceId: 'demo-1',
+      participantCount: 0,
+      pendingApprovals: 0,
+      hasFundingSources: false,
+      fundingLabel: 'No funding sources connected yet',
+    });
+    expect(step.href).toBe('/workspace/arrangements/demo-1/people');
+    expect(step.cta).toBe('Open People');
   });
 });

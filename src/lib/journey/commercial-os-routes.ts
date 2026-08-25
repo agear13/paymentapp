@@ -12,6 +12,16 @@ export const COMMERCIAL_OS_ROUTES = {
   arrangements: '/workspace/arrangements',
   arrangement: (workspaceId: string) =>
     `/workspace/arrangements/${encodeURIComponent(workspaceId)}`,
+  arrangementAgreement: (workspaceId: string) =>
+    `/workspace/arrangements/${encodeURIComponent(workspaceId)}/agreement`,
+  arrangementPeople: (workspaceId: string) =>
+    `/workspace/arrangements/${encodeURIComponent(workspaceId)}/people`,
+  arrangementObligations: (workspaceId: string) =>
+    `/workspace/arrangements/${encodeURIComponent(workspaceId)}/obligations`,
+  arrangementMoney: (workspaceId: string) =>
+    `/workspace/arrangements/${encodeURIComponent(workspaceId)}/money`,
+  arrangementActivity: (workspaceId: string) =>
+    `/workspace/arrangements/${encodeURIComponent(workspaceId)}/activity`,
   receivables: '/workspace/receivables',
   createInvoice: '/workspace/receivables/create',
   invoiceList: '/workspace/receivables/invoices',

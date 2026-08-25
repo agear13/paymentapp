@@ -35,6 +35,24 @@ export function commercialWorkspaceHref(workspaceId: string): string {
   return COMMERCIAL_OS_ROUTES.arrangement(workspaceId);
 }
 
+/** Convention from `agreementIntelligencePilotDealId` — `aiwf-{agreementId}`. */
+export function agreementIdFromPilotDealId(workspaceId: string): string | null {
+  if (!workspaceId.startsWith('aiwf-')) return null;
+  const agreementId = workspaceId.slice('aiwf-'.length).trim();
+  return agreementId || null;
+}
+
+export function sourceAgreementHref(agreementId: string): string {
+  return COMMERCIAL_OS_ROUTES.workflowAgreement('agreement-intelligence', agreementId);
+}
+
+export function commercialWorkspaceShowsAgreementTab(
+  source: CommercialWorkspaceSource,
+  linkedAgreementId?: string | null
+): boolean {
+  return source === 'agreement_intelligence' || Boolean(linkedAgreementId?.trim());
+}
+
 export function commercialWorkspaceSourceOf(deal: RecentDeal): CommercialWorkspaceSource {
   const via = deal.createdVia?.trim().toLowerCase() ?? '';
   if (via.includes('agreement_intelligence')) return 'agreement_intelligence';

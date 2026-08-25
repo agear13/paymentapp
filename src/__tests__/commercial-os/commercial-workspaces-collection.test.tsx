@@ -36,7 +36,65 @@ const snapshot = {
 
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), prefetch: jest.fn() }),
+  usePathname: () => '/workspace/arrangements/aiwf-saturday-beach',
 }));
+
+jest.mock('@/lib/projects/workspace-fetch', () => {
+  const deal = {
+    id: 'aiwf-saturday-beach',
+    dealName: 'Saturday Beach Event',
+    partner: 'Apex',
+    value: 12000,
+    introducer: '—',
+    closer: '—',
+    status: 'Approved',
+    lastUpdated: '2026-08-24T00:00:00.000Z',
+    paymentStatus: 'Not Paid',
+    currentStage: 'Work In Progress',
+    createdVia: 'agreement_intelligence_workflow',
+  };
+  const participants = [
+    {
+      id: 'p-apex',
+      dealId: 'aiwf-saturday-beach',
+      dealName: 'Saturday Beach Event',
+      name: 'Apex Promotions',
+      email: 'apex@example.com',
+      role: 'Contributor',
+    },
+  ];
+  const summary = {
+    id: deal.id,
+    name: deal.dealName,
+    value: 12000,
+    currencyLabel: '$12,000 AUD',
+    operationalStage: 'Work In Progress',
+    operationalStageLabel: 'Work In Progress',
+    settlementStatus: 'Approved',
+    paymentStatus: 'Not Paid',
+    participantCount: 1,
+    participantsReady: 0,
+    participantsPending: 1,
+    fundingLabel: 'No funding sources connected yet',
+    fundingSubcopy: 'Add invoices or funding sources.',
+    payoutLabel: 'Ready to pay out',
+    needsAttention: true,
+  };
+  return {
+    fetchWorkspaceSummary: jest.fn(async () => ({
+      deal,
+      summary,
+      participantCount: 1,
+      deals: [deal],
+    })),
+    fetchWorkspaceParticipants: jest.fn(async () => ({
+      participants,
+      projectParticipants: participants,
+    })),
+    fetchWorkspaceFullSnapshot: jest.fn(),
+    persistWorkspaceFullSnapshot: jest.fn(),
+  };
+});
 
 jest.mock('@/lib/deal-network-demo/pilot-store', () => ({
   fetchPilotSnapshot: jest.fn(async () => snapshot),
@@ -110,7 +168,12 @@ describe('Commercial Workspaces collection', () => {
     expect(screen.getByText(/You are in the Commercial Workspace/i)).toBeInTheDocument();
     expect(screen.getByTestId('source-agreement-intelligence')).toHaveAttribute(
       'href',
-      '/workspace/workflows/agreement-intelligence'
+      '/workspace/workflows/agreement-intelligence/saturday-beach'
+    );
+    expect(screen.getByTestId('workspace-tab-agreement')).toBeInTheDocument();
+    expect(screen.getByTestId('workspace-tab-people')).toHaveAttribute(
+      'href',
+      '/workspace/arrangements/aiwf-saturday-beach/people'
     );
   });
 });

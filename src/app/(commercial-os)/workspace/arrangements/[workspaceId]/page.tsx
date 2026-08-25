@@ -1,15 +1,5 @@
-import { notFound } from 'next/navigation';
-import { CommercialWorkspaceDetailScreen } from '@/components/journey/lovable/commercial-workspace-detail-screen';
+import { CommercialWorkspaceOverviewPanel } from '@/components/journey/lovable/commercial-workspace-overview-panel';
 
-export default async function CommercialWorkspaceDetailPage({
-  params,
-}: {
-  params: Promise<{ workspaceId: string }>;
-}) {
-  const { workspaceId } = await params;
-  if (!workspaceId.trim()) {
-    notFound();
-  }
-
-  return <CommercialWorkspaceDetailScreen workspaceId={workspaceId} />;
+export default function CommercialWorkspaceOverviewPage() {
+  return <CommercialWorkspaceOverviewPanel />;
 }
