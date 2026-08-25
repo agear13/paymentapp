@@ -6,7 +6,12 @@
 export const COMMERCIAL_OS_ROUTES = {
   provisioningBuild: '/journey/provisioning?build=1',
   workspace: '/workspace',
+  /** Org-level operating dashboard — not a per-arrangement Commercial Workspace. */
   commercialWorkspace: '/workspace/commercial',
+  /** Collection of operational Commercial Workspaces (`deal_network_pilot_deals`). */
+  arrangements: '/workspace/arrangements',
+  arrangement: (workspaceId: string) =>
+    `/workspace/arrangements/${encodeURIComponent(workspaceId)}`,
   receivables: '/workspace/receivables',
   createInvoice: '/workspace/receivables/create',
   invoiceList: '/workspace/receivables/invoices',

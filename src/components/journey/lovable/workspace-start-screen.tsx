@@ -8,6 +8,7 @@ import {
   ArrowRight,
   BarChart3,
   Brain,
+  Briefcase,
   Check,
   FilePlus2,
   LayoutGrid,
@@ -36,7 +37,13 @@ import {
   deriveWorkspaceRecommendation,
 } from '@/lib/journey/workspace-recommendation';
 
-type CardId = 'create-invoice' | 'manage-invoices' | 'sync-xero' | 'collections' | 'workspace';
+type CardId =
+  | 'create-invoice'
+  | 'manage-invoices'
+  | 'sync-xero'
+  | 'collections'
+  | 'workspace'
+  | 'arrangements';
 
 const CARDS: {
   id: CardId;
@@ -60,9 +67,16 @@ const CARDS: {
     to: COMMERCIAL_OS_ROUTES.receivables,
   },
   {
+    id: 'arrangements',
+    title: 'Commercial Workspaces',
+    desc: 'Open operational workspaces created from agreements, onboarding, or manually.',
+    icon: Briefcase,
+    to: COMMERCIAL_OS_ROUTES.arrangements,
+  },
+  {
     id: 'workspace',
-    title: 'Commercial Workspace',
-    desc: 'Open your commercial operating dashboard to work through invoices, workflows and items that need attention.',
+    title: 'Operating dashboard',
+    desc: 'Open your organization dashboard to work through invoices, workflows and items that need attention.',
     icon: LayoutGrid,
     to: COMMERCIAL_OS_ROUTES.commercialWorkspace,
   },

@@ -6,6 +6,7 @@ import {
   ArrowRight,
   BarChart3,
   Brain,
+  Briefcase,
   ChevronRight,
   FilePlus2,
   LayoutGrid,
@@ -22,6 +23,11 @@ import { getWorkflowBySlug } from '@/lib/journey/workflow-library-catalog';
 import { useDeployedWorkflows } from '@/hooks/use-deployed-workflows';
 
 const QUICK_ACTIONS = [
+  {
+    label: 'Commercial Workspaces',
+    icon: Briefcase,
+    href: COMMERCIAL_OS_ROUTES.arrangements,
+  },
   {
     label: 'Create Invoice',
     icon: FilePlus2,
@@ -60,7 +66,7 @@ export function CommercialWorkspaceScreen() {
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-ink-soft">
             <LayoutGrid className="h-3 w-3" />
-            Commercial Workspace
+            Operating dashboard
           </div>
           <h1 className="mt-4 text-balance text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
             Your commercial operating dashboard

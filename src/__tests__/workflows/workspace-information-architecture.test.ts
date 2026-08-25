@@ -62,6 +62,9 @@ describe('Workspace information architecture', () => {
     );
     expect(COMMERCIAL_OS_ROUTES.commercialWorkspace).toBe('/workspace/commercial');
     expect(COMMERCIAL_OS_ROUTES.workspace).toBe('/workspace');
+    expect(COMMERCIAL_OS_ROUTES.arrangements).toBe('/workspace/arrangements');
+    expect(COMMERCIAL_OS_ROUTES.arrangement('demo-1')).toBe('/workspace/arrangements/demo-1');
+    expect(COMMERCIAL_OS_ROUTES.arrangements).not.toBe(COMMERCIAL_OS_ROUTES.commercialWorkspace);
     expect(COMMERCIAL_OS_ROUTES.settlement).toBe('/workspace/settlement');
     expect(COMMERCIAL_OS_ROUTES.settlementObligations).toBe('/workspace/settlement/obligations');
     expect(COMMERCIAL_OS_ROUTES.settlementEarnings).toBe('/workspace/settlement/earnings');
@@ -103,5 +106,12 @@ describe('Workspace information architecture', () => {
 
   it('Commercial Workspace route is distinct from Workflow Library', () => {
     expect(COMMERCIAL_OS_ROUTES.commercialWorkspace).not.toBe(COMMERCIAL_OS_ROUTES.workflowLibrary);
+  });
+
+  it('Commercial Workspaces collection is distinct from the org operating dashboard', () => {
+    expect(COMMERCIAL_OS_ROUTES.arrangements).not.toBe(COMMERCIAL_OS_ROUTES.commercialWorkspace);
+    expect(COMMERCIAL_OS_ROUTES.arrangements).not.toBe(
+      COMMERCIAL_OS_ROUTES.workflowInstance('agreement-intelligence')
+    );
   });
 });
