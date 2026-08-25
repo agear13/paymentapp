@@ -12,6 +12,7 @@ import {
   Check,
   FilePlus2,
   LayoutGrid,
+  Plus,
   ReceiptText,
   RefreshCw,
   Sparkles,
@@ -43,7 +44,8 @@ type CardId =
   | 'sync-xero'
   | 'collections'
   | 'workspace'
-  | 'arrangements';
+  | 'arrangements'
+  | 'create-arrangement';
 
 const CARDS: {
   id: CardId;
@@ -72,6 +74,13 @@ const CARDS: {
     desc: 'Open operational workspaces created from agreements, onboarding, or manually.',
     icon: Briefcase,
     to: COMMERCIAL_OS_ROUTES.arrangements,
+  },
+  {
+    id: 'create-arrangement',
+    title: 'Create Commercial Workspace',
+    desc: 'Start an operational workspace without an agreement. Add participants and commercial terms later.',
+    icon: Plus,
+    to: `${COMMERCIAL_OS_ROUTES.arrangements}?create=1`,
   },
   {
     id: 'workspace',

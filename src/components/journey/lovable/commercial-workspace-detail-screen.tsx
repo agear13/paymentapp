@@ -122,7 +122,8 @@ export function CommercialWorkspaceDetailScreen({ workspaceId }: { workspaceId: 
         <p className="mt-2 text-[14px] text-foreground">{item.sourceLabel}</p>
         <p className="mt-3 text-[13px] text-ink-soft">
           Funding, approvals, and payouts continue to use the existing operational graph for this
-          workspace. The full operating surface will attach to this route in a later phase.
+          workspace. Add participants, obligations, and funding after creation — the full operating
+          surface will attach to this route in a later phase.
         </p>
       </div>
     </div>

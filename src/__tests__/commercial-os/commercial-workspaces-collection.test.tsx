@@ -2,7 +2,7 @@
 
 import '@testing-library/jest-dom';
 import * as React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 
@@ -57,13 +57,24 @@ jest.mock('@/hooks/use-entitlements', () => ({
 }));
 
 jest.mock('@/components/deal-network-demo/create-deal-modal', () => ({
-  CreateDealModal: () => null,
+  CreateDealModal: (props: { open: boolean; copy?: string; experienceMode?: string }) => (
+    <div
+      data-testid="create-deal-modal"
+      data-open={String(props.open)}
+      data-copy={props.copy ?? ''}
+      data-mode={props.experienceMode ?? ''}
+    />
+  ),
 }));
 
 import { CommercialWorkspacesIndexScreen } from '@/components/journey/lovable/commercial-workspaces-index-screen';
 import { CommercialWorkspaceDetailScreen } from '@/components/journey/lovable/commercial-workspace-detail-screen';
 
 describe('Commercial Workspaces collection', () => {
+  beforeEach(() => {
+    window.history.pushState({}, '', '/workspace/arrangements');
+  });
+
   it('lists existing deals as clickable Commercial Workspaces', async () => {
     render(<CommercialWorkspacesIndexScreen />);
 
@@ -75,6 +86,19 @@ describe('Commercial Workspaces collection', () => {
     expect(screen.getByTestId('create-commercial-workspace')).toHaveTextContent(
       'Create Commercial Workspace'
     );
+    const modal = screen.getByTestId('create-deal-modal');
+    expect(modal).toHaveAttribute('data-open', 'false');
+    expect(modal).toHaveAttribute('data-copy', 'commercial_workspace');
+    expect(modal).toHaveAttribute('data-mode', 'project');
+  });
+
+  it('opens the existing create modal from ?create=1 without a second creation service', async () => {
+    window.history.pushState({}, '', '/workspace/arrangements?create=1');
+    render(<CommercialWorkspacesIndexScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('create-deal-modal')).toHaveAttribute('data-open', 'true');
+    });
   });
 
   it('opens the intended detail route for a persisted workspace', async () => {

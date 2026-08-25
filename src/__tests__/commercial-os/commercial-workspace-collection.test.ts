@@ -3,6 +3,7 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import {
   commercialWorkspaceSourceOf,
   listCommercialWorkspaces,
+  stampManualCommercialWorkspace,
   toCommercialWorkspaceListItem,
 } from '@/lib/commercial-os/commercial-workspace-collection';
 
@@ -54,7 +55,22 @@ describe('Commercial Workspace collection mapping', () => {
     );
     expect(commercialWorkspaceSourceOf(deal({ id: 'onb-deal-1' }))).toBe('onboarding');
     expect(commercialWorkspaceSourceOf(deal({ id: 'rmwf-wf-1' }))).toBe('referral_management');
+    expect(commercialWorkspaceSourceOf(deal({ createdVia: 'deal_network_pilot_manual' }))).toBe(
+      'manual'
+    );
     expect(commercialWorkspaceSourceOf(deal({ id: 'demo-9' }))).toBe('manual');
+  });
+
+  it('stamps manual source metadata without replacing an existing createdVia', () => {
+    const stamped = stampManualCommercialWorkspace(
+      deal({ createdVia: undefined, currentStage: undefined, status: 'Pending' })
+    );
+    expect(stamped.createdVia).toBe('deal_network_pilot_manual');
+    expect(stamped.currentStage).toBe('Introduced');
+    expect(
+      stampManualCommercialWorkspace(deal({ createdVia: 'agreement_intelligence_workflow' }))
+        .createdVia
+    ).toBe('agreement_intelligence_workflow');
   });
 
   it('omits archived deals and counts participants from the existing snapshot', () => {

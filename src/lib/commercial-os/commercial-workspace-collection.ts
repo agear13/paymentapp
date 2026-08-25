@@ -41,11 +41,23 @@ export function commercialWorkspaceSourceOf(deal: RecentDeal): CommercialWorkspa
   if (via.includes('conversation') || via === 'ai_conversation_import') {
     return 'conversation_import';
   }
+  if (via === 'deal_network_pilot_manual') return 'manual';
   if (deal.id.startsWith('aiwf-')) return 'agreement_intelligence';
   if (deal.id.startsWith('onb-deal-')) return 'onboarding';
   if (deal.id.startsWith('rmwf-')) return 'referral_management';
   if (deal.importedConversation || deal.importedAt) return 'conversation_import';
   return 'manual';
+}
+
+/** Stamp existing payload metadata so OS-created workspaces classify as Manual. */
+export function stampManualCommercialWorkspace(deal: RecentDeal): RecentDeal {
+  return {
+    ...deal,
+    createdVia: deal.createdVia ?? 'deal_network_pilot_manual',
+    currentStage: deal.currentStage ?? 'Introduced',
+    status: deal.status || 'Pending',
+    paymentStatus: deal.paymentStatus || 'Not Paid',
+  };
 }
 
 export function commercialWorkspaceSourceLabel(source: CommercialWorkspaceSource): string {

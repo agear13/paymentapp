@@ -77,6 +77,7 @@ export interface CreateDealModalProps {
   onCreate: (deal: RecentDeal) => void | boolean | Promise<void | boolean>;
   editDeal?: RecentDeal | null;
   experienceMode?: 'referral' | 'project';
+  copy?: 'project' | 'commercial_workspace';
 }
 
 function CreateDealModalReferral({
@@ -1171,9 +1172,9 @@ function CreateDealModalReferral({
 }
 
 export function CreateDealModal(props: CreateDealModalProps) {
-  const { experienceMode = 'referral', ...rest } = props;
+  const { experienceMode = 'referral', copy, ...rest } = props;
   if (experienceMode === 'project') {
-    return <CreateDealModalProject {...rest} />;
+    return <CreateDealModalProject {...rest} copy={copy} />;
   }
   return <CreateDealModalReferral {...rest} />;
 }

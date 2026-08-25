@@ -24,6 +24,8 @@ describe('workspace start and trial copy truthfulness', () => {
     expect(start).toContain('Add payment methods when you are ready');
     expect(start).toContain('Commercial Workspaces');
     expect(start).toContain('COMMERCIAL_OS_ROUTES.arrangements');
+    expect(start).toContain('Create Commercial Workspace');
+    expect(start).toContain('?create=1');
     expect(start).toContain('Operating dashboard');
     expect(start).not.toMatch(/title: 'Commercial Workspace'/);
     expect(create).toContain('You can create invoices now');

@@ -22,6 +22,8 @@ export type CreateDealModalProjectProps = {
   onOpenChange: (open: boolean) => void;
   onCreate: (deal: RecentDeal) => void | boolean | Promise<void | boolean>;
   editDeal?: RecentDeal | null;
+  /** User-facing copy. Internal persistence still uses RecentDeal / deal_network_pilot_deals. */
+  copy?: 'project' | 'commercial_workspace';
 };
 
 export function CreateDealModalProject({
@@ -29,6 +31,7 @@ export function CreateDealModalProject({
   onOpenChange,
   onCreate,
   editDeal,
+  copy = 'project',
 }: CreateDealModalProjectProps) {
   const [dealName, setDealName] = React.useState('');
   const [projectDescription, setProjectDescription] = React.useState('');
@@ -54,9 +57,12 @@ export function CreateDealModalProject({
     setLinkedPaymentUrl(editDeal.paymentLink ?? '');
   }, [open, editDeal]);
 
+  const isCommercialWorkspace = copy === 'commercial_workspace';
   const dealValueNum = parseFloat(dealValue.replace(/,/g, ''));
   const valueOk = !Number.isNaN(dealValueNum) && dealValueNum > 0;
-  const canSubmit = Boolean(dealName.trim() && partnerName.trim() && valueOk);
+  const canSubmit = isCommercialWorkspace
+    ? Boolean(dealName.trim())
+    : Boolean(dealName.trim() && partnerName.trim() && valueOk);
 
   const isDirty = React.useMemo(() => {
     if (!open) return false;
@@ -82,34 +88,42 @@ export function CreateDealModalProject({
     e.preventDefault();
     if (!canSubmit || isSubmitting) return;
     const now = new Date().toISOString();
+    const name = dealName.trim();
+    const partner = partnerName.trim() || (isCommercialWorkspace ? name : '');
+    const value = valueOk ? dealValueNum : isCommercialWorkspace ? 0 : dealValueNum;
+    const paymentLinkFields = isCommercialWorkspace
+      ? {}
+      : { paymentLink: linkedPaymentUrl.trim() || undefined };
     const next: RecentDeal = editDeal
       ? {
           ...editDeal,
-          dealName: dealName.trim(),
-          partner: partnerName.trim(),
-          value: dealValueNum,
+          dealName: name,
+          partner,
+          value,
           lastUpdated: now,
           payoutTrigger: PAYOUT_TRIGGER_MANUAL,
-          paymentLink: linkedPaymentUrl.trim() || undefined,
           projectDescription: projectDescription.trim() || undefined,
           projectValueCurrency: 'AUD',
           latestUpdate: projectDescription.trim() || undefined,
+          ...paymentLinkFields,
         }
       : {
           id: `demo-${Date.now()}`,
-          dealName: dealName.trim(),
-          partner: partnerName.trim(),
-          value: dealValueNum,
+          dealName: name,
+          partner,
+          value,
           introducer: '',
           closer: '',
           status: 'Pending',
           lastUpdated: now,
           payoutTrigger: PAYOUT_TRIGGER_MANUAL,
-          paymentLink: linkedPaymentUrl.trim() || undefined,
           paymentStatus: 'Not Paid',
           projectDescription: projectDescription.trim() || undefined,
           projectValueCurrency: 'AUD',
           latestUpdate: projectDescription.trim() || undefined,
+          currentStage: isCommercialWorkspace ? 'Introduced' : undefined,
+          createdVia: isCommercialWorkspace ? 'deal_network_pilot_manual' : undefined,
+          ...paymentLinkFields,
         };
     setIsSubmitting(true);
     try {
@@ -154,21 +168,36 @@ export function CreateDealModalProject({
         }}
       >
         <DialogHeader className="px-6 pt-6 shrink-0">
-          <DialogTitle>{editDeal ? `Edit ${PRODUCT_TERMINOLOGY.projectLower}` : PRODUCT_TERMINOLOGY.createProject}</DialogTitle>
+          <DialogTitle>
+            {editDeal
+              ? isCommercialWorkspace
+                ? 'Edit Commercial Workspace'
+                : `Edit ${PRODUCT_TERMINOLOGY.projectLower}`
+              : isCommercialWorkspace
+                ? 'Create Commercial Workspace'
+                : PRODUCT_TERMINOLOGY.createProject}
+          </DialogTitle>
           <DialogDescription>
-            Name your project, optionally describe it, and paste an invoice link when you have one. Referral roles
-            stay stored in the background for compatibility but are not used in this mode.
+            {isCommercialWorkspace
+              ? 'Name the workspace to get started. Participants, obligations, approvals, and funding can be added after it is created.'
+              : 'Name your project, optionally describe it, and paste an invoice link when you have one. Referral roles stay stored in the background for compatibility but are not used in this mode.'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col max-h-[min(90vh,calc(100vh-2rem))]">
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 pb-4">
             <div className="space-y-2">
-              <Label htmlFor="dn-proj-name">Project name</Label>
+              <Label htmlFor="dn-proj-name">
+                {isCommercialWorkspace ? 'Workspace name' : 'Project name'}
+              </Label>
               <Input
                 id="dn-proj-name"
                 value={dealName}
                 onChange={(e) => setDealName(e.target.value)}
-                placeholder="e.g. Strait Experiences, March cohort"
+                placeholder={
+                  isCommercialWorkspace
+                    ? 'e.g. Saturday Beach Event'
+                    : 'e.g. Strait Experiences, March cohort'
+                }
                 required
               />
             </div>
@@ -183,28 +212,37 @@ export function CreateDealModalProject({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="dn-proj-partner">Counterparty / partner name</Label>
+              <Label htmlFor="dn-proj-partner">
+                {isCommercialWorkspace
+                  ? 'Counterparty / partner name (optional)'
+                  : 'Counterparty / partner name'}
+              </Label>
               <Input
                 id="dn-proj-partner"
                 value={partnerName}
                 onChange={(e) => setPartnerName(e.target.value)}
-                placeholder="Who the project is with"
-                required
+                placeholder={
+                  isCommercialWorkspace ? 'Who this arrangement is with' : 'Who the project is with'
+                }
+                required={!isCommercialWorkspace}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="dn-proj-value">Project value (AUD)</Label>
+              <Label htmlFor="dn-proj-value">
+                {isCommercialWorkspace ? 'Estimated value (AUD, optional)' : 'Project value (AUD)'}
+              </Label>
               <Input
                 id="dn-proj-value"
                 type="number"
-                min={1}
+                min={isCommercialWorkspace ? 0 : 1}
                 step={1}
                 value={dealValue}
                 onChange={(e) => setDealValue(e.target.value)}
                 placeholder="100000"
-                required
+                required={!isCommercialWorkspace}
               />
             </div>
+            {isCommercialWorkspace ? null : (
             <div className="space-y-2">
               <Label htmlFor="dn-proj-pay">Linked payment (optional)</Label>
               <Input
@@ -219,13 +257,20 @@ export function CreateDealModalProject({
                 Stored on the project for when you connect inbound payments.
               </p>
             </div>
+            )}
           </div>
           <div className="sticky bottom-0 z-10 flex shrink-0 items-center justify-between gap-3 border-t bg-background px-6 py-4">
             <Button type="button" variant="outline" onClick={requestClose} disabled={isSubmitting}>
               Cancel
             </Button>
             <Button type="submit" disabled={!canSubmit || isSubmitting}>
-              {isSubmitting ? 'Saving…' : editDeal ? 'Save changes' : PRODUCT_TERMINOLOGY.createProject}
+              {isSubmitting
+                ? 'Saving…'
+                : editDeal
+                  ? 'Save changes'
+                  : isCommercialWorkspace
+                    ? 'Create Commercial Workspace'
+                    : PRODUCT_TERMINOLOGY.createProject}
             </Button>
           </div>
         </form>

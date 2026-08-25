@@ -14,6 +14,7 @@ import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import { fetchPilotSnapshot, persistPilotSnapshot } from '@/lib/deal-network-demo/pilot-store';
 import {
   listCommercialWorkspaces,
+  stampManualCommercialWorkspace,
   type CommercialWorkspaceListItem,
 } from '@/lib/commercial-os/commercial-workspace-collection';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
@@ -73,6 +74,16 @@ export function CommercialWorkspacesIndexScreen() {
     void reload();
   }, [reload]);
 
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('create') !== '1') return;
+    setCreateOpen(true);
+    params.delete('create');
+    const next = `${window.location.pathname}${params.toString() ? `?${params}` : ''}`;
+    window.history.replaceState(null, '', next);
+  }, []);
+
   const items = React.useMemo(
     () => listCommercialWorkspaces(deals, participants),
     [deals, participants]
@@ -85,10 +96,7 @@ export function CommercialWorkspacesIndexScreen() {
         toast.error('Could not create the Commercial Workspace. Try again.');
         return false;
       }
-      const nextDeal: RecentDeal = {
-        ...deal,
-        createdVia: deal.createdVia ?? 'deal_network_pilot_manual',
-      };
+      const nextDeal = stampManualCommercialWorkspace(deal);
       const nextDeals = [nextDeal, ...latest.deals.filter((existing) => existing.id !== nextDeal.id)];
       const ok = await persistPilotSnapshot(
         { deals: nextDeals, participants: latest.participants },
@@ -182,6 +190,7 @@ export function CommercialWorkspacesIndexScreen() {
         onOpenChange={setCreateOpen}
         onCreate={handleCreate}
         experienceMode="project"
+        copy="commercial_workspace"
       />
     </div>
   );
