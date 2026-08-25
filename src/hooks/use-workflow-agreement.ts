@@ -322,6 +322,8 @@ export function useWorkflowAgreement(
     },
     [workflowId, agreementId]
   );
+
+  return {
     context,
     loading,
     error,
