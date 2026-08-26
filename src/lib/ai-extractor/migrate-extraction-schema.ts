@@ -14,6 +14,7 @@ import type {
   CompensationTermType,
 } from './extraction-types';
 import { hasFixedFeeAmount, hasRevenueSharePct } from './party-obligation-metrics';
+import { paymentTermIsLinkedToParty } from './party-linked-settlement';
 import { deliverableDescriptions } from './parse-deliverables';
 import { inferServiceCategoriesForParty } from './service-category-detection';
 
@@ -123,7 +124,6 @@ function buildInstalmentTermsFromPaymentTerms(
   party: ExtractedParty,
   result: ExtractionResult
 ): ExtractedCompensationTerm[] {
-  const partyName = party.name.value?.trim().toLowerCase() ?? '';
   const terms: ExtractedCompensationTerm[] = [];
 
   for (const paymentTerm of result.paymentTerms ?? []) {
@@ -131,12 +131,7 @@ function buildInstalmentTermsFromPaymentTerms(
     const due = paymentTerm.dueCondition.value?.trim() ?? '';
     const amount = paymentTerm.amount.value;
     if (amount == null) continue;
-    if (!description.toLowerCase().includes(partyName) && partyName.length > 0) {
-      const mentionsParty =
-        description.toLowerCase().includes(partyName) ||
-        due.toLowerCase().includes(partyName);
-      if (!mentionsParty) continue;
-    }
+    if (!paymentTermIsLinkedToParty(paymentTerm, party)) continue;
     terms.push({
       id: termId(party.id, `inst-${terms.length + 1}`),
       type: 'instalment',
@@ -406,10 +401,9 @@ export function formatCompensationTermLabel(
 export function buildSettlementEventsFromCompensationTerms(
   party: ExtractedParty,
   compensationTerms: ExtractedCompensationTerm[],
-  result: ExtractionResult
+  _result: ExtractionResult
 ): ExtractedSettlementEvent[] {
   const events: ExtractedSettlementEvent[] = [];
-  const settlementTriggers = collectSettlementTriggersForParty(party, result);
 
   for (const term of compensationTerms) {
     const eventType =
@@ -425,13 +419,14 @@ export function buildSettlementEventsFromCompensationTerms(
                 ? 'attribution'
                 : 'fixed_fee';
 
+    const ownTrigger = term.trigger.value?.trim() || term.deadline.value?.trim() || null;
     events.push({
       partyId: field(party.id),
       partyName: field(party.name.value ?? ''),
       type: field(eventType),
       amount: term.amount,
       percentage: term.percentage,
-      trigger: field(term.trigger.value ?? settlementTriggers[0] ?? null, term.trigger.confidence),
+      trigger: field(ownTrigger, term.trigger.confidence),
       condition: field(
         term.type === 'conditional_bonus' ? term.trigger.value : null,
         term.trigger.confidence
@@ -441,22 +436,6 @@ export function buildSettlementEventsFromCompensationTerms(
   }
 
   return events;
-}
-
-function collectSettlementTriggersForParty(party: ExtractedParty, result: ExtractionResult): string[] {
-  const triggers = new Set<string>();
-  for (const rule of result.settlementRules ?? []) {
-    const trigger = rule.trigger.value?.trim();
-    if (trigger) triggers.add(trigger);
-  }
-  for (const term of result.paymentTerms ?? []) {
-    const due = term.dueCondition.value?.trim();
-    if (due) triggers.add(due);
-  }
-  for (const comp of party.compensationTerms ?? []) {
-    if (comp.trigger.value?.trim()) triggers.add(comp.trigger.value.trim());
-  }
-  return [...triggers];
 }
 
 export function isHybridCompensation(terms: ExtractedCompensationTerm[]): boolean {

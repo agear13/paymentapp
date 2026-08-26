@@ -54,6 +54,7 @@ import type {
   ParticipantCommercialCard,
   ParticipantReviewStatus,
   PaymentEventModel,
+  ProjectCashflowSnapshot,
   ReviewReason,
 } from '@/lib/ai-extractor/commercial-graph-types';
 
@@ -96,6 +97,43 @@ function ReportSection({
 
 function isDefaultPlaceholder(value: string): boolean {
   return commercialTermIsUntouchedDefault(value);
+}
+
+/* ─── Project inbound cashflow ──────────────────────────────────────────────── */
+
+function ProjectCashflowSection({ cashflow }: { cashflow: ProjectCashflowSnapshot }) {
+  if (cashflow.entries.length === 0) return null;
+  const from = cashflow.counterparty?.trim();
+  const to = cashflow.projectName?.trim();
+  const heading = from && to ? `${from} → ${to}` : from || to || null;
+
+  return (
+    <ReportSection title="Project Cashflow / Client Payment Schedule">
+      {heading ? <p className="text-sm font-medium">{heading}</p> : null}
+      <ul className="space-y-2">
+        {cashflow.entries.map((entry, index) => {
+          const amount =
+            entry.amount != null
+              ? `${entry.currency?.trim() || 'AUD'} ${entry.amount.toLocaleString('en-AU', { maximumFractionDigits: 0 })}`
+              : null;
+          return (
+            <li
+              key={`${entry.description}-${index}`}
+              className="rounded-lg border border-[rgba(124,92,255,0.12)] bg-white/80 px-3 py-2.5"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="text-sm font-medium">{entry.description}</span>
+                {amount ? <span className="text-sm font-semibold">{amount}</span> : null}
+              </div>
+              {entry.dueCondition ? (
+                <p className="mt-1 text-xs text-muted-foreground">{entry.dueCondition}</p>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+    </ReportSection>
+  );
 }
 
 /* ─── Commercial Risk Summary (Part 8) ──────────────────────────────────────── */
@@ -670,6 +708,10 @@ export function AgreementIntelligenceReport({
             readinessLabel={readinessLabel}
             onEditDraft={onEditDraft}
           />
+
+          {(insight.projectCashflow?.entries.length ?? 0) > 0 ? (
+            <ProjectCashflowSection cashflow={insight.projectCashflow!} />
+          ) : null}
 
           {/* ── Part 8: Commercial Risk Summary ── */}
           {(insight.commercialRiskSummary?.length ?? 0) > 0 ? (

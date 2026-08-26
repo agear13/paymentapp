@@ -15,6 +15,11 @@ import { toOperationalSyncHandlers } from '@/lib/operations/orchestration/operat
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import type { AttachedWorkspaceInvoice } from '@/lib/commercial-os/attached-invoices';
+import {
+  formatWorkspaceCashflowAmount,
+  resolveWorkspaceInboundCashflow,
+  workspaceParticipantPayables,
+} from '@/lib/commercial-os/workspace-inbound-cashflow';
 
 type OrgInvoiceOption = {
   id: string;
@@ -122,6 +127,8 @@ export function CommercialWorkspaceMoneyPanel() {
   if (!deal || !summary) return null;
 
   const defaultCurrency = summary.currencyLabel.includes('AUD') ? 'AUD' : 'USD';
+  const inboundCashflow = resolveWorkspaceInboundCashflow(deal);
+  const payables = workspaceParticipantPayables(projectParticipants);
 
   return (
     <div className="space-y-6" data-testid="commercial-workspace-money">
@@ -148,6 +155,60 @@ export function CommercialWorkspaceMoneyPanel() {
           <p className="mt-1 text-[12px] text-ink-soft">{summary.fundingLabel}</p>
         </div>
       </div>
+
+      {inboundCashflow ? (
+        <div
+          className="rounded-2xl border border-border bg-card p-5 shadow-card"
+          data-testid="workspace-inbound-cashflow"
+        >
+          <h3 className="text-[14px] font-semibold">Client payment schedule</h3>
+          <p className="mt-1 text-[12px] text-ink-soft">
+            Money coming into the project. Distinct from amounts owed to participants.
+          </p>
+          {inboundCashflow.counterparty || inboundCashflow.projectName ? (
+            <p className="mt-2 text-[13px] text-ink-soft">
+              {[inboundCashflow.counterparty, inboundCashflow.projectName].filter(Boolean).join(' → ')}
+            </p>
+          ) : null}
+          <ul className="mt-3 space-y-2">
+            {inboundCashflow.entries.map((entry, index) => (
+              <li key={`${entry.description}-${index}`} className="flex flex-wrap items-baseline justify-between gap-2 text-[13px]">
+                <span>
+                  {entry.description}
+                  {entry.dueCondition ? (
+                    <span className="ml-2 text-ink-soft">{entry.dueCondition}</span>
+                  ) : null}
+                </span>
+                <span className="font-semibold">
+                  {formatWorkspaceCashflowAmount(entry.amount, entry.currency ?? defaultCurrency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {payables.length > 0 ? (
+        <div
+          className="rounded-2xl border border-border bg-card p-5 shadow-card"
+          data-testid="workspace-participant-payables"
+        >
+          <h3 className="text-[14px] font-semibold">Participant payables</h3>
+          <p className="mt-1 text-[12px] text-ink-soft">
+            Money owed to named participants. Payment timing stays unresolved until explicitly defined.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {payables.map((payable) => (
+              <li key={payable.name} className="flex items-baseline justify-between gap-2 text-[13px]">
+                <span>{payable.name}</span>
+                <span className="font-semibold">
+                  {formatWorkspaceCashflowAmount(payable.amount, defaultCurrency)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {showAccounting ? (
         <div data-testid="workspace-money-accounting">

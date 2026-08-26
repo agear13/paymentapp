@@ -205,6 +205,20 @@ export type UnifiedSettlementScheduleEntry = {
   settlementTriggers: string[];
 };
 
+/** Project/client inbound cashflow — never a participant settlement schedule. */
+export type ProjectCashflowEntry = {
+  description: string;
+  amount: number | null;
+  currency: string | null;
+  dueCondition: string | null;
+};
+
+export type ProjectCashflowSnapshot = {
+  counterparty: string | null;
+  projectName: string | null;
+  entries: ProjectCashflowEntry[];
+};
+
 export type CommercialGraphSnapshot = {
   schemaVersion: 'v5';
   agreementOwner: string | null;
@@ -214,6 +228,8 @@ export type CommercialGraphSnapshot = {
   commercialStructureOverview: CommercialStructureOverview;
   participantCards: ParticipantCommercialCard[];
   settlementSchedule: UnifiedSettlementScheduleEntry[];
+  /** Client/counterparty payment schedule. Distinct from participant payables. */
+  projectCashflow?: ProjectCashflowSnapshot;
   operationalObligations: { participant: string; items: string[] }[];
   compensationTerms: { participant: string; items: string[] }[];
   /** Structured revenue share summary (per participant, with settlement timing). */

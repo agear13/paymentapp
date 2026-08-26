@@ -24,6 +24,7 @@ import type {
   ParticipantCommercialCard,
   ParticipantReviewStatus,
   PaymentEventModel,
+  ProjectCashflowSnapshot,
   RevenueShareDetail,
   RevenueShareSummaryRow,
   ReviewReason,
@@ -39,6 +40,7 @@ import {
   formatCompensationTermLabel,
   isHybridCompensation,
 } from './migrate-extraction-schema';
+import { settlementRuleIsLinkedToParty } from './party-linked-settlement';
 import { inferServiceCategoriesForParty } from './service-category-detection';
 import { serviceCategoryDisplayLabel } from './service-category';
 
@@ -221,9 +223,8 @@ function buildSettlementRulesForParty(
 ): string[] {
   const rules: string[] = [];
 
-  // Result-level settlement rules are agreement-wide clauses (not per-party in v5 schema).
-  // Per-party settlement rules are not yet in ExtractedParty — handled via globalTriggers below.
   for (const rule of result.settlementRules ?? []) {
+    if (!settlementRuleIsLinkedToParty(rule, party)) continue;
     const text = rule.trigger.value?.trim();
     if (text && !rules.some((r) => r.toLowerCase() === text.toLowerCase())) {
       rules.push(text);
@@ -231,6 +232,7 @@ function buildSettlementRulesForParty(
   }
 
   // Global triggers stripped from payment events — show once per party as settlement rule
+  // only when that party's own compensation terms carried the trigger.
   for (const term of party.compensationTerms ?? buildCompensationTermsFromParty(party, result)) {
     const rawTrigger = term.trigger.value?.trim();
     if (!rawTrigger) continue;
@@ -241,6 +243,25 @@ function buildSettlementRulesForParty(
   }
 
   return uniqueNonEmpty(rules);
+}
+
+function buildProjectCashflow(result: ExtractionResult): ProjectCashflowSnapshot | undefined {
+  const entries = (result.paymentTerms ?? [])
+    .map((term) => ({
+      description: term.description.value?.trim() || 'Payment',
+      amount: term.amount.value,
+      currency: term.currency.value?.trim() ?? result.currency.value?.trim() ?? null,
+      dueCondition: term.dueCondition.value?.trim() || null,
+    }))
+    .filter((entry) => entry.amount != null || Boolean(entry.dueCondition) || entry.description !== 'Payment');
+
+  if (entries.length === 0) return undefined;
+
+  return {
+    counterparty: result.counterparty?.value?.trim() ?? null,
+    projectName: result.projectName?.value?.trim() ?? null,
+    entries,
+  };
 }
 
 /* ─── Revenue share detail ───────────────────────────────────────────────────── */
@@ -720,6 +741,7 @@ export function buildCommercialGraph(result: ExtractionResult): CommercialGraphS
     commercialStructureOverview: buildCommercialStructureOverview(metrics),
     participantCards,
     settlementSchedule,
+    projectCashflow: buildProjectCashflow(result),
     operationalObligations: participantCards.map((card) => ({
       participant: card.name,
       items: card.operationalObligations,

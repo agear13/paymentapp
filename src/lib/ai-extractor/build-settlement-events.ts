@@ -6,6 +6,7 @@ import type {
   SettlementEventType,
 } from './extraction-types';
 import { hasFixedFeeAmount, hasRevenueSharePct } from './party-obligation-metrics';
+import { collectPartyOwnedSettlementTriggers } from './party-linked-settlement';
 import { isHallucinatedSettlementTrigger } from './parse-settlement-rules';
 
 const DEFAULT_STATUS: ObligationStatus = 'pending';
@@ -38,29 +39,11 @@ function buildEvent(
 }
 
 function findExplicitSettlementTrigger(result: ExtractionResult, party: ExtractedParty): string | null {
-  const rules = result.settlementRules ?? [];
-  for (const rule of rules) {
-    const trigger = rule.trigger.value?.trim();
-    if (trigger && !isHallucinatedSettlementTrigger(trigger)) {
+  for (const trigger of collectPartyOwnedSettlementTriggers(party, result)) {
+    if (!isHallucinatedSettlementTrigger(trigger)) {
       return trigger;
     }
   }
-
-  for (const term of result.paymentTerms ?? []) {
-    const due = term.dueCondition.value?.trim();
-    if (due && !isHallucinatedSettlementTrigger(due)) {
-      return due;
-    }
-  }
-
-  for (const milestone of party.milestones ?? []) {
-    if (milestone.category.value !== 'financial') continue;
-    const deadline = milestone.deadline.value?.trim();
-    if (deadline && !isHallucinatedSettlementTrigger(deadline)) {
-      return deadline;
-    }
-  }
-
   return null;
 }
 

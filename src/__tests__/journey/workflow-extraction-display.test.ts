@@ -141,7 +141,7 @@ describe('buildWorkflowPaymentScheduleRows', () => {
 });
 
 describe('buildExtractionReviewSettlementGroups', () => {
-  it('renders supplier payment phases as percentages, not misformatted currency', () => {
+  it('shows project payment phases as project cashflow, not as a supplier settlement schedule', () => {
     const result = baseResult({
       parties: [
         {
@@ -184,12 +184,13 @@ describe('buildExtractionReviewSettlementGroups', () => {
     });
 
     const groups = buildExtractionReviewSettlementGroups(result, (amount) => `A$${amount}`);
-    expect(groups).toHaveLength(1);
-    expect(groups[0]?.kind).toBe('payment_schedule');
-    expect(groups[0]?.rows?.[0]?.title).toBe('30% Deposit');
-    expect(groups[0]?.rows?.[1]?.title).toBe('40% Milestone Payment');
-    expect(groups[0]?.rows?.[2]?.title).toBe('30% Final Settlement');
-    expect(groups[0]?.rows?.[0]?.amountLabel).toBe('A$990');
+    const project = groups.find((group) => group.kind === 'project_cashflow');
+    expect(project).toBeDefined();
+    expect(project?.rows?.[0]?.title).toBe('30% Deposit');
+    expect(project?.rows?.[1]?.title).toBe('40% Milestone Payment');
+    expect(project?.rows?.[2]?.title).toBe('30% Final Settlement');
+    expect(project?.rows?.[0]?.amountLabel).toBe('A$990');
+    expect(groups.some((group) => group.partyName === 'Northside Venue')).toBe(false);
   });
 
   it('shows revenue-share settlement for promoters instead of supplier instalments', () => {
@@ -263,6 +264,9 @@ describe('buildExtractionReviewSettlementGroups', () => {
     expect(sarah?.revenueShare?.headline).toBe('15% of paid and validated ticket revenue');
     expect(sarah?.revenueShare?.trigger).toBe('After the event concludes');
     expect(sarah?.revenueShare?.settlement).toContain('separately');
+    expect(sarah?.rows).toBeUndefined();
+    const project = groups.find((group) => group.kind === 'project_cashflow');
+    expect(project).toBeDefined();
     expect(sarah?.rows).toBeUndefined();
   });
 });

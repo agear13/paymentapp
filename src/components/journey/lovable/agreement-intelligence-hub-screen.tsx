@@ -707,6 +707,42 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
                 </div>
               )}
 
+              {extraction && (extraction.paymentTerms?.length ?? 0) > 0 ? (
+                <div
+                  className="rounded-xl border border-border bg-secondary/10 p-4"
+                  data-testid="hub-project-cashflow"
+                >
+                  <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+                    Client payment schedule
+                  </p>
+                  {extraction.counterparty.value || extraction.projectName.value ? (
+                    <p className="mt-1 text-[13px] text-ink-soft">
+                      {[extraction.counterparty.value, extraction.projectName.value]
+                        .filter(Boolean)
+                        .join(' → ')}
+                    </p>
+                  ) : null}
+                  <ul className="mt-3 space-y-2">
+                    {extraction.paymentTerms.map((term, index) => (
+                      <li key={`${term.description.value ?? 'term'}-${index}`} className="text-[14px]">
+                        <span className="font-medium">
+                          {term.description.value?.trim() || `Payment ${index + 1}`}
+                        </span>
+                        {term.amount.value != null ? (
+                          <span className="ml-2 font-semibold">
+                            {term.currency.value?.trim() || 'AUD'}{' '}
+                            {term.amount.value.toLocaleString('en-AU', { maximumFractionDigits: 0 })}
+                          </span>
+                        ) : null}
+                        {term.dueCondition.value ? (
+                          <p className="text-[12px] text-ink-soft">{term.dueCondition.value}</p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
               {lifecycleStatus === 'EXTRACTION_FAILED' && (
                 <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-4">
                   <p className="text-[14px] font-medium text-amber-900 dark:text-amber-200">

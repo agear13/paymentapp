@@ -8,6 +8,7 @@ import type {
   ParticipantCommercialCard,
   RevenueShareSummaryRow,
   UnifiedSettlementScheduleEntry,
+  ProjectCashflowSnapshot,
 } from '@/lib/ai-extractor/commercial-graph-types';
 import {
   mapExtractionToObligationSnapshot,
@@ -85,6 +86,8 @@ export type AgreementIntelligenceInsight = {
   compensationTermsFound?: { participant: string; items: string[] }[];
   /** v5 — unified settlement schedule (replaces duplicated settlement sections). */
   settlementSchedule?: UnifiedSettlementScheduleEntry[];
+  /** Client/counterparty inbound payment schedule — not participant settlement. */
+  projectCashflow?: ProjectCashflowSnapshot;
   /** v5 — rich participant summary cards. */
   participantCards?: ParticipantCommercialCard[];
   /** v5 — settlement blockers for executive summary. */
@@ -479,6 +482,7 @@ export function buildInsightsFromExtraction(
       operationalObligations: commercialGraph?.operationalObligations,
       compensationTermsFound,
       settlementSchedule: commercialGraph?.settlementSchedule,
+      projectCashflow: commercialGraph?.projectCashflow,
       participantCards: commercialGraph?.participantCards,
       settlementBlockers: readiness?.settlementBlockers,
       revenueShareSummary: commercialGraph?.revenueShareSummary,

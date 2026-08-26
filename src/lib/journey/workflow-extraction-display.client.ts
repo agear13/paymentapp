@@ -12,6 +12,10 @@ import {
   isHybridExtractedParty,
 } from '@/lib/ai-extractor/party-obligation-metrics';
 import {
+  PAYMENT_TIMING_NOT_SPECIFIED_IN_AGREEMENT,
+  paymentTermIsLinkedToParty,
+} from '@/lib/ai-extractor/party-linked-settlement';
+import {
   buildSettlementSchedule,
   type SettlementScheduleLine,
 } from '@/lib/ai-extractor/settlement-schedule';
@@ -639,9 +643,11 @@ export type ExtractionReviewRevenueShareDisplay = {
 export type ExtractionReviewSettlementGroup = {
   key: string;
   partyName: string;
-  kind: 'payment_schedule' | 'revenue_share';
+  kind: 'project_cashflow' | 'payment_schedule' | 'revenue_share' | 'unresolved_timing';
   rows?: WorkflowPaymentScheduleRow[];
   revenueShare?: ExtractionReviewRevenueShareDisplay;
+  entitlementLabel?: string | null;
+  timingNote?: string | null;
 };
 
 function partyIsRevenueShareOnly(party: ExtractedParty): boolean {
@@ -659,13 +665,6 @@ function partyIsRevenueShareOnly(party: ExtractedParty): boolean {
   return (
     hasRevenueSharePct(party) || party.participationModel.value === 'revenue_share'
   );
-}
-
-function partyUsesSharedSupplierSchedule(party: ExtractedParty): boolean {
-  if (partyIsRevenueShareOnly(party)) return false;
-  if (party.participationModel.value === 'customer_attribution') return false;
-  if (party.participationModel.value === 'revenue_share') return false;
-  return true;
 }
 
 function pickSettlementRuleText(
@@ -699,16 +698,94 @@ function buildRevenueShareSettlementDisplay(
     headline = basis;
   }
 
-  const trigger =
-    revTerm?.trigger.value?.trim() ||
-    pickSettlementRuleText(result, /after.*event|event concludes|post.?event/i);
+  const trigger = revTerm?.trigger.value?.trim() || null;
 
   const settlement =
     pickSettlementRuleText(result, /separat|calculated after|commission/i) ||
     revTerm?.label.value?.trim() ||
     null;
 
-  return { headline, trigger: trigger ?? null, settlement };
+  return { headline, trigger, settlement };
+}
+
+function formatPartyEntitlementLabel(
+  party: ExtractedParty,
+  formatMoney: (amount: number) => string,
+): string | null {
+  const terms = party.compensationTerms ?? [];
+  const fixedTerm = terms.find((term) => term.type === 'fixed_fee' && term.amount.value != null);
+  if (fixedTerm?.amount.value != null) {
+    return `${formatMoney(fixedTerm.amount.value)} fixed fee`;
+  }
+  if (hasFixedFeeAmount(party) && party.fixedAmount.value != null) {
+    return `${formatMoney(party.fixedAmount.value)} fixed fee`;
+  }
+  const instalments = terms.filter((term) => term.type === 'instalment' && term.amount.value != null);
+  if (instalments.length > 0) {
+    return instalments
+      .map((term) => `${formatMoney(term.amount.value!)} ${term.label.value?.trim() || 'instalment'}`)
+      .join('; ');
+  }
+  if (hasRevenueSharePct(party) && party.revenueSharePct.value != null) {
+    return `${party.revenueSharePct.value}% revenue share`;
+  }
+  return null;
+}
+
+function partyHasFinancialEntitlement(party: ExtractedParty): boolean {
+  if (hasFixedFeeAmount(party) || hasRevenueSharePct(party)) return true;
+  return (party.compensationTerms ?? []).some(
+    (term) => term.amount.value != null || term.percentage.value != null,
+  );
+}
+
+function eventHasExplicitTiming(trigger: string | null | undefined): boolean {
+  return Boolean(trigger?.trim());
+}
+
+function buildPartyLinkedPaymentTermRows(
+  party: ExtractedParty,
+  result: ExtractionResult,
+  formatMoney: (amount: number) => string,
+): WorkflowPaymentScheduleRow[] {
+  const linked = (result.paymentTerms ?? []).filter((term) =>
+    paymentTermIsLinkedToParty(term, party),
+  );
+  if (linked.length === 0) return [];
+  return buildWorkflowPaymentScheduleRows(
+    { ...result, paymentTerms: linked, settlementEvents: [] },
+    formatMoney,
+  );
+}
+
+function buildPartyCompensationTimingRows(
+  party: ExtractedParty,
+  formatMoney: (amount: number) => string,
+): WorkflowPaymentScheduleRow[] {
+  const terms = party.compensationTerms ?? [];
+  const rows: WorkflowPaymentScheduleRow[] = [];
+  for (const [index, term] of terms.entries()) {
+    const trigger = term.trigger.value?.trim() || term.deadline.value?.trim() || null;
+    if (!trigger) continue;
+    const amount = term.amount.value;
+    const percentage = term.percentage.value;
+    rows.push({
+      key: `${party.id}-term-${term.id}`,
+      title: term.label.value?.trim() || (term.type === 'fixed_fee' ? 'Fixed fee' : 'Payment'),
+      amountLabel:
+        amount != null
+          ? formatMoney(amount)
+          : percentage != null
+            ? `${percentage}%`
+            : null,
+      trigger,
+      participant: party.name.value?.trim() ?? null,
+      phase: 'other',
+      stepNumber: index + 1,
+      stepLabel: 'Payment',
+    });
+  }
+  return rows;
 }
 
 function buildPartySettlementScheduleRows(
@@ -717,7 +794,8 @@ function buildPartySettlementScheduleRows(
   formatMoney: (amount: number) => string,
 ): WorkflowPaymentScheduleRow[] {
   const partyEvents = (result.settlementEvents ?? []).filter(
-    (event) => event.partyId.value === party.id,
+    (event) =>
+      event.partyId.value === party.id && eventHasExplicitTiming(event.trigger.value),
   );
   if (partyEvents.length === 0) return [];
 
@@ -727,37 +805,69 @@ function buildPartySettlementScheduleRows(
   );
 }
 
-/** Extraction review modal — reuse journey payment schedule formatting per participant. */
+function projectCashflowPartyName(result: ExtractionResult): string {
+  const from = result.counterparty?.value?.trim();
+  const to = result.projectName?.value?.trim();
+  if (from && to) return `${from} → ${to}`;
+  return to || from || 'Project';
+}
+
+/** Extraction review modal — project cashflow stays separate from participant settlement. */
 export function buildExtractionReviewSettlementGroups(
   result: ExtractionResult,
   formatMoney: (amount: number) => string,
 ): ExtractionReviewSettlementGroup[] {
-  const hasProjectPaymentTerms = (result.paymentTerms?.length ?? 0) > 0;
-  const sharedScheduleRows = hasProjectPaymentTerms
-    ? buildWorkflowPaymentScheduleRows(result, formatMoney)
-    : [];
-
   const groups: ExtractionReviewSettlementGroup[] = [];
+
+  if ((result.paymentTerms?.length ?? 0) > 0) {
+    const projectRows = buildWorkflowPaymentScheduleRows(result, formatMoney);
+    if (projectRows.length > 0) {
+      groups.push({
+        key: 'project-cashflow',
+        partyName: projectCashflowPartyName(result),
+        kind: 'project_cashflow',
+        rows: projectRows,
+      });
+    }
+  }
 
   for (const party of result.parties) {
     const partyName = party.name.value?.trim() || 'Unnamed participant';
+    const entitlementLabel = formatPartyEntitlementLabel(party, formatMoney);
 
     if (partyIsRevenueShareOnly(party)) {
+      const revenueShare = buildRevenueShareSettlementDisplay(party, result);
       groups.push({
         key: party.id,
         partyName,
         kind: 'revenue_share',
-        revenueShare: buildRevenueShareSettlementDisplay(party, result),
+        revenueShare,
+        entitlementLabel,
+        timingNote: revenueShare.trigger ? null : PAYMENT_TIMING_NOT_SPECIFIED_IN_AGREEMENT,
       });
       continue;
     }
 
-    if (hasProjectPaymentTerms && partyUsesSharedSupplierSchedule(party) && sharedScheduleRows.length > 0) {
+    const linkedRows = buildPartyLinkedPaymentTermRows(party, result, formatMoney);
+    if (linkedRows.length > 0) {
       groups.push({
         key: party.id,
         partyName,
         kind: 'payment_schedule',
-        rows: sharedScheduleRows,
+        rows: linkedRows,
+        entitlementLabel,
+      });
+      continue;
+    }
+
+    const compensationRows = buildPartyCompensationTimingRows(party, formatMoney);
+    if (compensationRows.length > 0) {
+      groups.push({
+        key: party.id,
+        partyName,
+        kind: 'payment_schedule',
+        rows: compensationRows,
+        entitlementLabel,
       });
       continue;
     }
@@ -769,6 +879,18 @@ export function buildExtractionReviewSettlementGroups(
         partyName,
         kind: 'payment_schedule',
         rows: partyRows,
+        entitlementLabel,
+      });
+      continue;
+    }
+
+    if (partyHasFinancialEntitlement(party)) {
+      groups.push({
+        key: party.id,
+        partyName,
+        kind: 'unresolved_timing',
+        entitlementLabel,
+        timingNote: PAYMENT_TIMING_NOT_SPECIFIED_IN_AGREEMENT,
       });
     }
   }

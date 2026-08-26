@@ -12,6 +12,11 @@ import {
 } from '@/lib/commercial-os/commercial-workspace-collection';
 import { commercialWorkspaceNextStep } from '@/lib/commercial-os/commercial-workspace-next-step';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
+import {
+  formatWorkspaceCashflowAmount,
+  resolveWorkspaceInboundCashflow,
+  workspaceParticipantPayables,
+} from '@/lib/commercial-os/workspace-inbound-cashflow';
 
 function MetricCard({
   label,
@@ -48,6 +53,10 @@ export function CommercialWorkspaceOverviewPanel() {
   });
   const source = commercialWorkspaceSourceOf(deal);
   const valueLabel = summary?.currencyLabel ?? (deal.value ? String(deal.value) : 'Not set');
+  const inboundCashflow = resolveWorkspaceInboundCashflow(deal);
+  const payables = workspaceParticipantPayables(projectParticipants);
+  const inboundTotal = inboundCashflow?.entries.reduce((sum, entry) => sum + (entry.amount ?? 0), 0) ?? 0;
+  const payableTotal = payables.reduce((sum, payable) => sum + payable.amount, 0);
 
   return (
     <div className="space-y-6" data-testid="commercial-workspace-overview">
@@ -109,6 +118,38 @@ export function CommercialWorkspaceOverviewPanel() {
         />
         <MetricCard label="Source" value={item.sourceLabel} />
       </div>
+
+      {inboundCashflow || payables.length > 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {inboundCashflow ? (
+            <div className="rounded-2xl border border-border bg-card p-5 shadow-card" data-testid="overview-inbound-cashflow">
+              <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+                Money coming in
+              </div>
+              <div className="mt-2 text-[15px] font-semibold">
+                {formatWorkspaceCashflowAmount(inboundTotal, deal.projectValueCurrency) ?? valueLabel}
+              </div>
+              <p className="mt-1 text-[12px] text-ink-soft">
+                {inboundCashflow.entries.length} client instalment
+                {inboundCashflow.entries.length === 1 ? '' : 's'}
+              </p>
+            </div>
+          ) : null}
+          {payables.length > 0 ? (
+            <div className="rounded-2xl border border-border bg-card p-5 shadow-card" data-testid="overview-participant-payables">
+              <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+                Money owed to participants
+              </div>
+              <div className="mt-2 text-[15px] font-semibold">
+                {formatWorkspaceCashflowAmount(payableTotal, deal.projectValueCurrency)}
+              </div>
+              <p className="mt-1 text-[12px] text-ink-soft">
+                {payables.map((payable) => payable.name).join(', ')}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
         <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
