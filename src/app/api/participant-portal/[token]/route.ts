@@ -129,6 +129,12 @@ export async function GET(
         partner: loaded.deal.partner,
       },
       syncedAt: loaded.portalContext.syncedAt,
+      invoiceActivation:
+        decision.role === 'participant'
+          ? {
+              convertedOrganizationId: found.convertedOrganizationId,
+            }
+          : null,
     });
   } catch (e) {
     console.error('[participant-portal GET]', e);

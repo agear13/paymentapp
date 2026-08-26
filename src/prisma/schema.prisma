@@ -245,6 +245,7 @@ model organizations {
   organization_workflow_agreements   organization_workflow_agreements[]
   sourced_participants               deal_network_pilot_participants[]  @relation("ParticipantSourceOrganization")
   converted_participants             deal_network_pilot_participants[]  @relation("ParticipantConvertedOrganization")
+  origin_source_payment_links        payment_links[]                    @relation("PaymentLinkOriginSourceOrganization")
 }
 
 /// Immutable operational onboarding / bootstrap / graph initialization transitions.
@@ -473,8 +474,20 @@ model payment_links {
   manual_bank_payment_confirmations manual_bank_payment_confirmations[]
   treasury_events              treasury_events[]
   /// Deal Network pilot project (Strait) — optional invoice↔project coordination link.
+  /// Must not be used for participant-portal provenance; that lives on origin_deal_id.
   pilot_deal_id           String?                   @db.VarChar(255)
   pilot_deal              deal_network_pilot_deals? @relation("PilotDealPaymentLinks", fields: [pilot_deal_id], references: [id], onDelete: SetNull)
+  /// How this invoice was originated. Null on legacy rows and ordinary manual creates.
+  invoice_origin          String?                   @db.VarChar(32)
+  /// Participant row that originated a participant-portal invoice. Informational provenance.
+  origin_participant_id   String?                   @db.VarChar(255)
+  origin_participant      deal_network_pilot_participants? @relation("PaymentLinkOriginParticipant", fields: [origin_participant_id], references: [id], onDelete: SetNull)
+  /// Organiser/source organisation attribution. Not the invoice owner.
+  origin_source_organization_id String?             @db.Uuid
+  origin_source_organization organizations?         @relation("PaymentLinkOriginSourceOrganization", fields: [origin_source_organization_id], references: [id], onDelete: SetNull)
+  /// Originating agreement/deal id. Informational only — never copied to pilot_deal_id.
+  origin_deal_id          String?                   @db.VarChar(255)
+  origin_deal             deal_network_pilot_deals? @relation("PaymentLinkOriginDeal", fields: [origin_deal_id], references: [id], onDelete: SetNull)
   /// Commercial timing for this invoice — inherits agreement defaults; optional overrides.
   commercial_timing       Json?
 
@@ -483,6 +496,10 @@ model payment_links {
   @@index([expires_at])
   @@index([payment_method])
   @@index([pilot_deal_id])
+  @@index([invoice_origin])
+  @@index([origin_participant_id])
+  @@index([origin_source_organization_id])
+  @@index([origin_deal_id])
   @@index([referral_link_id])
   @@index([referral_code_id])
   @@index([organization_service_id])
@@ -1276,6 +1293,7 @@ model deal_network_pilot_deals {
   obligations      deal_network_pilot_obligations[]
   pilot_payment_events payment_events[] @relation("PilotDealPaymentEvents")
   linked_payment_links payment_links[] @relation("PilotDealPaymentLinks")
+  origin_payment_links payment_links[] @relation("PaymentLinkOriginDeal")
   funding_sources  project_funding_sources[]
 
   @@index([user_id])
@@ -1406,6 +1424,7 @@ model deal_network_pilot_participants {
   obligations  deal_network_pilot_obligations[]
   source_organization organizations? @relation("ParticipantSourceOrganization", fields: [source_organization_id], references: [id], onDelete: SetNull)
   converted_organization organizations? @relation("ParticipantConvertedOrganization", fields: [converted_organization_id], references: [id], onDelete: SetNull)
+  origin_payment_links payment_links[] @relation("PaymentLinkOriginParticipant")
 
   @@index([deal_id])
   @@index([authenticated_user_id])

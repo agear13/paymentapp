@@ -43,6 +43,8 @@ export async function findParticipantByPortalToken(token: string): Promise<{
   dealUserId: string;
   authenticatedUserId: string | null;
   participantEmail: string | null;
+  convertedOrganizationId: string | null;
+  sourceOrganizationId: string | null;
 } | null> {
   const rows = await prisma.deal_network_pilot_participants.findMany({
     where: {
@@ -67,6 +69,8 @@ export async function findParticipantByPortalToken(token: string): Promise<{
     dealUserId: row.deal.user_id,
     authenticatedUserId: row.authenticated_user_id ?? null,
     participantEmail: row.email?.trim() || participant.email?.trim() || null,
+    convertedOrganizationId: row.converted_organization_id ?? null,
+    sourceOrganizationId: row.source_organization_id ?? null,
   };
 }
 

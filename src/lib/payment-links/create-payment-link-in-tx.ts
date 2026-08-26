@@ -12,6 +12,7 @@ import { inheritCommercialTimingForInvoice } from '@/lib/commercial-timing/inher
 import { commercialTimingFromDeal } from '@/lib/commercial-timing/commercial-timing-payload';
 import { commercialTimingToPaymentLinkJson } from '@/lib/commercial-timing/payment-link-timing';
 import { dealRowToRecentDeal } from '@/lib/deal-network-demo/pilot-snapshot.server';
+import type { ParticipantPortalInvoiceProvenance } from '@/lib/invoices/agreement-invoice-prefill';
 
 export type WiseInsertContext = {
   metadata: Record<string, unknown>;
@@ -31,6 +32,8 @@ export type CreatePaymentLinkInTxInput = {
   requestedInvoiceReference: string | null;
   wiseContext: WiseInsertContext | null;
   pilotDealIdToStore: string | null;
+  /** Server-resolved provenance only. Never copied onto pilot_deal_id. */
+  invoiceOriginProvenance?: ParticipantPortalInvoiceProvenance | null;
 };
 
 /**
@@ -52,6 +55,7 @@ export async function insertPaymentLinkInTransaction(
     requestedInvoiceReference,
     wiseContext,
     pilotDealIdToStore,
+    invoiceOriginProvenance = null,
   } = input;
 
   const commercialCurrency = effectiveInvoiceCurrency.toUpperCase();
@@ -179,6 +183,10 @@ export async function insertPaymentLinkInTransaction(
     updated_at: now,
     wise_status: wiseContext ? 'INSTRUCTIONS_READY' : null,
     pilot_deal_id: pilotDealIdToStore,
+    invoice_origin: invoiceOriginProvenance?.invoiceOrigin ?? null,
+    origin_participant_id: invoiceOriginProvenance?.originParticipantId ?? null,
+    origin_source_organization_id: invoiceOriginProvenance?.originSourceOrganizationId ?? null,
+    origin_deal_id: invoiceOriginProvenance?.originDealId ?? null,
     commercial_timing: commercialTimingJson ?? null,
   };
 

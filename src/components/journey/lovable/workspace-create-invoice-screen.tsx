@@ -23,9 +23,18 @@ import { usePaymentLinkUrl } from '@/components/operational/customer-facing-orig
 import { useOrganization } from '@/hooks/use-organization';
 import { useToast } from '@/hooks/use-toast';
 import {
+  agreementOriginCommercialDealDraft,
   defaultCommercialDealDraft,
   type CommercialDealDraft,
 } from '@/lib/commercial-os/commercial-deal-draft';
+import {
+  applyAgreementInvoicePrefillToDraft,
+  agreementOriginTimingCopy,
+  PARTICIPANT_PORTAL_INVOICE_ORIGIN,
+  type AgreementInvoicePrefill,
+} from '@/lib/invoices/agreement-invoice-prefill';
+import { isParticipantPortalInvoiceOrigin } from '@/lib/invoices/participant-invoice-activation';
+import { clearStoredInvoiceActivationIntent } from '@/lib/journey/journey-invoice-activation.client';
 import { formatCurrency } from '@/lib/formatters/format-currency';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import {
@@ -207,7 +216,13 @@ function CreateInvoiceSuccess({
   );
 }
 
-export function WorkspaceCreateInvoiceScreen() {
+export function WorkspaceCreateInvoiceScreen({
+  origin = null,
+  sourceParticipantId = null,
+}: {
+  origin?: string | null;
+  sourceParticipantId?: string | null;
+} = {}) {
   const router = useRouter();
   const { toast } = useToast();
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
@@ -217,7 +232,13 @@ export function WorkspaceCreateInvoiceScreen() {
     pilotBypass,
   } = useEntitlements();
 
-  const [draft, setDraft] = useState<CommercialDealDraft>(() => defaultCommercialDealDraft());
+  const isAgreementOrigin = isParticipantPortalInvoiceOrigin(origin);
+  const [draft, setDraft] = useState<CommercialDealDraft>(() =>
+    isAgreementOrigin ? agreementOriginCommercialDealDraft() : defaultCommercialDealDraft()
+  );
+  const [agreementPrefill, setAgreementPrefill] = useState<AgreementInvoicePrefill | null>(null);
+  const [agreementPrefillLoading, setAgreementPrefillLoading] = useState(isAgreementOrigin);
+  const [agreementPrefillApplied, setAgreementPrefillApplied] = useState(false);
   const [merchantSettings, setMerchantSettings] = useState<MerchantSettingsSnapshot | null>(null);
   const [merchantSettingsLoaded, setMerchantSettingsLoaded] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
@@ -244,6 +265,51 @@ export function WorkspaceCreateInvoiceScreen() {
   const patchDraft = useCallback((patch: Partial<CommercialDealDraft>) => {
     setDraft((prev) => ({ ...prev, ...patch }));
   }, []);
+
+  useEffect(() => {
+    if (isAgreementOrigin) {
+      clearStoredInvoiceActivationIntent();
+    }
+  }, [isAgreementOrigin]);
+
+  useEffect(() => {
+    if (!isAgreementOrigin) {
+      setAgreementPrefillLoading(false);
+      return;
+    }
+    const participantHint = sourceParticipantId?.trim();
+    if (!participantHint) {
+      setAgreementPrefillLoading(false);
+      return;
+    }
+    if (!organizationId) return;
+
+    let cancelled = false;
+    setAgreementPrefillLoading(true);
+
+    void (async () => {
+      try {
+        const response = await fetch(
+          `/api/invoices/agreement-prefill?sourceParticipantId=${encodeURIComponent(participantHint)}`,
+          { credentials: 'include', cache: 'no-store' }
+        );
+        if (!response.ok) return;
+        const body = (await response.json()) as { prefill?: AgreementInvoicePrefill };
+        if (cancelled || !body.prefill) return;
+        setDraft((prev) => applyAgreementInvoicePrefillToDraft(body.prefill!, prev));
+        setAgreementPrefill(body.prefill);
+        setAgreementPrefillApplied(true);
+      } catch {
+        /* keep a blank agreement-origin draft; user can still complete the invoice */
+      } finally {
+        if (!cancelled) setAgreementPrefillLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAgreementOrigin, sourceParticipantId, organizationId]);
 
   useEffect(() => {
     if (!organizationId) {
@@ -304,11 +370,17 @@ export function WorkspaceCreateInvoiceScreen() {
 
   useEffect(() => {
     if (!organizationId || !merchantSettingsLoaded) return;
+    if (agreementPrefillApplied) return;
     const acct = merchantSettings?.defaultCurrency?.trim().toUpperCase().slice(0, 3);
     if (acct && acct.length === 3) {
       setDraft((prev) => (prev.currency === 'AUD' ? { ...prev, currency: acct } : prev));
     }
-  }, [organizationId, merchantSettingsLoaded, merchantSettings?.defaultCurrency]);
+  }, [
+    organizationId,
+    merchantSettingsLoaded,
+    merchantSettings?.defaultCurrency,
+    agreementPrefillApplied,
+  ]);
 
   useEffect(() => {
     if (!organizationId) {
@@ -479,6 +551,23 @@ export function WorkspaceCreateInvoiceScreen() {
     patchDraft,
   ]);
 
+  useEffect(() => {
+    if (!isAgreementOrigin) return;
+    if (!merchantSettingsLoaded || !railDefaultsLoaded) return;
+    if ((draft.paymentCollectionMode ?? 'single') !== 'single') return;
+    const hasReadyRail = paymentMethodOptions.some((opt) => opt.configured && opt.available);
+    if (!hasReadyRail) {
+      patchDraft({ paymentCollectionMode: 'invoice_only', paymentMethod: undefined });
+    }
+  }, [
+    isAgreementOrigin,
+    merchantSettingsLoaded,
+    railDefaultsLoaded,
+    draft.paymentCollectionMode,
+    paymentMethodOptions,
+    patchDraft,
+  ]);
+
   const guidance = useMemo(() => {
     const mode = draft.paymentCollectionMode ?? 'single';
     if (!draft.customerName.trim() && !draft.customerEmail.trim()) {
@@ -570,10 +659,20 @@ export function WorkspaceCreateInvoiceScreen() {
 
     setIsSubmitting(true);
     try {
-      const result = await createPaymentLinkFromDraft(organizationId, draft, {
-        manualBank: railDefaults.manualBank,
-        crypto: railDefaults.crypto,
-      });
+      const result = await createPaymentLinkFromDraft(
+        organizationId,
+        draft,
+        {
+          manualBank: railDefaults.manualBank,
+          crypto: railDefaults.crypto,
+        },
+        isAgreementOrigin && sourceParticipantId?.trim()
+          ? {
+              invoiceOrigin: PARTICIPANT_PORTAL_INVOICE_ORIGIN,
+              sourceParticipantId: sourceParticipantId.trim(),
+            }
+          : undefined
+      );
       setCreated(result);
     } catch (error) {
       if (error instanceof EntitlementRequiredError) {
@@ -656,6 +755,9 @@ export function WorkspaceCreateInvoiceScreen() {
       invoiceNumberHint={invoiceNumberHint}
       invoiceReferenceLoading={invoiceReferenceLoading}
       onInvoiceReferenceEdited={() => setInvoiceReferenceEdited(true)}
+      agreementOrigin={isAgreementOrigin}
+      agreementPrefill={agreementPrefill}
+      agreementPrefillLoading={agreementPrefillLoading}
     />
   );
 }
@@ -682,6 +784,9 @@ function CreateInvoiceForm({
   invoiceNumberHint,
   invoiceReferenceLoading,
   onInvoiceReferenceEdited,
+  agreementOrigin = false,
+  agreementPrefill = null,
+  agreementPrefillLoading = false,
 }: {
   draft: CommercialDealDraft;
   patchDraft: (patch: Partial<CommercialDealDraft>) => void;
@@ -708,6 +813,9 @@ function CreateInvoiceForm({
   } | null;
   invoiceReferenceLoading: boolean;
   onInvoiceReferenceEdited: () => void;
+  agreementOrigin?: boolean;
+  agreementPrefill?: AgreementInvoicePrefill | null;
+  agreementPrefillLoading?: boolean;
 }) {
   const [showValidation, setShowValidation] = useState(false);
   const [formInteracted, setFormInteracted] = useState(false);
@@ -729,7 +837,10 @@ function CreateInvoiceForm({
     [draft, railSetup, railDefaults.manualBank, railDefaults.crypto, paymentMethodOptions]
   );
   const workflowSteps = useMemo(() => computeCreateInvoiceWorkflowProgress(draft), [draft]);
-  const formLoading = !merchantSettingsLoaded || !railDefaultsLoaded;
+  const formLoading =
+    !merchantSettingsLoaded ||
+    !railDefaultsLoaded ||
+    (agreementOrigin && agreementPrefillLoading);
   const collectionMode = draft.paymentCollectionMode ?? 'single';
   const { readyPaymentOptions, setupPaymentOptions } = useMemo(() => {
     const ready = paymentMethodOptions.filter((opt) => opt.configured && opt.available);
@@ -770,6 +881,8 @@ function CreateInvoiceForm({
     progressiveGuidance: guidance,
   });
   const setupSectionExpanded = readyPaymentOptions.length === 0;
+  const agreementTiming =
+    agreementOrigin && agreementPrefill ? agreementOriginTimingCopy(agreementPrefill) : null;
   const contextualGuidance = useMemo(() => {
     if (formLoading) return null;
     return deriveCreateInvoiceContextualGuidance({
@@ -811,7 +924,9 @@ function CreateInvoiceForm({
         <div>
           <h1 className="text-4xl font-semibold tracking-[-0.035em] sm:text-5xl">Create Invoice</h1>
           <p className="mt-3 max-w-xl text-[16px] text-ink-soft">
-            Issue a payment request without leaving your workspace.
+            {agreementOrigin
+              ? 'Provvy prepared this invoice from your agreement. Review and edit anything before you create it.'
+              : 'Issue a payment request without leaving your workspace.'}
           </p>
         </div>
 
@@ -826,6 +941,24 @@ function CreateInvoiceForm({
             <>
           {contextualGuidance ? (
             <CreateInvoiceContextualGuidance guidance={contextualGuidance} />
+          ) : null}
+          {agreementOrigin && agreementPrefill ? (
+            <div
+              data-testid="agreement-invoice-origin-banner"
+              className="rounded-2xl border border-primary/20 bg-accent/60 px-4 py-3.5 text-[13.5px] text-foreground"
+            >
+              <p className="font-semibold tracking-tight">Prepared from your agreement</p>
+              <p className="mt-1 text-ink-soft">
+                {agreementPrefill.projectName
+                  ? `${agreementPrefill.description}`
+                  : 'Suggested details from the agreement are filled in. Everything stays editable.'}
+              </p>
+              {agreementPrefill.compensationKind === 'variable' && agreementPrefill.amount == null ? (
+                <p className="mt-1.5 text-ink-soft">
+                  Confirm the final invoice amount — it was not fixed in the agreement.
+                </p>
+              ) : null}
+            </div>
           ) : null}
           <CreateInvoiceFormCard
             title="Customer"
@@ -947,6 +1080,14 @@ function CreateInvoiceForm({
                   onChange={(e) => updateDraft({ dueDate: parseDateInput(e.target.value) })}
                   className={inputCls}
                 />
+                {agreementTiming?.note ? (
+                  <p
+                    data-testid="agreement-invoice-timing-note"
+                    className="mt-1.5 text-[12px] text-ink-soft"
+                  >
+                    {agreementTiming.note}
+                  </p>
+                ) : null}
               </div>
             </div>
             {showFieldErrors && !validation.description ? (

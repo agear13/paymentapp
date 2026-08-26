@@ -35,6 +35,7 @@ type WorkspacePayload = {
   paymentSetupToken?: string | null;
   inviteToken?: string;
   participant?: { id?: string } | null;
+  invoiceActivation?: { convertedOrganizationId?: string | null } | null;
 };
 
 const REFRESH_INTERVAL_MS = 30_000;
@@ -195,6 +196,7 @@ export default function ParticipantWorkspacePage() {
       sourceParticipantId={
         typeof payload.participant?.id === 'string' ? payload.participant.id : null
       }
+      convertedOrganizationId={payload.invoiceActivation?.convertedOrganizationId ?? null}
       bootstrap={{
         onboarding: payload.onboarding,
         inviteToken: payload.inviteToken,

@@ -7,6 +7,7 @@ import { Check, Loader2, Sparkles } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { createClient } from '@/lib/supabase/client';
 import { completeJourneyOnboarding } from '@/lib/journey/complete-journey-onboarding.client';
+import { consumePostProvisioningDestination } from '@/lib/journey/journey-invoice-activation.client';
 import {
   fetchAuthorizedParticipantWorkspacePrefill,
   shouldOfferParticipantWorkspaceNameConfirm,
@@ -81,7 +82,8 @@ export function WorkspaceProvisioningScreen() {
 
         setReady(true);
         setStep(STEPS.length);
-        router.replace(COMMERCIAL_OS_ROUTES.workspace);
+        const next = consumePostProvisioningDestination();
+        router.replace(next ?? COMMERCIAL_OS_ROUTES.workspace);
         router.refresh();
       } catch (err: unknown) {
         if (cancelled) return;

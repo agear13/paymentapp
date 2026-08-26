@@ -41,6 +41,11 @@ jest.mock('@/lib/payment-links/create-payment-link-in-tx', () => ({
   insertPaymentLinkInTransaction: jest.fn(),
 }));
 
+jest.mock('@/lib/invoices/agreement-invoice-prefill.server', () => ({
+  resolveParticipantPortalInvoiceProvenance: jest.fn(),
+  loadAuthorizedAgreementInvoicePrefill: jest.fn(),
+}));
+
 jest.mock('@/lib/logger', () => ({
   loggers: {
     api: { error: jest.fn(), warn: jest.fn(), info: jest.fn() },

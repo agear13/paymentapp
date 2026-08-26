@@ -175,4 +175,22 @@ describe('CreatePaymentLinkSchema — invoice creation payloads', () => {
       expect(result.data).not.toHaveProperty('commercialTiming');
     }
   });
+
+  it('strips client-supplied invoice origin IDs rather than treating them as authority', () => {
+    const result = parsePayload({
+      ...base,
+      paymentMethod: 'STRIPE',
+      invoiceOrigin: 'participant_portal',
+      originParticipantId: 'p-sarah-1',
+      originSourceOrganizationId: 'org-organiser',
+      originDealId: 'aiwf-saturday-beach',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).not.toHaveProperty('invoiceOrigin');
+      expect(result.data).not.toHaveProperty('originParticipantId');
+      expect(result.data).not.toHaveProperty('originSourceOrganizationId');
+      expect(result.data).not.toHaveProperty('originDealId');
+    }
+  });
 });

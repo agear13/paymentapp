@@ -26,6 +26,11 @@ import { insertPaymentLinkInTransaction } from '@/lib/payment-links/create-payme
 import { normalizeInvoiceReference } from '@/lib/payment-links/invoice-reference';
 import { runPaymentLinkPostCreateEffects } from '@/lib/payment-links/payment-link-post-create';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
+import { resolveParticipantPortalInvoiceProvenance } from '@/lib/invoices/agreement-invoice-prefill.server';
+import {
+  PARTICIPANT_PORTAL_INVOICE_ORIGIN,
+  type ParticipantPortalInvoiceProvenance,
+} from '@/lib/invoices/agreement-invoice-prefill';
 import { AuditEventType, logPaymentEvent } from '@/lib/audit/audit-log';
 import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 import { createZodValidationErrorResponse } from '@/lib/validations/middleware';
@@ -345,6 +350,17 @@ export async function POST(request: NextRequest) {
     }
     const bodyWithoutClientOrg = { ...(rawBody as Record<string, unknown>) };
     delete bodyWithoutClientOrg.organizationId;
+    const requestedInvoiceOrigin = bodyWithoutClientOrg.invoiceOrigin;
+    const sourceParticipantHint = bodyWithoutClientOrg.sourceParticipantId;
+    delete bodyWithoutClientOrg.invoiceOrigin;
+    delete bodyWithoutClientOrg.sourceParticipantId;
+    delete bodyWithoutClientOrg.originParticipantId;
+    delete bodyWithoutClientOrg.origin_participant_id;
+    delete bodyWithoutClientOrg.originSourceOrganizationId;
+    delete bodyWithoutClientOrg.origin_source_organization_id;
+    delete bodyWithoutClientOrg.originDealId;
+    delete bodyWithoutClientOrg.origin_deal_id;
+    delete bodyWithoutClientOrg.invoice_origin;
 
     const validatedData = CreatePaymentLinkSchema.parse({
       ...bodyWithoutClientOrg,
@@ -364,8 +380,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let invoiceOriginProvenance: ParticipantPortalInvoiceProvenance | null = null;
+    if (requestedInvoiceOrigin === PARTICIPANT_PORTAL_INVOICE_ORIGIN) {
+      const resolved = await resolveParticipantPortalInvoiceProvenance({
+        user: { id: user.id, email: user.email },
+        organizationId,
+        sourceParticipantId: sourceParticipantHint,
+      });
+      if (resolved.kind !== 'ok') {
+        return NextResponse.json(
+          { error: 'Invalid invoice origin' },
+          { status: 403 }
+        );
+      }
+      invoiceOriginProvenance = resolved.provenance;
+    }
+
     let pilotDealIdToStore: string | null = null;
-    if (validatedData.pilotDealId) {
+    if (!invoiceOriginProvenance && validatedData.pilotDealId) {
       try {
         await assertPilotDealOwnedByUser(user.id, validatedData.pilotDealId);
         pilotDealIdToStore = validatedData.pilotDealId;
@@ -442,6 +474,7 @@ export async function POST(request: NextRequest) {
                 ? { metadata: wiseContext.metadata as Record<string, unknown> }
                 : null,
               pilotDealIdToStore,
+              invoiceOriginProvenance,
             }),
           { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
         );

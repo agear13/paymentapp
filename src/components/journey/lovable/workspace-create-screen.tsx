@@ -10,6 +10,7 @@ import {
 } from '@/lib/journey/commercial-os-routes';
 import { createClient } from '@/lib/supabase/client';
 import { completeJourneyOnboarding } from '@/lib/journey/complete-journey-onboarding.client';
+import { consumePostProvisioningDestination } from '@/lib/journey/journey-invoice-activation.client';
 import {
   fetchAuthorizedParticipantWorkspacePrefill,
   shouldOfferParticipantWorkspaceNameConfirm,
@@ -83,7 +84,8 @@ export function WorkspaceCreateScreen() {
       await completeJourneyOnboarding(userEmail ?? email, {
         confirmedWorkspaceName,
       });
-      router.replace(COMMERCIAL_OS_ROUTES.workspace);
+      const next = consumePostProvisioningDestination();
+      router.replace(next ?? COMMERCIAL_OS_ROUTES.workspace);
       router.refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to set up workspace';

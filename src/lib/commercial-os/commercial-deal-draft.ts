@@ -21,6 +21,7 @@ export type CommercialDealDraft = {
   paymentMethod: PaymentMethod | undefined;
 };
 
+/** Manual / blank Create Invoice. Invents a +14 day due date. Agreement-origin must not use this for due dates. */
 export function defaultCommercialDealDraft(currency = 'AUD'): CommercialDealDraft {
   const invoiceDate = new Date();
   const dueDate = new Date(invoiceDate);
@@ -37,5 +38,13 @@ export function defaultCommercialDealDraft(currency = 'AUD'): CommercialDealDraf
     currency,
     paymentCollectionMode: 'single',
     paymentMethod: undefined,
+  };
+}
+
+/** Blank draft without an invented due date — used while agreement-origin prefill loads. */
+export function agreementOriginCommercialDealDraft(currency = 'AUD'): CommercialDealDraft {
+  return {
+    ...defaultCommercialDealDraft(currency),
+    dueDate: undefined,
   };
 }

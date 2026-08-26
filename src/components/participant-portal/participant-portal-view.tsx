@@ -18,7 +18,9 @@ import { CommercialWorkspaceNav } from '@/components/commercial/workspace/commer
 import { Button } from '@/components/ui/button';
 import { ParticipantLogoutButton } from '@/components/participant-portal/participant-logout-button';
 import { ParticipantWorkspaceConversionCta } from '@/components/participant-portal/participant-workspace-conversion-cta';
+import { ParticipantInvoiceActivationCta } from '@/components/participant-portal/participant-invoice-activation-cta';
 import { shouldShowParticipantWorkspaceConversionCta } from '@/lib/participants/source-participant-hint';
+import { shouldShowParticipantInvoiceActivationCta } from '@/lib/invoices/participant-invoice-activation';
 
 type Props = {
   workspace: ParticipantCommercialWorkspaceModel;
@@ -31,6 +33,8 @@ type Props = {
   portalToken?: string;
   onSignOut?: () => void;
   sourceParticipantId?: string | null;
+  convertedOrganizationId?: string | null;
+  previewMode?: boolean;
 };
 
 function formatSyncedAt(iso: string): string {
@@ -141,6 +145,8 @@ export function ParticipantCommercialWorkspaceView({
   portalToken,
   onSignOut,
   sourceParticipantId = null,
+  convertedOrganizationId = null,
+  previewMode = false,
 }: Props) {
   return (
     <div className="min-h-screen bg-muted/30">
@@ -179,11 +185,23 @@ export function ParticipantCommercialWorkspaceView({
           </div>
         ) : null}
 
-        {shouldShowParticipantWorkspaceConversionCta({
+        {shouldShowParticipantInvoiceActivationCta({
           onboardingComplete: Boolean(onboarding?.onboardingComplete),
-          previewMode: false,
+          previewMode,
           sourceParticipantId,
         }) && sourceParticipantId ? (
+          <ParticipantInvoiceActivationCta
+            sourceParticipantId={sourceParticipantId}
+            convertedOrganizationId={convertedOrganizationId}
+            commercialSections={workspace.commercialSections}
+          />
+        ) : null}
+
+        {shouldShowParticipantWorkspaceConversionCta({
+          onboardingComplete: Boolean(onboarding?.onboardingComplete),
+          previewMode,
+          sourceParticipantId,
+        }) && sourceParticipantId && !convertedOrganizationId ? (
           <ParticipantWorkspaceConversionCta sourceParticipantId={sourceParticipantId} />
         ) : null}
 

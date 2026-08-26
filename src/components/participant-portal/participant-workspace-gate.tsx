@@ -36,6 +36,7 @@ type Props = {
   bootstrap: WorkspaceBootstrap;
   previewMode?: boolean;
   sourceParticipantId?: string | null;
+  convertedOrganizationId?: string | null;
   signedInEmail?: string | null;
   onSignOut?: () => void;
   onRefresh: () => Promise<void>;
@@ -170,6 +171,7 @@ export function ParticipantWorkspaceGate({
   bootstrap,
   previewMode = false,
   sourceParticipantId = null,
+  convertedOrganizationId = null,
   signedInEmail,
   onSignOut,
   onRefresh,
@@ -336,6 +338,8 @@ export function ParticipantWorkspaceGate({
       portalToken={portalToken}
       onSignOut={onSignOut}
       sourceParticipantId={conversionParticipantId}
+      convertedOrganizationId={convertedOrganizationId}
+      previewMode={previewMode}
     />
   );
 }

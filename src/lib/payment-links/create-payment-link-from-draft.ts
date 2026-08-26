@@ -12,6 +12,7 @@ import type {
   ManualBankRailDefaults,
 } from '@/lib/payment-links/merchant-dedicated-rail-defaults';
 import { formatPaymentLinkApiValidationMessage } from '@/lib/payment-links/payment-link-api-validation-error';
+import { PARTICIPANT_PORTAL_INVOICE_ORIGIN } from '@/lib/invoices/agreement-invoice-prefill';
 
 export { EntitlementRequiredError } from '@/lib/entitlements/entitlement-api-errors';
 
@@ -30,6 +31,10 @@ export async function createPaymentLinkFromDraft(
   railDefaults?: {
     manualBank?: ManualBankRailDefaults | null;
     crypto?: CryptoRailDefaults | null;
+  },
+  originRequest?: {
+    invoiceOrigin: typeof PARTICIPANT_PORTAL_INVOICE_ORIGIN;
+    sourceParticipantId: string;
   }
 ): Promise<CreatePaymentLinkResult> {
   if (!draft.amount || draft.amount <= 0) {
@@ -59,6 +64,16 @@ export async function createPaymentLinkFromDraft(
     invoiceOnlyMode: mode === 'invoice_only',
     customerChoosesAtCheckout: mode === 'customer_choice',
   };
+  // Agreement-origin invoices stay owned by the authenticated merchant org.
+  // Do not set pilotDealId to an organiser-owned deal.
+  // Origin IDs are never sent; the server derives provenance from the hint.
+  if (
+    originRequest?.invoiceOrigin === PARTICIPANT_PORTAL_INVOICE_ORIGIN &&
+    originRequest.sourceParticipantId.trim()
+  ) {
+    body.invoiceOrigin = PARTICIPANT_PORTAL_INVOICE_ORIGIN;
+    body.sourceParticipantId = originRequest.sourceParticipantId.trim();
+  }
 
   if (mode === 'single' && draft.paymentMethod) {
     body.paymentMethod = draft.paymentMethod;
