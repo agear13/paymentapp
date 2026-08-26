@@ -211,6 +211,9 @@ describe('Production path: Saturday Beach Event opens existing extraction', () =
     expect(screen.getByRole('button', { name: 'Review Agreement' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Review structured result' })).toBeInTheDocument();
     expect(screen.getByText('Apex Promotions')).toBeInTheDocument();
+    expect(screen.getByText('Project payment trigger')).toBeInTheDocument();
+    expect(screen.getByText('Every Friday')).toBeInTheDocument();
+    expect(screen.queryByText('Settlement schedule')).not.toBeInTheDocument();
     expect(screen.queryByTestId('open-commercial-workspace')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Create Commercial Workspace' })

@@ -378,7 +378,7 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
                 />
                 <MetricCard label="Obligations" value={operational.obligationCount} />
                 <MetricCard
-                  label="Settlement schedule"
+                  label="Project payment trigger"
                   value={operational.settlement.schedule ?? 'Not captured'}
                 />
               </div>
@@ -679,7 +679,7 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
                 <MetricCard label="Obligations identified" value={hub.obligationCount} />
                 <MetricCard label="Revenue shares" value={hub.revenueShareCount} />
                 <MetricCard
-                  label="Settlement schedule"
+                  label="Project payment trigger"
                   value={hub.settlementSchedule ?? 'Not captured'}
                 />
                 <MetricCard

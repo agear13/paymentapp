@@ -197,7 +197,7 @@ export function composeAgreementBriefingSnapshot(input: {
     commercialTerms.push({ label: 'Agreement value', value: input.summary.currencyLabel });
   }
   if (input.deal.payoutTrigger) {
-    commercialTerms.push({ label: 'Settlement schedule', value: input.deal.payoutTrigger });
+    commercialTerms.push({ label: 'Project payment trigger', value: input.deal.payoutTrigger });
   }
   roles.forEach((role) => {
     commercialTerms.push({
