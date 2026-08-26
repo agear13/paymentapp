@@ -37,12 +37,35 @@ export async function POST(request: NextRequest) {
     return error;
   }
 
+  const sourceParticipantHint = readSourceParticipantHint({
+    body,
+    searchParams: request.nextUrl.searchParams,
+  });
+
   const existingOrg = await getOrganizationForAuthenticatedUser(user.id);
   if (existingOrg) {
     const settings = await prisma.merchant_settings.findFirst({
       where: { organization_id: existingOrg.id },
       select: { id: true },
     });
+
+    // Invoice activation (and conversion) may reuse an existing org that was never
+    // attributed. Hint selects the invitation; attach still requires bound identity + OWNER.
+    if (sourceParticipantHint.kind === 'hint') {
+      try {
+        await attachParticipantWorkspaceAttribution({
+          userId: user.id,
+          newOrganizationId: existingOrg.id,
+          hint: sourceParticipantHint,
+        });
+      } catch (error) {
+        log.warn('participant workspace attribution skipped on workspace reuse', {
+          userId: user.id,
+          organizationId: existingOrg.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
 
     return apiResponse({
       organizationId: existingOrg.id,
@@ -53,11 +76,6 @@ export async function POST(request: NextRequest) {
   const currency = isWorkspaceCurrencyCode(body.defaultCurrency)
     ? body.defaultCurrency
     : DEFAULT_WORKSPACE_CURRENCY;
-
-  const sourceParticipantHint = readSourceParticipantHint({
-    body,
-    searchParams: request.nextUrl.searchParams,
-  });
 
   const result = await prisma.$transaction(async (tx) => {
       const organization = await tx.organizations.create({

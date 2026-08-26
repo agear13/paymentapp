@@ -80,14 +80,32 @@ describe('POST /api/onboarding/bootstrap-workspace attribution', () => {
     mockAttach.mockResolvedValue({ attached: true, participantId: 'p-1' });
   });
 
-  it('does not attach attribution when an existing organization is reused', async () => {
+  it('does not attach attribution when an existing organization is reused without a participant hint', async () => {
     mockGetOrganization.mockResolvedValue({ id: 'org-existing' });
     const response = await bootstrapWorkspace(
-      request({ workspaceName: 'Acme', defaultCurrency: 'AUD', participantId: 'p-1' })
+      request({ workspaceName: 'Acme', defaultCurrency: 'AUD' })
     );
     expect(response.status).toBe(200);
     expect(mockCreate).not.toHaveBeenCalled();
     expect(mockAttach).not.toHaveBeenCalled();
+    const { prisma } = jest.requireMock('@/lib/server/prisma') as {
+      prisma: { merchant_settings: { updateMany: jest.Mock } };
+    };
+    expect(prisma.merchant_settings.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('attaches attribution to the reused organisation when a participant hint is present', async () => {
+    mockGetOrganization.mockResolvedValue({ id: 'org-existing' });
+    const response = await bootstrapWorkspace(
+      request({ workspaceName: 'Acme', defaultCurrency: 'AUD', sourceParticipantId: 'p-1' })
+    );
+    expect(response.status).toBe(200);
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockAttach).toHaveBeenCalledWith({
+      userId: 'user-1',
+      newOrganizationId: 'org-existing',
+      hint: { kind: 'hint', value: 'p-1' },
+    });
     const { prisma } = jest.requireMock('@/lib/server/prisma') as {
       prisma: { merchant_settings: { updateMany: jest.Mock } };
     };

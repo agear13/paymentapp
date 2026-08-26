@@ -155,27 +155,55 @@ describe('completeJourneyOnboarding idempotency', () => {
     expect(body.sourceParticipantId).toBeUndefined();
   });
 
-  it('clears the stored hint when an existing organization is reused without bootstrap', async () => {
+  it('still bootstraps when reusing an existing org with a participant hint so attribution can attach', async () => {
     persistSourceParticipantHint('p-invite-1');
     const objective = 'reconcile';
     const business = { industry: 'Professional services', size: '1–5' };
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        hasOrganization: true,
-        organizationId: 'org-123',
-        state: {
-          onboarding_context: journeyAssessmentContext(objective, business),
-          merchantSettingsId: 'merchant-123',
-        },
-      }),
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/onboarding' && init?.method === 'PATCH') {
+        throw new Error('matching-assessment reuse with a hint must not PATCH');
+      }
+      if (url === '/api/onboarding') {
+        return {
+          ok: true,
+          json: async () => ({
+            hasOrganization: true,
+            organizationId: 'org-123',
+            state: {
+              onboarding_context: journeyAssessmentContext(objective, business),
+              merchantSettingsId: 'merchant-123',
+            },
+          }),
+        };
+      }
+      if (url === '/api/onboarding/bootstrap-workspace') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ organizationId: 'org-123', merchantSettingsId: 'merchant-123' }),
+        };
+      }
+      throw new Error(`Unexpected fetch ${url}`);
     });
 
     await completeJourneyOnboarding('user@company.com');
-    expect(readStoredSourceParticipantHint()).toBeNull();
-    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('bootstrap-workspace'))).toBe(
-      false
+    const bootstrapCall = fetchMock.mock.calls.find(
+      (call) => String(call[0]) === '/api/onboarding/bootstrap-workspace'
     );
+    expect(bootstrapCall).toBeTruthy();
+    const body = JSON.parse(String((bootstrapCall?.[1] as RequestInit)?.body)) as {
+      sourceParticipantId?: string;
+    };
+    expect(body.sourceParticipantId).toBe('p-invite-1');
+    expect(readStoredSourceParticipantHint()).toBeNull();
+    expect(
+      fetchMock.mock.calls.some(
+        (call) =>
+          String(call[0]) === '/api/onboarding' &&
+          (call[1] as RequestInit | undefined)?.method === 'PATCH'
+      )
+    ).toBe(false);
   });
 
   it('uses the confirmed workspace name only on genuine create', async () => {

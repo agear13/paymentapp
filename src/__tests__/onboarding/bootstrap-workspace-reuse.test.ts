@@ -107,7 +107,6 @@ function expectReuseDidNotMutateWorkspace() {
   expect(mockUserOrgCreate).not.toHaveBeenCalled();
   expect(mockSaveOnboarding).not.toHaveBeenCalled();
   expect(mockConvergence).not.toHaveBeenCalled();
-  expect(mockAttach).not.toHaveBeenCalled();
   expect(mockPilotSnapshot).not.toHaveBeenCalled();
   expect(mockParticipantUpdate).not.toHaveBeenCalled();
   expect(mockTransitionCreate).not.toHaveBeenCalled();
@@ -149,6 +148,11 @@ describe('POST /api/onboarding/bootstrap-workspace reuse hardening', () => {
       select: { id: true },
     });
     expectReuseDidNotMutateWorkspace();
+    expect(mockAttach).toHaveBeenCalledWith({
+      userId: 'user-1',
+      newOrganizationId: 'org-existing',
+      hint: { kind: 'hint', value: 'p-invite-1' },
+    });
   });
 
   it.each([
@@ -162,6 +166,7 @@ describe('POST /api/onboarding/bootstrap-workspace reuse hardening', () => {
       const response = await bootstrapWorkspace(request(body));
       expect(response.status).toBe(200);
       expectReuseDidNotMutateWorkspace();
+      expect(mockAttach).not.toHaveBeenCalled();
     }
   );
 
@@ -187,7 +192,11 @@ describe('POST /api/onboarding/bootstrap-workspace reuse hardening', () => {
 
     expect(mockPilotSnapshot).not.toHaveBeenCalled();
     expect(mockParticipantUpdate).not.toHaveBeenCalled();
-    expect(mockAttach).not.toHaveBeenCalled();
+    expect(mockAttach).toHaveBeenCalledWith({
+      userId: 'user-1',
+      newOrganizationId: 'org-existing',
+      hint: { kind: 'hint', value: 'p-invite-1' },
+    });
   });
 
   it('still initializes a genuine create from the confirmed request', async () => {
@@ -272,10 +281,10 @@ describe('bootstrap-workspace reuse surface', () => {
     );
 
     expect(reuse).toContain('merchant_settings.findFirst');
+    expect(reuse).toContain('attachParticipantWorkspaceAttribution');
     expect(reuse).not.toContain('updateMany');
     expect(reuse).not.toContain('saveOperatorOnboardingState');
     expect(reuse).not.toContain('runOperationalInitializationConvergence');
-    expect(reuse).not.toContain('attachParticipantWorkspaceAttribution');
     expect(reuse).not.toContain('step: \'use_case\'');
     expect(reuse).not.toContain('display_name');
     expect(reuse).not.toContain('default_currency');

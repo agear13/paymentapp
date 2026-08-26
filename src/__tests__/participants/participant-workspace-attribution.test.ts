@@ -334,6 +334,60 @@ describe('attachParticipantWorkspaceAttribution', () => {
     expect(prisma.deal_network_pilot_participants.updateMany).not.toHaveBeenCalled();
   });
 
+  it('cannot attach another user\'s organisation', async () => {
+    prisma.user_organizations.findUnique.mockResolvedValue(null);
+    await expect(
+      attachParticipantWorkspaceAttribution({
+        userId: USER,
+        newOrganizationId: 'org-someone-else',
+        hint: { kind: 'hint', value: PARTICIPANT },
+      })
+    ).resolves.toEqual({ attached: false, participantId: null });
+    expect(prisma.deal_network_pilot_participants.findMany).not.toHaveBeenCalled();
+    expect(prisma.deal_network_pilot_participants.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('cannot attach when the actor is not OWNER of the resolved organisation', async () => {
+    prisma.user_organizations.findUnique.mockResolvedValue({ role: 'MEMBER' });
+    await expect(
+      attachParticipantWorkspaceAttribution({
+        userId: USER,
+        newOrganizationId: NEW_ORG,
+        hint: { kind: 'hint', value: PARTICIPANT },
+      })
+    ).resolves.toEqual({ attached: false, participantId: null });
+    expect(prisma.deal_network_pilot_participants.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('does not attach for the originating organiser (preview is not participant identity)', async () => {
+    prisma.deal_network_pilot_participants.findMany.mockResolvedValue([]);
+    await expect(
+      attachParticipantWorkspaceAttribution({
+        userId: 'user-organiser',
+        newOrganizationId: NEW_ORG,
+        hint: { kind: 'hint', value: PARTICIPANT },
+      })
+    ).resolves.toEqual({ attached: false, participantId: null });
+    expect(prisma.deal_network_pilot_participants.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ authenticated_user_id: 'user-organiser' }),
+      })
+    );
+    expect(prisma.deal_network_pilot_participants.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('leaves an already-correct converted organisation unchanged', async () => {
+    prisma.deal_network_pilot_participants.findMany.mockResolvedValue([]);
+    await expect(
+      attachParticipantWorkspaceAttribution({
+        userId: USER,
+        newOrganizationId: NEW_ORG,
+        hint: { kind: 'hint', value: PARTICIPANT },
+      })
+    ).resolves.toEqual({ attached: false, participantId: null });
+    expect(prisma.deal_network_pilot_participants.updateMany).not.toHaveBeenCalled();
+  });
+
   it('cannot attach a participant bound to another authenticated user', async () => {
     prisma.deal_network_pilot_participants.findMany.mockResolvedValue([]);
     await attachParticipantWorkspaceAttribution({

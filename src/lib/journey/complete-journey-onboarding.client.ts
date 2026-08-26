@@ -69,7 +69,10 @@ async function runCompleteJourneyOnboarding(
 
   const existing = await fetchExistingOnboarding();
   const alreadyHadOrganization = Boolean(existing.hasOrganization && existing.organizationId);
-  if (alreadyHadOrganization && existing.organizationId) {
+  const sourceParticipantId = readStoredSourceParticipantHint();
+  // Skip bootstrap only when there is no participant hint. Generate-my-invoice reuse
+  // must still POST so the server can attach converted_organization_id.
+  if (alreadyHadOrganization && existing.organizationId && !sourceParticipantId) {
     const savedAssessment = parseJourneyAssessmentContext(existing.state?.onboarding_context);
     if (journeyAssessmentsMatch(savedAssessment, objective, business)) {
       clearJourneyProvisioningPending();
@@ -86,8 +89,6 @@ async function runCompleteJourneyOnboarding(
     alreadyHadOrganization,
     options?.confirmedWorkspaceName
   );
-
-  const sourceParticipantId = readStoredSourceParticipantHint();
   const bootstrapRes = await csrfAwareFetch('/api/onboarding/bootstrap-workspace', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
