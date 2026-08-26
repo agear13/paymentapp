@@ -94,12 +94,15 @@ type ParticipantOnboardingStatusCardProps = {
   projectId: string;
   onSendPaymentRequest?: (participant: DemoParticipant) => void;
   onSharePaymentRequest?: (participant: DemoParticipant) => void;
+  /** When omitted, the review CTA uses the dashboard review path. */
+  reviewHref?: string;
 };
 
 export function ParticipantOnboardingStatusCard({
   participant,
   projectId,
   onSendPaymentRequest,
+  reviewHref,
 }: ParticipantOnboardingStatusCardProps) {
   const workflow = deriveParticipantOperationalWorkflow(participant);
   const stage = workflow.stage;
@@ -110,7 +113,7 @@ export function ParticipantOnboardingStatusCard({
   const isComplete = stage === 'SETTLEMENT_READY' || stage === 'PAID';
   const isRejected = participant.supplierOnboarding?.rejection != null;
 
-  const ctaHref = projectOperatorReviewPath(projectId, participant.id);
+  const ctaHref = reviewHref ?? projectOperatorReviewPath(projectId, participant.id);
 
   return (
     <div
@@ -178,7 +181,7 @@ export function ParticipantOnboardingStatusCard({
         action.destination !== 'send_payment_request' &&
         action.destination !== 'await_participant' ? (
           <Button asChild size="sm" variant={config.ctaVariant} className="whitespace-nowrap">
-            <Link href={ctaHref}>
+            <Link href={ctaHref} data-testid="onboarding-status-review-cta">
               {action.label}
               <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
             </Link>

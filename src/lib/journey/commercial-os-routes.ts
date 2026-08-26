@@ -16,10 +16,21 @@ export const COMMERCIAL_OS_ROUTES = {
     `/workspace/arrangements/${encodeURIComponent(workspaceId)}/agreement`,
   arrangementPeople: (workspaceId: string) =>
     `/workspace/arrangements/${encodeURIComponent(workspaceId)}/people`,
+  arrangementPeopleFocus: (
+    workspaceId: string,
+    focus: 'approvals' | 'onboarding' | 'payment-requests'
+  ) =>
+    `/workspace/arrangements/${encodeURIComponent(workspaceId)}/people?focus=${encodeURIComponent(focus)}`,
+  arrangementPersonOnboard: (workspaceId: string, participantId: string) =>
+    `/workspace/arrangements/${encodeURIComponent(workspaceId)}/people/${encodeURIComponent(participantId)}/onboard`,
+  arrangementPersonReview: (workspaceId: string, participantId: string) =>
+    `/workspace/arrangements/${encodeURIComponent(workspaceId)}/people/${encodeURIComponent(participantId)}/review`,
   arrangementObligations: (workspaceId: string) =>
     `/workspace/arrangements/${encodeURIComponent(workspaceId)}/obligations`,
   arrangementMoney: (workspaceId: string) =>
     `/workspace/arrangements/${encodeURIComponent(workspaceId)}/money`,
+  arrangementMoneyAccounting: (workspaceId: string) =>
+    `/workspace/arrangements/${encodeURIComponent(workspaceId)}/money?section=accounting`,
   arrangementActivity: (workspaceId: string) =>
     `/workspace/arrangements/${encodeURIComponent(workspaceId)}/activity`,
   receivables: '/workspace/receivables',

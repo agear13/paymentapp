@@ -2,10 +2,12 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { ProjectFundingSourcesPanel } from '@/components/projects/project-funding-sources-panel';
+import { ProjectFundingWorkflowBanner } from '@/components/commercial/project-funding-workflow-banner';
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
@@ -28,6 +30,8 @@ type OrgInvoiceOption = {
 export function CommercialWorkspaceMoneyPanel() {
   const { deal, summary, projectId, projectParticipants, refresh, invalidate } =
     useProjectWorkspace();
+  const searchParams = useSearchParams();
+  const showAccounting = searchParams?.get('section') === 'accounting';
   const { reloadCoordinationSnapshot } = useOperationalCoordinationState({
     scope: 'project',
     project: deal ?? undefined,
@@ -144,6 +148,16 @@ export function CommercialWorkspaceMoneyPanel() {
           <p className="mt-1 text-[12px] text-ink-soft">{summary.fundingLabel}</p>
         </div>
       </div>
+
+      {showAccounting ? (
+        <div data-testid="workspace-money-accounting">
+          <React.Suspense fallback={null}>
+            <ProjectFundingWorkflowBanner
+              onboardingHref={COMMERCIAL_OS_ROUTES.arrangementPeopleFocus(projectId, 'onboarding')}
+            />
+          </React.Suspense>
+        </div>
+      ) : null}
 
       <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
         <h3 className="text-[14px] font-semibold">Attached invoices</h3>

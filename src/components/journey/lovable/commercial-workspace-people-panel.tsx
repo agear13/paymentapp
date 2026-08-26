@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,8 @@ import {
   deriveApprovalStats,
 } from '@/components/projects/approval-centre-header';
 import { ApprovalCentreParticipantCard } from '@/components/projects/approval-centre-participant-card';
+import { ParticipantOnboardingStatusCard } from '@/components/commercial/supplier-onboarding/participant-onboarding-status-card';
+import { ParticipantPaymentRequestShareDialog } from '@/components/commercial/payment-tax/participant-payment-request-share-dialog';
 import { useOrganization } from '@/hooks/use-organization';
 import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { useEntitlements } from '@/hooks/use-entitlements';
@@ -29,11 +32,17 @@ import {
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
 import { appendOperationalAuditEntry } from '@/hooks/use-operational-audit-store';
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
+import { createArrangementCtaHrefResolver } from '@/lib/commercial-os/arrangement-operator-routes';
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
+import { generatePaymentRequestClient } from '@/lib/commercial/generate-payment-request.client';
+import {
+  buildParticipantPaymentPortalUrl,
+  deriveParticipantOperationalWorkflow,
+} from '@/lib/commercial/participant-commercial-lifecycle';
 
 /**
- * People mutations use existing /api/deal-network-pilot/participants routes
- * (not persistWorkspaceFullSnapshot). Nested onboard/review dashboard URLs
- * remain a Phase 4B route-adapter item.
+ * People mutations use existing /api/deal-network-pilot/participants routes.
+ * Approval Centre CTAs stay on Commercial OS via arrangementWorkflowCtaHref.
  */
 export function CommercialWorkspacePeoplePanel() {
   const {
@@ -45,6 +54,8 @@ export function CommercialWorkspacePeoplePanel() {
     invalidate,
     refreshSilent,
   } = useProjectWorkspace();
+  const searchParams = useSearchParams();
+  const focus = searchParams?.get('focus');
   const { organizationId } = useOrganization();
   const { currency: workspaceCurrency } = useOrganizationCurrency();
   const { isAllowed } = useEntitlements();
@@ -60,6 +71,17 @@ export function CommercialWorkspacePeoplePanel() {
     null
   );
   const [shareParticipant, setShareParticipant] = React.useState<DemoParticipant | null>(null);
+  const [paymentRequestShareParticipant, setPaymentRequestShareParticipant] =
+    React.useState<DemoParticipant | null>(null);
+  const [paymentRequestPortalUrl, setPaymentRequestPortalUrl] = React.useState<string | null>(
+    null
+  );
+  const [paymentRequestEmailSending, setPaymentRequestEmailSending] = React.useState(false);
+
+  const resolveCtaHref = React.useMemo(
+    () => createArrangementCtaHrefResolver(projectId),
+    [projectId]
+  );
 
   const syncHandlers = React.useMemo(
     () =>
@@ -154,12 +176,89 @@ export function CommercialWorkspacePeoplePanel() {
     [isAllowed, patchParticipants]
   );
 
+  const openPaymentRequestShare = React.useCallback((p: DemoParticipant, portalUrl: string) => {
+    setPaymentRequestShareParticipant(p);
+    setPaymentRequestPortalUrl(portalUrl);
+  }, []);
+
+  const generatePaymentRequest = React.useCallback(
+    async (p: DemoParticipant, options?: { sendEmail?: boolean }) => {
+      if (!isAllowed('approval_workflows')) {
+        toast.error('Approval workflows are not available on this plan.');
+        return null;
+      }
+      try {
+        const json = await generatePaymentRequestClient(p.id, options);
+        if (json.participant) {
+          patchParticipants((list) =>
+            list.map((x) => (x.id === p.id ? json.participant! : x))
+          );
+        }
+        await applyOperationalSyncRefresh(syncHandlers, parseOperationalSync(json), {
+          mutation: 'supplier_onboarding',
+          projectId,
+          participantId: p.id,
+          surface: 'commercial-workspace-people',
+        });
+        const portalUrl =
+          json.portalUrl ??
+          (json.participant ? buildParticipantPaymentPortalUrl(json.participant) : null);
+        if (portalUrl && json.participant) {
+          openPaymentRequestShare(json.participant, portalUrl);
+        }
+        if (json.emailSent) {
+          toast.success(json.message ?? 'Payment request emailed');
+        } else if (!options?.sendEmail) {
+          toast.success(json.message ?? 'Payment request ready to share');
+        }
+        return json;
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : 'Failed to generate payment request');
+        return null;
+      }
+    },
+    [isAllowed, openPaymentRequestShare, patchParticipants, projectId, syncHandlers]
+  );
+
+  const handleSendPaymentRequest = React.useCallback(
+    (p: DemoParticipant) => {
+      void generatePaymentRequest(p);
+    },
+    [generatePaymentRequest]
+  );
+
+  const handleSendPaymentRequestEmail = React.useCallback(async () => {
+    if (!paymentRequestShareParticipant) return;
+    setPaymentRequestEmailSending(true);
+    try {
+      await generatePaymentRequest(paymentRequestShareParticipant, { sendEmail: true });
+    } finally {
+      setPaymentRequestEmailSending(false);
+    }
+  }, [generatePaymentRequest, paymentRequestShareParticipant]);
+
+  const onboardingParticipants = React.useMemo(() => {
+    if (focus !== 'onboarding') return [];
+    return projectParticipants.filter((p) => {
+      const stage = deriveParticipantOperationalWorkflow(p).stage;
+      return (
+        stage !== 'DRAFT' &&
+        stage !== 'EARNINGS_CONFIGURED' &&
+        stage !== 'AGREEMENT_SENT'
+      );
+    });
+  }, [focus, projectParticipants]);
+
   if (!deal) return null;
 
   const stats = deriveApprovalStats(projectParticipants);
 
   return (
-    <div className="space-y-6" data-testid="commercial-workspace-people">
+    <div
+      className="space-y-6"
+      data-testid="commercial-workspace-people"
+      data-people-focus={focus ?? ''}
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-[16px] font-semibold">People</h2>
@@ -174,12 +273,47 @@ export function CommercialWorkspacePeoplePanel() {
         </Button>
       </div>
 
+      {focus === 'payment-requests' ? (
+        <div
+          className="rounded-2xl border border-border bg-card p-4 shadow-card"
+          data-testid="workspace-people-payment-requests"
+        >
+          <h3 className="text-[14px] font-semibold">Payment requests</h3>
+          <p className="mt-1 text-[12px] text-ink-soft">
+            Generate and share payout-detail requests from this page. Participant links stay on
+            the participant portal.
+          </p>
+        </div>
+      ) : null}
+
       {projectParticipants.length > 0 ? (
         <ApprovalCentreHeader
           participants={projectParticipants}
           agreementName={deal.dealName}
           projectId={projectId}
+          resolveCtaHref={resolveCtaHref}
         />
+      ) : null}
+
+      {focus === 'onboarding' && onboardingParticipants.length > 0 ? (
+        <div className="space-y-3" data-testid="workspace-people-onboarding">
+          <div>
+            <h3 className="text-[14px] font-semibold">Payment Preparation</h3>
+            <p className="mt-1 text-[12px] text-ink-soft">
+              Review submitted payout details or request them again. Operator review stays in this
+              workspace.
+            </p>
+          </div>
+          {onboardingParticipants.map((participant) => (
+            <ParticipantOnboardingStatusCard
+              key={participant.id}
+              participant={participant}
+              projectId={projectId}
+              onSendPaymentRequest={handleSendPaymentRequest}
+              reviewHref={COMMERCIAL_OS_ROUTES.arrangementPersonReview(projectId, participant.id)}
+            />
+          ))}
+        </div>
       ) : null}
 
       {projectParticipants.length === 0 ? (
@@ -196,9 +330,11 @@ export function CommercialWorkspacePeoplePanel() {
               participant={participant}
               onShareAgreement={openAgreementShare}
               onConfigureEarnings={setEarningsParticipant}
+              onSendPaymentRequest={handleSendPaymentRequest}
               projectId={projectId}
               organizationId={organizationId}
               workspaceCurrency={workspaceCurrency}
+              resolveCtaHref={resolveCtaHref}
             />
           ))}
         </div>
@@ -240,6 +376,21 @@ export function CommercialWorkspacePeoplePanel() {
         onOpenChange={(open) => {
           if (!open) setShareParticipant(null);
         }}
+      />
+
+      <ParticipantPaymentRequestShareDialog
+        participant={paymentRequestShareParticipant}
+        portalUrl={paymentRequestPortalUrl}
+        projectName={deal.dealName}
+        open={Boolean(paymentRequestShareParticipant)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPaymentRequestShareParticipant(null);
+            setPaymentRequestPortalUrl(null);
+          }
+        }}
+        onSendEmail={handleSendPaymentRequestEmail}
+        sendingEmail={paymentRequestEmailSending}
       />
     </div>
   );

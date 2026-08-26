@@ -51,6 +51,7 @@ import {
   projectOperatorReviewPath,
   projectXeroExportPath,
 } from '@/lib/projects/project-routes';
+import type { ResolveWorkflowCtaHref } from '@/lib/projects/workflow-cta-href';
 import { ParticipantReleaseButton } from '@/components/projects/participant-release-button';
 import { AccountingReconciliationCard } from '@/components/commercial/accounting-reconciliation-card';
 import type { AccountingReconciliationResult } from '@/lib/commercial/accounting-reconciliation';
@@ -307,6 +308,8 @@ export type ApprovalCentreParticipantCardProps = {
   releaseDisabledReason?: string | null;
   accountingReconciliation?: AccountingReconciliationResult | null;
   releaseSyncHandlers?: OperationalSyncHandlers;
+  /** When omitted, review/xero CTAs use dashboard /dashboard/projects/* paths. */
+  resolveCtaHref?: ResolveWorkflowCtaHref;
   /**
    * Commercial timeline events for this agreement.
    * When provided, shows the participant's commercial relationship history
@@ -334,6 +337,7 @@ export function ApprovalCentreParticipantCard({
   releaseDisabledReason,
   accountingReconciliation,
   releaseSyncHandlers,
+  resolveCtaHref,
   commercialTimeline,
 }: ApprovalCentreParticipantCardProps) {
   const entity = React.useMemo(
@@ -405,49 +409,74 @@ export function ApprovalCentreParticipantCard({
             {!secondary ? <ArrowRight className="h-3 w-3" /> : null}
           </Button>
         );
-      case 'review_payment':
-        return projectId ? (
+      case 'review_payment': {
+        const href = resolveCtaHref
+          ? resolveCtaHref('review_payment', entity.id)
+          : projectId
+            ? projectOperatorReviewPath(projectId, entity.id)
+            : null;
+        return href ? (
           <Button key={cta.kind} asChild variant={variant} size="sm" className={className}>
-            <Link href={projectOperatorReviewPath(projectId, entity.id)}>
+            <Link href={href} data-testid="approval-centre-cta-review_payment">
               {cta.label}
               {!secondary ? <ArrowRight className="h-3 w-3" /> : null}
             </Link>
           </Button>
         ) : null;
-      case 'xero_export':
-        return projectId ? (
+      }
+      case 'xero_export': {
+        const href = resolveCtaHref
+          ? resolveCtaHref('xero_export', entity.id)
+          : projectId
+            ? projectXeroExportPath(projectId)
+            : null;
+        return href ? (
           <Button key={cta.kind} asChild variant={variant} size="sm" className={className}>
-            <Link href={projectXeroExportPath(projectId)}>
+            <Link href={href} data-testid="approval-centre-cta-xero_export">
               {cta.label}
               {!secondary ? <ArrowRight className="h-3 w-3" /> : null}
             </Link>
           </Button>
         ) : null;
+      }
       case 'settlement':
-        return releaseSyncHandlers ? (
-          <div key={cta.kind} className="space-y-2">
-            {accountingReconciliation ? (
-              <AccountingReconciliationCard reconciliation={accountingReconciliation} />
-            ) : null}
-            <ParticipantReleaseButton
-              participantId={entity.id}
-              participantName={entity.name}
-              organizationId={organizationId}
-              currency={workspaceCurrency}
-              releaseReady={releaseReady}
-              canRelease={canRelease && (accountingReconciliation?.releaseAllowed ?? true)}
-              disabledReason={
-                accountingReconciliation && !accountingReconciliation.releaseAllowed
-                  ? accountingReconciliation.reason
-                  : releaseDisabledReason
-              }
-              reconciliation={accountingReconciliation}
-              syncHandlers={releaseSyncHandlers}
-              className="h-7 px-3 text-xs font-medium gap-1 shrink-0"
-              label={cta.label}
-            />
-          </div>
-        ) : (
+        if (releaseSyncHandlers) {
+          return (
+            <div key={cta.kind} className="space-y-2">
+              {accountingReconciliation ? (
+                <AccountingReconciliationCard reconciliation={accountingReconciliation} />
+              ) : null}
+              <ParticipantReleaseButton
+                participantId={entity.id}
+                participantName={entity.name}
+                organizationId={organizationId}
+                currency={workspaceCurrency}
+                releaseReady={releaseReady}
+                canRelease={canRelease && (accountingReconciliation?.releaseAllowed ?? true)}
+                disabledReason={
+                  accountingReconciliation && !accountingReconciliation.releaseAllowed
+                    ? accountingReconciliation.reason
+                    : releaseDisabledReason
+                }
+                reconciliation={accountingReconciliation}
+                syncHandlers={releaseSyncHandlers}
+                className="h-7 px-3 text-xs font-medium gap-1 shrink-0"
+                label={cta.label}
+              />
+            </div>
+          );
+        }
+        if (resolveCtaHref) {
+          return (
+            <Button key={cta.kind} asChild variant={variant} size="sm" className={className}>
+              <Link href={resolveCtaHref('settlement', entity.id)} data-testid="approval-centre-cta-settlement">
+                {cta.label}
+                {!secondary ? <ArrowRight className="h-3 w-3" /> : null}
+              </Link>
+            </Button>
+          );
+        }
+        return (
           <Badge key={cta.kind} variant="outline" className="h-7 px-3 text-xs">
             {cta.label}
           </Badge>

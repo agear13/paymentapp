@@ -73,7 +73,12 @@ function deriveOnboardingCounts(participants: DemoParticipant[]): OnboardingCoun
  * Shown at the top of the Funding page when there are participants who have
  * approved their agreements but not yet completed supplier onboarding.
  */
-export function ProjectFundingWorkflowBanner() {
+export function ProjectFundingWorkflowBanner({
+  onboardingHref,
+}: {
+  /** When omitted, "Manage payment setup" uses the dashboard onboarding path. */
+  onboardingHref?: string;
+} = {}) {
   const { projectId, projectParticipants, loading } = useProjectWorkspace();
   const searchParams = useSearchParams();
   const showAccountingSection = searchParams?.get('section') === 'accounting';
@@ -143,7 +148,10 @@ export function ProjectFundingWorkflowBanner() {
 
           <div className="flex items-center gap-2 pt-1">
             <Button asChild size="sm" variant={allComplete ? 'outline' : 'default'}>
-              <Link href={projectSupplierOnboardingPath(projectId)}>
+              <Link
+                href={onboardingHref ?? projectSupplierOnboardingPath(projectId)}
+                data-testid="funding-workflow-onboarding-cta"
+              >
                 {allComplete ? 'View payment records' : 'Manage payment setup'}
                 <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
               </Link>

@@ -27,15 +27,11 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import {
   deriveParticipantOperationalWorkflow,
   type ParticipantOperationalWorkflow,
-  type ParticipantWorkflowCtaDestination,
 } from '@/lib/commercial/participant-commercial-lifecycle';
 import {
-  projectOperatorReviewPath,
-  projectPaymentRequestsPath,
-  projectParticipantsPath,
-  projectSettlementPath,
-  projectXeroExportPath,
-} from '@/lib/projects/project-routes';
+  dashboardWorkflowCtaHref,
+  type ResolveWorkflowCtaHref,
+} from '@/lib/projects/workflow-cta-href';
 import { cn } from '@/lib/utils';
 
 /* ─── Approval stat derivation ─────────────────────────────────────────────── */
@@ -176,7 +172,8 @@ type NextBottleneck = {
 
 export function deriveNextBottleneck(
   participants: DemoParticipant[],
-  projectId: string
+  projectId: string,
+  resolveCtaHref?: ResolveWorkflowCtaHref
 ): NextBottleneck | null {
   const ranked = participants
     .map((participant) => ({
@@ -189,11 +186,16 @@ export function deriveNextBottleneck(
   const next = ranked[0];
   if (!next) return null;
 
+  const resolve =
+    resolveCtaHref ??
+    ((destination, participantId) =>
+      dashboardWorkflowCtaHref(projectId, participantId, destination));
+
   return {
     title: next.workflow.badge,
     description: next.workflow.explanation,
     ctaLabel: next.workflow.primaryCta.label,
-    href: workflowCtaHref(projectId, next.participant.id, next.workflow.primaryCta.destination),
+    href: resolve(next.workflow.primaryCta.destination, next.participant.id),
   };
 }
 
@@ -201,31 +203,6 @@ function workflowPriority(workflow: ParticipantOperationalWorkflow): number {
   if (workflow.primaryCta.urgency === 'action_required') return 0;
   if (workflow.primaryCta.urgency === 'attention') return 1;
   return 2;
-}
-
-function workflowCtaHref(
-  projectId: string,
-  participantId: string | undefined,
-  destination: ParticipantWorkflowCtaDestination
-): string {
-  switch (destination) {
-    case 'send_payment_request':
-    case 'await_participant':
-      return projectPaymentRequestsPath(projectId);
-    case 'review_payment':
-      return participantId
-        ? projectOperatorReviewPath(projectId, participantId)
-        : projectPaymentRequestsPath(projectId);
-    case 'xero_export':
-      return projectXeroExportPath(projectId);
-    case 'settlement':
-      return projectSettlementPath(projectId);
-    case 'configure_earnings':
-    case 'send_agreement':
-    case 'none':
-    default:
-      return projectParticipantsPath(projectId);
-  }
 }
 
 /* ─── Props ─────────────────────────────────────────────────────────────────── */
@@ -236,6 +213,8 @@ type ApprovalCentreHeaderProps = {
   commercialCapabilities?: unknown;
   /** Required for next-bottleneck CTA links in State B */
   projectId: string;
+  /** When omitted, CTAs use dashboard /dashboard/projects/* paths. */
+  resolveCtaHref?: ResolveWorkflowCtaHref;
 };
 
 /* ─── Main export ───────────────────────────────────────────────────────────── */
@@ -245,6 +224,7 @@ export function ApprovalCentreHeader({
   agreementName,
   commercialCapabilities,
   projectId,
+  resolveCtaHref,
 }: ApprovalCentreHeaderProps) {
   const stats = React.useMemo(() => deriveApprovalStats(participants), [participants]);
   const guidanceLine = React.useMemo(
@@ -254,7 +234,9 @@ export function ApprovalCentreHeader({
 
   void commercialCapabilities;
   const approvalsComplete = stats.total > 0 && stats.pending === 0;
-  const nextBottleneck = approvalsComplete ? deriveNextBottleneck(participants, projectId) : null;
+  const nextBottleneck = approvalsComplete
+    ? deriveNextBottleneck(participants, projectId, resolveCtaHref)
+    : null;
 
   /* ─── STATE B: Everyone accepted ─── */
 
@@ -293,7 +275,7 @@ export function ApprovalCentreHeader({
                 </p>
               </div>
               <Button asChild size="sm" className="shrink-0 h-8 px-4 text-xs font-semibold gap-1.5">
-                <Link href={nextBottleneck.href}>
+                <Link href={nextBottleneck.href} data-testid="approval-centre-next-cta">
                   {nextBottleneck.ctaLabel}
                   <ArrowRight className="h-3 w-3" />
                 </Link>

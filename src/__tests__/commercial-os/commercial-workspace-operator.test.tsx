@@ -64,6 +64,8 @@ function summaryFor(deal: RecentDeal, count: number): ProjectWorkspaceSummary {
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: jest.fn(), replace: jest.fn(), prefetch: jest.fn() }),
   usePathname: () => '/workspace/arrangements/aiwf-saturday-beach',
+  useParams: () => ({ workspaceId: 'aiwf-saturday-beach', participantId: 'p-apex' }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 jest.mock('@/lib/projects/workspace-fetch', () => ({
