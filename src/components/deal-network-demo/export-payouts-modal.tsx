@@ -29,6 +29,10 @@ import {
   effectiveParticipantPayoutStatus,
   type ParticipantPayoutSettlementStatus,
 } from '@/lib/deal-network-demo/participant-payout-status';
+import {
+  dealLevelExportPayoutTrigger,
+  resolveParticipantExportPayoutTiming,
+} from '@/lib/deal-network-demo/export-payout-timing';
 
 export interface ExportPayoutRow {
   dealName: string;
@@ -42,6 +46,9 @@ export interface ExportPayoutRow {
   approvalStatus: 'Pending approval' | 'Approved' | 'Not required';
   settlementStatus: ParticipantPayoutSettlementStatus;
   contractPaidStatus: 'Contract Unpaid' | 'Contract Paid';
+  /** Project/deal-level commercial term. Not this participant's payout timing. */
+  projectPaymentTrigger: string;
+  /** Party-owned payout timing, or unresolved when the agreement does not specify it. */
   payoutTrigger: string;
   paymentStatus: 'Not Paid' | 'Paid';
   paidAmount?: number;
@@ -94,7 +101,8 @@ function rowsToCsv(rows: ExportPayoutRow[]): string {
     'Approval Status',
     'Settlement Status',
     'Deal Trigger Status / Contract Paid Status',
-    'Payout Trigger',
+    'Project payment trigger',
+    'Participant payout timing',
     'Payment Status',
     'Paid Amount',
     'Paid At',
@@ -120,6 +128,7 @@ function rowsToCsv(rows: ExportPayoutRow[]): string {
         esc(r.approvalStatus),
         esc(r.settlementStatus),
         esc(r.contractPaidStatus),
+        esc(r.projectPaymentTrigger),
         esc(r.payoutTrigger),
         esc(r.paymentStatus),
         String(r.paidAmount ?? ''),
@@ -162,8 +171,9 @@ export function ExportPayoutsModal({
         <DialogHeader>
           <DialogTitle>Export payouts</DialogTitle>
           <DialogDescription>
-            Accounting-ready extract: deal, partner, participant line items, settlement status, and
-            payout trigger. Download CSV for CFO / controller review.
+            Accounting-ready extract: deal, partner, participant line items, settlement status,
+            project payment trigger, and participant payout timing. Download CSV for CFO /
+            controller review.
           </DialogDescription>
           {excludedUnapprovedCount > 0 ? (
             <p className="text-xs text-amber-700 dark:text-amber-400">
@@ -186,7 +196,8 @@ export function ExportPayoutsModal({
                 <TableHead className="whitespace-nowrap">Approval status</TableHead>
                 <TableHead className="whitespace-nowrap">Settlement status</TableHead>
                 <TableHead className="whitespace-nowrap">Contract paid status</TableHead>
-                <TableHead className="whitespace-nowrap">Payout trigger</TableHead>
+                <TableHead className="whitespace-nowrap">Project payment trigger</TableHead>
+                <TableHead className="whitespace-nowrap">Participant payout timing</TableHead>
                 <TableHead className="whitespace-nowrap">Payment status</TableHead>
                 <TableHead className="text-right whitespace-nowrap">Paid amount</TableHead>
                 <TableHead className="whitespace-nowrap">Paid at</TableHead>
@@ -197,7 +208,7 @@ export function ExportPayoutsModal({
             <TableBody>
               {rows.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={17} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={18} className="text-center text-muted-foreground py-8">
                     No rows to export yet.
                   </TableCell>
                 </TableRow>
@@ -233,6 +244,7 @@ export function ExportPayoutsModal({
                       <Badge variant={getStatusVariant(r.settlementStatus)}>{r.settlementStatus}</Badge>
                     </TableCell>
                     <TableCell className="align-top">{r.contractPaidStatus}</TableCell>
+                    <TableCell className="text-sm align-top">{r.projectPaymentTrigger}</TableCell>
                     <TableCell className="text-sm align-top">{r.payoutTrigger}</TableCell>
                     <TableCell className="align-top">
                       <Badge variant={r.paymentStatus === 'Paid' ? 'success' : 'outline'}>
@@ -287,7 +299,7 @@ export function buildExportPayoutRows(
   for (const deal of activeDeals) {
     const dealIsPaid = deal.status === 'Approved' || deal.status === 'Paid';
     const settlementStatus = coerceDealStatusToPayout(deal.status ?? 'Pending');
-    const payoutTrigger = deal.payoutTrigger ?? 'Manual';
+    const projectPaymentTrigger = dealLevelExportPayoutTrigger(deal.payoutTrigger);
     const lu = formatExportDate(deal.lastUpdated);
     const paymentStatus = deal.paymentStatus ?? 'Not Paid';
     const paidAt = deal.paidAt ? formatExportDate(deal.paidAt) : undefined;
@@ -308,7 +320,8 @@ export function buildExportPayoutRows(
         approvalStatus: 'Not required',
         settlementStatus,
         contractPaidStatus,
-        payoutTrigger,
+        projectPaymentTrigger,
+        payoutTrigger: projectPaymentTrigger,
         paymentStatus,
         paidAmount: deal.paidAmount,
         paidAt,
@@ -335,7 +348,7 @@ export function buildExportPayoutRows(
 
     const dealIsPaid = deal.status === 'Approved' || deal.status === 'Paid';
     const lineSettlement = effectiveParticipantPayoutStatus(p, deal);
-    const payoutTrigger = deal.payoutTrigger ?? 'Manual';
+    const projectPaymentTrigger = dealLevelExportPayoutTrigger(deal.payoutTrigger);
     const lu = formatExportDate(deal.lastUpdated);
     const paymentStatus = deal.paymentStatus ?? 'Not Paid';
     const paidAt =
@@ -380,7 +393,8 @@ export function buildExportPayoutRows(
       approvalStatus: p.approvalStatus,
       settlementStatus: lineSettlement,
       contractPaidStatus,
-      payoutTrigger,
+      projectPaymentTrigger,
+      payoutTrigger: resolveParticipantExportPayoutTiming(p),
       paymentStatus,
       paidAmount: deal.paidAmount,
       paidAt,
