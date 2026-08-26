@@ -48,3 +48,11 @@ export function agreementOriginCommercialDealDraft(currency = 'AUD'): Commercial
     dueDate: undefined,
   };
 }
+
+/**
+ * Conversation-origin draft. Same as agreement-origin: never invent a +14 due date.
+ * Manual Create Invoice must keep using defaultCommercialDealDraft().
+ */
+export function conversationOriginCommercialDealDraft(currency = 'AUD'): CommercialDealDraft {
+  return agreementOriginCommercialDealDraft(currency);
+}

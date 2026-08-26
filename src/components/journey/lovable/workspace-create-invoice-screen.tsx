@@ -15,15 +15,16 @@ import {
   Landmark,
   Loader2,
   Send,
-  Sparkles,
   User,
 } from 'lucide-react';
 import { CurrencySelect } from '@/components/payment-links/currency-select';
 import { usePaymentLinkUrl } from '@/components/operational/customer-facing-origin-provider';
 import { useOrganization } from '@/hooks/use-organization';
 import { useToast } from '@/hooks/use-toast';
+import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import {
   agreementOriginCommercialDealDraft,
+  conversationOriginCommercialDealDraft,
   defaultCommercialDealDraft,
   type CommercialDealDraft,
 } from '@/lib/commercial-os/commercial-deal-draft';
@@ -33,6 +34,17 @@ import {
   PARTICIPANT_PORTAL_INVOICE_ORIGIN,
   type AgreementInvoicePrefill,
 } from '@/lib/invoices/agreement-invoice-prefill';
+import {
+  applyConversationInvoiceExtractionToDraft,
+  conversationInvoiceReviewMessages,
+  sanitizeConversationInvoiceExtraction,
+  type ConversationInvoiceExtraction,
+} from '@/lib/invoices/conversation-invoice-extraction';
+import {
+  ConversationInvoicePastePanel,
+  ConversationInvoiceReviewBanners,
+  InvoiceCreationMethodToggle,
+} from '@/components/journey/lovable/conversation-invoice-paste-panel';
 import { isParticipantPortalInvoiceOrigin } from '@/lib/invoices/participant-invoice-activation';
 import { clearStoredInvoiceActivationIntent } from '@/lib/journey/journey-invoice-activation.client';
 import { formatCurrency } from '@/lib/formatters/format-currency';
@@ -241,7 +253,12 @@ export function WorkspaceCreateInvoiceScreen({
   const [agreementPrefillApplied, setAgreementPrefillApplied] = useState(false);
   const [merchantSettings, setMerchantSettings] = useState<MerchantSettingsSnapshot | null>(null);
   const [merchantSettingsLoaded, setMerchantSettingsLoaded] = useState(false);
-  const [aiPrompt, setAiPrompt] = useState('');
+  const [creationMethod, setCreationMethod] = useState<'manual' | 'conversation'>('manual');
+  const [conversationText, setConversationText] = useState('');
+  const [conversationExtraction, setConversationExtraction] =
+    useState<ConversationInvoiceExtraction | null>(null);
+  const [conversationGenerating, setConversationGenerating] = useState(false);
+  const [conversationError, setConversationError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [created, setCreated] = useState<CreatePaymentLinkResult | null>(null);
@@ -371,6 +388,7 @@ export function WorkspaceCreateInvoiceScreen({
   useEffect(() => {
     if (!organizationId || !merchantSettingsLoaded) return;
     if (agreementPrefillApplied) return;
+    if (conversationExtraction?.currencyFromConversation) return;
     const acct = merchantSettings?.defaultCurrency?.trim().toUpperCase().slice(0, 3);
     if (acct && acct.length === 3) {
       setDraft((prev) => (prev.currency === 'AUD' ? { ...prev, currency: acct } : prev));
@@ -380,6 +398,7 @@ export function WorkspaceCreateInvoiceScreen({
     merchantSettingsLoaded,
     merchantSettings?.defaultCurrency,
     agreementPrefillApplied,
+    conversationExtraction?.currencyFromConversation,
   ]);
 
   useEffect(() => {
@@ -606,11 +625,48 @@ export function WorkspaceCreateInvoiceScreen({
     ? formatCurrency(draft.amount!, draft.currency)
     : 'Add amount';
 
-  const handleAiGenerate = () => {
-    toast({
-      title: 'Coming soon',
-      description: 'AI invoice generation will fill customer, description, amount, and due date for you.',
-    });
+  const handleCreationMethodChange = (method: 'manual' | 'conversation') => {
+    setCreationMethod(method);
+    setConversationError(null);
+    setConversationExtraction(null);
+    const currency = draft.currency || 'AUD';
+    if (method === 'conversation') {
+      setDraft(conversationOriginCommercialDealDraft(currency));
+      return;
+    }
+    setDraft(defaultCommercialDealDraft(currency));
+  };
+
+  const handleConversationGenerate = async () => {
+    setConversationError(null);
+    setConversationGenerating(true);
+    try {
+      const response = await csrfAwareFetch('/api/invoices/conversation-prefill', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ conversationText }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        extraction?: ConversationInvoiceExtraction;
+        error?: string;
+      };
+      if (!response.ok || !body.extraction) {
+        setConversationError(body.error || 'Could not extract invoice details. Try again or enter them manually.');
+        return;
+      }
+      const extraction = sanitizeConversationInvoiceExtraction(body.extraction, {
+        conversationText,
+      });
+      setConversationExtraction(extraction);
+      setDraft((prev) =>
+        applyConversationInvoiceExtractionToDraft(extraction, prev, { conversationText })
+      );
+    } catch {
+      setConversationError('Could not extract invoice details. Try again or enter them manually.');
+    } finally {
+      setConversationGenerating(false);
+    }
   };
 
   const handleCopyLink = async () => {
@@ -749,9 +805,15 @@ export function WorkspaceCreateInvoiceScreen({
       })}
       previewAmount={previewAmount}
       hasPreviewAmount={hasPreviewAmount}
-      aiPrompt={aiPrompt}
-      setAiPrompt={setAiPrompt}
-      handleAiGenerate={handleAiGenerate}
+      showCreationMethodToggle={!isAgreementOrigin}
+      creationMethod={creationMethod}
+      onCreationMethodChange={handleCreationMethodChange}
+      conversationText={conversationText}
+      onConversationTextChange={setConversationText}
+      onConversationGenerate={() => void handleConversationGenerate()}
+      conversationGenerating={conversationGenerating}
+      conversationError={conversationError}
+      conversationExtraction={conversationExtraction}
       invoiceNumberHint={invoiceNumberHint}
       invoiceReferenceLoading={invoiceReferenceLoading}
       onInvoiceReferenceEdited={() => setInvoiceReferenceEdited(true)}
@@ -778,9 +840,15 @@ function CreateInvoiceForm({
   brandingConfigured,
   previewAmount,
   hasPreviewAmount,
-  aiPrompt,
-  setAiPrompt,
-  handleAiGenerate,
+  showCreationMethodToggle = false,
+  creationMethod = 'manual',
+  onCreationMethodChange,
+  conversationText = '',
+  onConversationTextChange,
+  onConversationGenerate,
+  conversationGenerating = false,
+  conversationError = null,
+  conversationExtraction = null,
   invoiceNumberHint,
   invoiceReferenceLoading,
   onInvoiceReferenceEdited,
@@ -803,9 +871,15 @@ function CreateInvoiceForm({
   brandingConfigured: boolean;
   previewAmount: string;
   hasPreviewAmount: boolean;
-  aiPrompt: string;
-  setAiPrompt: (value: string) => void;
-  handleAiGenerate: () => void;
+  showCreationMethodToggle?: boolean;
+  creationMethod?: 'manual' | 'conversation';
+  onCreationMethodChange?: (method: 'manual' | 'conversation') => void;
+  conversationText?: string;
+  onConversationTextChange?: (value: string) => void;
+  onConversationGenerate?: () => void;
+  conversationGenerating?: boolean;
+  conversationError?: string | null;
+  conversationExtraction?: ConversationInvoiceExtraction | null;
   invoiceNumberHint: {
     source: 'xero' | 'provvy' | 'manual';
     suggestionLabel?: string;
@@ -873,6 +947,11 @@ function CreateInvoiceForm({
   );
   const showFieldErrors = showValidation || formInteracted;
   const canSubmit = validation.isSubmittable && !formLoading;
+  const showPasteOnly =
+    showCreationMethodToggle && creationMethod === 'conversation' && !conversationExtraction;
+  const conversationMessages = conversationExtraction
+    ? conversationInvoiceReviewMessages(conversationExtraction)
+    : [];
   const footerMessage = deriveCreateInvoiceFooterMessage({
     validation,
     formLoading,
@@ -939,7 +1018,22 @@ function CreateInvoiceForm({
             <CreateInvoiceFormSkeleton />
           ) : (
             <>
-          {contextualGuidance ? (
+          {showCreationMethodToggle && onCreationMethodChange ? (
+            <InvoiceCreationMethodToggle
+              method={creationMethod}
+              onChange={onCreationMethodChange}
+            />
+          ) : null}
+          {showPasteOnly ? (
+            <ConversationInvoicePastePanel
+              conversationText={conversationText}
+              onConversationTextChange={onConversationTextChange ?? (() => undefined)}
+              onGenerate={onConversationGenerate ?? (() => undefined)}
+              generating={conversationGenerating}
+              error={conversationError}
+            />
+          ) : null}
+          {contextualGuidance && !showPasteOnly ? (
             <CreateInvoiceContextualGuidance guidance={contextualGuidance} />
           ) : null}
           {agreementOrigin && agreementPrefill ? (
@@ -960,6 +1054,14 @@ function CreateInvoiceForm({
               ) : null}
             </div>
           ) : null}
+          {conversationExtraction && !showPasteOnly ? (
+            <ConversationInvoiceReviewBanners
+              extraction={conversationExtraction}
+              messages={conversationMessages}
+            />
+          ) : null}
+          {!showPasteOnly ? (
+            <>
           <CreateInvoiceFormCard
             title="Customer"
             icon={User}
@@ -1086,6 +1188,13 @@ function CreateInvoiceForm({
                     className="mt-1.5 text-[12px] text-ink-soft"
                   >
                     {agreementTiming.note}
+                  </p>
+                ) : conversationExtraction?.paymentTimingNote && !draft.dueDate ? (
+                  <p
+                    data-testid="conversation-invoice-timing-note"
+                    className="mt-1.5 text-[12px] text-ink-soft"
+                  >
+                    {conversationExtraction.paymentTimingNote}
                   </p>
                 ) : null}
               </div>
@@ -1318,35 +1427,8 @@ function CreateInvoiceForm({
               </>
             ) : null}
           </CreateInvoiceFormCard>
-
-          <details className="rounded-xl border border-border/80 bg-card/50 p-4">
-            <summary className="flex cursor-pointer list-none items-center gap-2 text-[13px] font-medium marker:content-none">
-              <Sparkles className="h-4 w-4 text-primary" aria-hidden />
-              Start with AI
-              <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-ink-soft">
-                Coming soon
-              </span>
-            </summary>
-            <p className="mt-3 text-[12.5px] text-ink-soft">
-              Describe what you are billing and Provvy will draft customer, description, amount, and due
-              date for you to review.
-            </p>
-            <textarea
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder={`"Marketing campaign for Beth — $2,500, due in 14 days."`}
-              rows={2}
-              className={`${inputCls} mt-3 resize-none`}
-            />
-            <button
-              type="button"
-              onClick={handleAiGenerate}
-              className="mt-3 inline-flex h-9 items-center gap-2 rounded-lg border border-border px-4 text-[12.5px] font-medium transition-colors hover:bg-secondary"
-            >
-              <Sparkles className="h-3.5 w-3.5" />
-              Generate invoice
-            </button>
-          </details>
+            </>
+          ) : null}
             </>
           )}
         </div>
@@ -1365,7 +1447,11 @@ function CreateInvoiceForm({
       <footer className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/90 backdrop-blur-md">
         <div className="mx-auto flex w-[min(1280px,calc(100%-2rem))] flex-wrap items-center justify-between gap-4 py-4">
           <div className="min-w-0 flex-1">
-            {submitError ? (
+            {showPasteOnly ? (
+              <p className="text-[13px] text-ink-soft" role="status">
+                Generate a draft from the conversation, then review it here before creating the invoice.
+              </p>
+            ) : submitError ? (
               <p className="text-[13px] text-destructive" role="alert">
                 {submitError}
               </p>
@@ -1392,6 +1478,7 @@ function CreateInvoiceForm({
             >
               Cancel
             </button>
+            {!showPasteOnly ? (
             <button
               type="button"
               disabled={isSubmitting || formLoading || !canSubmit}
@@ -1401,6 +1488,7 @@ function CreateInvoiceForm({
               {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Create Invoice
             </button>
+            ) : null}
           </div>
         </div>
       </footer>
