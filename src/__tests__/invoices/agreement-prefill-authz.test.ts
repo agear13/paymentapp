@@ -4,6 +4,10 @@ jest.mock('@/lib/auth/get-org', () => ({
   getOrganizationForAuthenticatedUser: jest.fn(),
 }));
 
+jest.mock('next/headers', () => ({
+  cookies: jest.fn(async () => ({ get: () => undefined })),
+}));
+
 jest.mock('@/lib/deal-network-demo/pilot-snapshot.server', () => ({
   dealRowToRecentDeal: jest.fn((row: { id: string; deal_payload: unknown }) => ({
     ...(row.deal_payload as object),
@@ -90,6 +94,57 @@ describe('loadAuthorizedAgreementInvoicePrefill', () => {
     const result = await loadAuthorizedAgreementInvoicePrefill({
       user: ORGANISER,
       sourceParticipantId: 'p-sarah-1',
+      testContext: null,
+    });
+    expect(result.kind).toBe('denied');
+  });
+
+  it('allows organiser prefill identity only with a verified test context on an eligible row', async () => {
+    mockFindUnique.mockResolvedValue({
+      ...sarahRow,
+      email: 'qa-fixed@example.com',
+      authenticated_user_id: null,
+      converted_organization_id: null,
+    });
+    const { createParticipantTestContextPayload } = await import(
+      '@/lib/participant-portal/participant-test-context'
+    );
+    const testContext = createParticipantTestContextPayload({
+      actorUserId: ORGANISER.id,
+      participantId: 'p-sarah-1',
+      portalToken: 'tok-qa',
+    });
+    mockFindUnique.mockResolvedValue({
+      ...sarahRow,
+      email: 'qa-fixed@example.com',
+      authenticated_user_id: null,
+      converted_organization_id: null,
+      participant_payload: {
+        ...sarahRow.participant_payload,
+        participantPortalToken: 'tok-qa',
+      },
+    });
+    const result = await loadAuthorizedAgreementInvoicePrefill({
+      user: ORGANISER,
+      sourceParticipantId: 'p-sarah-1',
+      testContext,
+    });
+    expect(result.kind).toBe('ok');
+  });
+
+  it('does not let test context impersonate a participant bound to another user', async () => {
+    const { createParticipantTestContextPayload } = await import(
+      '@/lib/participant-portal/participant-test-context'
+    );
+    const testContext = createParticipantTestContextPayload({
+      actorUserId: ORGANISER.id,
+      participantId: 'p-sarah-1',
+      portalToken: 'tok-sarah',
+    });
+    const result = await loadAuthorizedAgreementInvoicePrefill({
+      user: ORGANISER,
+      sourceParticipantId: 'p-sarah-1',
+      testContext,
     });
     expect(result.kind).toBe('denied');
   });
@@ -150,6 +205,38 @@ describe('resolveParticipantPortalInvoiceProvenance', () => {
       user: ORGANISER,
       organizationId: CONVERTED_ORG,
       sourceParticipantId: 'p-sarah-1',
+      testContext: null,
+    });
+    expect(result.kind).toBe('denied');
+  });
+
+  it('does not stamp provenance merely because test context is present', async () => {
+    const { createParticipantTestContextPayload } = await import(
+      '@/lib/participant-portal/participant-test-context'
+    );
+    const { resolveParticipantPortalInvoiceProvenance } = await import(
+      '@/lib/invoices/agreement-invoice-prefill.server'
+    );
+    mockFindUnique.mockResolvedValue({
+      ...sarahRow,
+      email: 'qa-fixed@example.com',
+      authenticated_user_id: null,
+      converted_organization_id: CONVERTED_ORG,
+      participant_payload: {
+        ...sarahRow.participant_payload,
+        participantPortalToken: 'tok-qa',
+      },
+    });
+    const testContext = createParticipantTestContextPayload({
+      actorUserId: ORGANISER.id,
+      participantId: 'p-sarah-1',
+      portalToken: 'tok-qa',
+    });
+    const result = await resolveParticipantPortalInvoiceProvenance({
+      user: ORGANISER,
+      organizationId: 'org-organiser-workspace',
+      sourceParticipantId: 'p-sarah-1',
+      testContext,
     });
     expect(result.kind).toBe('denied');
   });

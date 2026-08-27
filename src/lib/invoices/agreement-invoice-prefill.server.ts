@@ -4,6 +4,8 @@ import { prisma } from '@/lib/server/prisma';
 import { parseSourceParticipantHint } from '@/lib/participants/source-participant-hint';
 import { isAuthorisedParticipantWorkspaceIdentity } from '@/lib/participant-portal/participant-access';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
+import { resolveRequestParticipantTestContext } from '@/lib/participant-portal/participant-test-context.server';
+import type { VerifiedParticipantTestContext } from '@/lib/participant-portal/participant-test-context';
 import {
   dealRowToRecentDeal,
   participantRowToDemo,
@@ -26,6 +28,7 @@ export type AuthorizedInvoiceOriginProvenanceResult =
 async function loadAuthorizedParticipantInvoiceRow(input: {
   user: { id: string; email?: string | null };
   sourceParticipantId: unknown;
+  testContext?: VerifiedParticipantTestContext | null;
 }) {
   const parsed = parseSourceParticipantHint(input.sourceParticipantId);
   const actorId = input.user.id?.trim();
@@ -41,11 +44,24 @@ async function loadAuthorizedParticipantInvoiceRow(input: {
     return { kind: 'denied' as const };
   }
 
+  const participant = participantRowToDemo(row);
+  const testContext = await resolveRequestParticipantTestContext({
+    actorUserId: actorId,
+    participantId: row.id,
+    dealOwnerUserId: row.deal.user_id,
+    authenticatedUserId: row.authenticated_user_id,
+    portalToken: participant.participantPortalToken,
+    testContext: input.testContext,
+  });
+
   const authorised = isAuthorisedParticipantWorkspaceIdentity({
     user: input.user,
     participantEmail: row.email,
     authenticatedUserId: row.authenticated_user_id,
     dealOwnerUserId: row.deal.user_id,
+    participantId: row.id,
+    portalToken: participant.participantPortalToken,
+    testContext,
   });
   if (!authorised) {
     return { kind: 'denied' as const };
@@ -62,6 +78,7 @@ async function loadAuthorizedParticipantInvoiceRow(input: {
 export async function loadAuthorizedAgreementInvoicePrefill(input: {
   user: { id: string; email?: string | null };
   sourceParticipantId: unknown;
+  testContext?: VerifiedParticipantTestContext | null;
 }): Promise<AuthorizedAgreementInvoicePrefillResult> {
   const loaded = await loadAuthorizedParticipantInvoiceRow(input);
   if (loaded.kind !== 'ok') {
@@ -97,6 +114,7 @@ export async function resolveParticipantPortalInvoiceProvenance(input: {
   user: { id: string; email?: string | null };
   organizationId: string;
   sourceParticipantId: unknown;
+  testContext?: VerifiedParticipantTestContext | null;
 }): Promise<AuthorizedInvoiceOriginProvenanceResult> {
   const organizationId = input.organizationId.trim();
   if (!organizationId) {

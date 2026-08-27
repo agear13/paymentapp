@@ -92,6 +92,8 @@ const envSchema = z.object({
   ENABLE_GUIDED_SETUP: z.string().optional().default('false'),
   /** Client-visible guided setup flag — set alongside ENABLE_GUIDED_SETUP for UI. */
   NEXT_PUBLIC_ENABLE_GUIDED_SETUP: z.string().optional().default('false'),
+  /** Internal Test-as-participant portal context. Hard-disabled when NODE_ENV=production. */
+  ENABLE_PARTICIPANT_TEST_CONTEXT: z.string().optional().default('false'),
   /** Alchemy API key for EVM RPC + Notify */
   ALCHEMY_API_KEY: z.string().optional(),
   /** Alchemy Notify webhook HMAC signing key */
@@ -168,6 +170,7 @@ function buildTimePlaceholderRecord(): Record<string, string | undefined> {
     ENABLE_WISE_PAYMENTS: process.env.ENABLE_WISE_PAYMENTS || 'false',
     ENABLE_GUIDED_SETUP: process.env.ENABLE_GUIDED_SETUP || 'false',
     NEXT_PUBLIC_ENABLE_GUIDED_SETUP: process.env.NEXT_PUBLIC_ENABLE_GUIDED_SETUP || 'false',
+    ENABLE_PARTICIPANT_TEST_CONTEXT: process.env.ENABLE_PARTICIPANT_TEST_CONTEXT || 'false',
     NEXT_PUBLIC_SHOW_WISE_DEMO: process.env.NEXT_PUBLIC_SHOW_WISE_DEMO || 'true',
     BETA_LOCKDOWN_MODE: process.env.BETA_LOCKDOWN_MODE || 'true',
     WISE_API_TOKEN: process.env.WISE_API_TOKEN,

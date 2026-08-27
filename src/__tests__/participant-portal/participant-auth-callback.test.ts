@@ -157,7 +157,7 @@ describe('wrong-operator recovery keeps the participant session after callback',
       dealOwnerUserId: OWNER,
       action: 'read',
     });
-    expect(operatorOnInvitation).toEqual({ status: 'denied', role: null });
+    expect(operatorOnInvitation).toEqual({ status: 'denied', role: null, accessGrant: null });
 
     const afterRecover = evaluateParticipantAccess({
       user: null,
@@ -166,7 +166,7 @@ describe('wrong-operator recovery keeps the participant session after callback',
       dealOwnerUserId: OWNER,
       action: 'read',
     });
-    expect(afterRecover).toEqual({ status: 'unauthenticated', role: null });
+    expect(afterRecover).toEqual({ status: 'unauthenticated', role: null, accessGrant: null });
 
     const callback = planParticipantCallbackSession({
       candidateReturn: TOKEN_PATH,
@@ -194,7 +194,7 @@ describe('wrong-operator recovery keeps the participant session after callback',
       dealOwnerUserId: OWNER,
       action: 'read',
     });
-    expect(hardRefresh).toEqual({ status: 'ok', role: 'participant' });
+    expect(hardRefresh).toEqual({ status: 'ok', role: 'participant', accessGrant: 'genuine' });
 
     const hardRefreshMutate = evaluateParticipantAccess({
       user: callback.sessionUser,
@@ -203,7 +203,7 @@ describe('wrong-operator recovery keeps the participant session after callback',
       dealOwnerUserId: OWNER,
       action: 'mutate',
     });
-    expect(hardRefreshMutate).toEqual({ status: 'ok', role: 'participant' });
+    expect(hardRefreshMutate).toEqual({ status: 'ok', role: 'participant', accessGrant: 'genuine' });
   });
 
   it('does not sign out the invited identity when getUser() confirms the new session', () => {

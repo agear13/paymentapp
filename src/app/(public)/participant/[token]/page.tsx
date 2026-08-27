@@ -10,6 +10,7 @@ import {
   type ParticipantInvitationPreview,
 } from '@/components/participant-portal/participant-auth-gate';
 import { CsrfBootstrap } from '@/components/security/csrf-bootstrap';
+import { ParticipantTestContextBanner } from '@/components/participant-portal/participant-test-context-banner';
 import {
   reloadParticipantInvitation,
   signOutParticipantSession,
@@ -27,6 +28,7 @@ type WorkspacePayload = {
   auth?: {
     status: AuthStatus;
     role?: 'participant' | 'operator_preview';
+    accessGrant?: 'genuine' | 'test_context' | 'operator_preview' | null;
     signedInEmail?: string | null;
   };
   invitation?: ParticipantInvitationPreview;
@@ -191,6 +193,9 @@ export default function ParticipantWorkspacePage() {
   return (
     <>
       <CsrfBootstrap />
+      {payload.auth.accessGrant === 'test_context' ? (
+        <ParticipantTestContextBanner signedInEmail={payload.auth.signedInEmail} />
+      ) : null}
       <ParticipantWorkspaceGate
       portalToken={token}
       sourceParticipantId={

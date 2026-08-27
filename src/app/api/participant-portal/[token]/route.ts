@@ -58,8 +58,9 @@ export async function GET(
           authenticatedUserId: found.authenticatedUserId,
           dealOwnerUserId: found.dealUserId,
           action: 'read',
+          portalToken: token,
         })
-      : { status: 'unauthenticated' as const, role: null };
+      : { status: 'unauthenticated' as const, role: null, accessGrant: null };
 
     if (decision.status === 'unauthenticated') {
       return NextResponse.json(
@@ -87,7 +88,7 @@ export async function GET(
       return NextResponse.json({ error: 'Portal link not found' }, { status: 404 });
     }
 
-    if (decision.role === 'participant') {
+    if (decision.role === 'participant' && decision.accessGrant === 'genuine') {
       await markParticipantPortalOpened(token);
     }
 
@@ -114,6 +115,7 @@ export async function GET(
       auth: {
         status: 'authorized',
         role: decision.role,
+        accessGrant: decision.accessGrant,
         signedInEmail: user?.email ?? null,
       },
       workspace,

@@ -416,6 +416,12 @@ export default function DeveloperControlCentrePage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Link
+              href="/dashboard/admin/developer/participant-portal"
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 hidden sm:inline"
+            >
+              Test Participant Portal
+            </Link>
             {isActive ? (
               <Badge className="bg-amber-500/10 text-amber-600 border-amber-300/50 text-xs font-medium">
                 <Zap className="h-3 w-3 mr-1" />

@@ -95,7 +95,7 @@ describe('email change revokes old workspace access', () => {
         dealOwnerUserId: OWNER,
         action: 'mutate',
       })
-    ).toEqual({ status: 'denied', role: null });
+    ).toEqual({ status: 'denied', role: null, accessGrant: null });
   });
 
   it('allows the new invited email to use the workspace before binding', () => {
@@ -107,7 +107,7 @@ describe('email change revokes old workspace access', () => {
         dealOwnerUserId: OWNER,
         action: 'mutate',
       })
-    ).toEqual({ status: 'ok', role: 'participant' });
+    ).toEqual({ status: 'ok', role: 'participant', accessGrant: 'genuine' });
   });
 
   it('does not grant an unrelated user access after an email edit', () => {
@@ -119,7 +119,7 @@ describe('email change revokes old workspace access', () => {
         dealOwnerUserId: OWNER,
         action: 'mutate',
       })
-    ).toEqual({ status: 'denied', role: null });
+    ).toEqual({ status: 'denied', role: null, accessGrant: null });
   });
 
   it('keeps operator preview after an unbound email change', () => {
@@ -131,6 +131,6 @@ describe('email change revokes old workspace access', () => {
         dealOwnerUserId: OWNER,
         action: 'read',
       })
-    ).toEqual({ status: 'ok', role: 'operator_preview' });
+    ).toEqual({ status: 'ok', role: 'operator_preview', accessGrant: 'operator_preview' });
   });
 });

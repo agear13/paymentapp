@@ -23,7 +23,7 @@ describe('participant access evaluation', () => {
         dealOwnerUserId: OWNER,
         action: 'read',
       })
-    ).toEqual({ status: 'unauthenticated', role: null });
+    ).toEqual({ status: 'unauthenticated', role: null, accessGrant: null });
 
     expect(
       evaluateParticipantAccess({
@@ -33,7 +33,7 @@ describe('participant access evaluation', () => {
         dealOwnerUserId: OWNER,
         action: 'mutate',
       })
-    ).toEqual({ status: 'unauthenticated', role: null });
+    ).toEqual({ status: 'unauthenticated', role: null, accessGrant: null });
   });
 
   it('grants the invited identity access by email on first sign-in', () => {
@@ -45,7 +45,7 @@ describe('participant access evaluation', () => {
         dealOwnerUserId: OWNER,
         action: 'mutate',
       })
-    ).toEqual({ status: 'ok', role: 'participant' });
+    ).toEqual({ status: 'ok', role: 'participant', accessGrant: 'genuine' });
   });
 
   it('grants access by bound authenticated_user_id even if email later changes', () => {
@@ -57,7 +57,7 @@ describe('participant access evaluation', () => {
         dealOwnerUserId: OWNER,
         action: 'mutate',
       })
-    ).toEqual({ status: 'ok', role: 'participant' });
+    ).toEqual({ status: 'ok', role: 'participant', accessGrant: 'genuine' });
   });
 
   it('denies a forwarded URL when a different authenticated user is signed in', () => {
@@ -69,7 +69,7 @@ describe('participant access evaluation', () => {
         dealOwnerUserId: OWNER,
         action: 'mutate',
       })
-    ).toEqual({ status: 'denied', role: null });
+    ).toEqual({ status: 'denied', role: null, accessGrant: null });
   });
 
   it('denies a second account after the invited identity is already bound', () => {
@@ -81,7 +81,7 @@ describe('participant access evaluation', () => {
         dealOwnerUserId: OWNER,
         action: 'mutate',
       })
-    ).toEqual({ status: 'denied', role: null });
+    ).toEqual({ status: 'denied', role: null, accessGrant: null });
   });
 
   it('lets the deal owner preview the workspace but not mutate', () => {
@@ -93,7 +93,7 @@ describe('participant access evaluation', () => {
         dealOwnerUserId: OWNER,
         action: 'read',
       })
-    ).toEqual({ status: 'ok', role: 'operator_preview' });
+    ).toEqual({ status: 'ok', role: 'operator_preview', accessGrant: 'operator_preview' });
 
     expect(
       evaluateParticipantAccess({
@@ -103,7 +103,7 @@ describe('participant access evaluation', () => {
         dealOwnerUserId: OWNER,
         action: 'mutate',
       })
-    ).toEqual({ status: 'denied', role: null });
+    ).toEqual({ status: 'denied', role: null, accessGrant: null });
   });
 
   it('does not let access to one bound participant grant another workspace', () => {
@@ -115,7 +115,7 @@ describe('participant access evaluation', () => {
         dealOwnerUserId: OWNER,
         action: 'read',
       })
-    ).toEqual({ status: 'denied', role: null });
+    ).toEqual({ status: 'denied', role: null, accessGrant: null });
   });
 });
 

@@ -68,7 +68,7 @@ export async function GET(
       return participantAuthDeniedResponse();
     }
 
-    if (row.approval_status !== 'Approved' && access.role === 'participant') {
+    if (row.approval_status !== 'Approved' && access.role === 'participant' && access.accessGrant === 'genuine') {
       await markParticipantInviteOpened(token);
     }
 

@@ -11,6 +11,8 @@ import {
   type ParticipantAccessAction,
   type ParticipantAccessDecision,
 } from '@/lib/participant-portal/participant-access';
+import { resolveRequestParticipantTestContext } from '@/lib/participant-portal/participant-test-context.server';
+import type { VerifiedParticipantTestContext } from '@/lib/participant-portal/participant-test-context';
 
 export type ParticipantSessionUser = {
   id: string;
@@ -65,18 +67,33 @@ export async function authorizeParticipantRelationship(input: {
   authenticatedUserId?: string | null;
   dealOwnerUserId: string;
   action: ParticipantAccessAction;
+  portalToken?: string | null;
+  testContext?: VerifiedParticipantTestContext | null;
 }): Promise<ParticipantAccessDecision> {
+  const testContext = await resolveRequestParticipantTestContext({
+    actorUserId: input.user.id,
+    participantId: input.participantId,
+    dealOwnerUserId: input.dealOwnerUserId,
+    authenticatedUserId: input.authenticatedUserId,
+    portalToken: input.portalToken,
+    testContext: input.testContext,
+  });
+
   const decision = evaluateParticipantAccess({
     user: input.user,
     participantEmail: input.participantEmail,
     authenticatedUserId: input.authenticatedUserId,
     dealOwnerUserId: input.dealOwnerUserId,
     action: input.action,
+    participantId: input.participantId,
+    portalToken: input.portalToken,
+    testContext,
   });
 
   if (
     decision.status === 'ok' &&
     decision.role === 'participant' &&
+    decision.accessGrant === 'genuine' &&
     !input.authenticatedUserId?.trim()
   ) {
     await bindParticipantAuthenticatedUser({

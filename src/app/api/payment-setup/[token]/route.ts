@@ -53,7 +53,9 @@ export async function GET(
   const { participant } = result;
   const deal = result.deal.deal_payload as { dealName?: string; id?: string };
 
-  void recordPaymentPortalOpened(participant.id);
+  if (access.role === 'participant' && access.accessGrant === 'genuine') {
+    void recordPaymentPortalOpened(participant.id);
+  }
 
   // Build the onboarding input to derive the current draft invoice
   const input = buildSupplierOnboardingInput(participant, {
