@@ -13,11 +13,11 @@ describe('resolveXeroConnectionUiMode', () => {
     );
   });
 
-  it('treats a transient refresh failure as refresh_error, not reconnect', () => {
+  it('treats an internal refresh failure as refresh_error, not reconnect', () => {
     expect(
       resolveXeroConnectionUiMode({
         connected: true,
-        transientRefreshFailure: true,
+        internalFailure: true,
         connectionState: 'ERROR',
       })
     ).toBe('refresh_error');

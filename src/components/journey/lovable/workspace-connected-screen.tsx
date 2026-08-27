@@ -183,6 +183,7 @@ export function WorkspaceConnectedScreen() {
             stale?: boolean;
             reauthorizationRequired?: boolean;
             transientRefreshFailure?: boolean;
+            internalFailure?: boolean;
             tenantId?: string | null;
             connectionState?: XeroConnectionState;
           };
@@ -194,6 +195,7 @@ export function WorkspaceConnectedScreen() {
                   stale: xeroStatus.stale,
                   reauthorizationRequired: xeroStatus.reauthorizationRequired,
                   transientRefreshFailure: xeroStatus.transientRefreshFailure,
+                  internalFailure: xeroStatus.internalFailure,
                   tenantId: xeroStatus.tenantId,
                   invoiceMappingsComplete: null,
                 });

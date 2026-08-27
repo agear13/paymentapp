@@ -39,6 +39,7 @@ export type XeroReadinessConnection = {
   stale?: boolean;
   reauthorizationRequired?: boolean;
   transientRefreshFailure?: boolean;
+  internalFailure?: boolean;
   connectionState: XeroConnectionState;
 };
 
@@ -131,6 +132,7 @@ export type XeroReadinessInput = {
     stale?: boolean;
     reauthorizationRequired?: boolean;
     transientRefreshFailure?: boolean;
+    internalFailure?: boolean;
     connectionState?: XeroConnectionState;
   };
   mappings: XeroReadinessMappingsPayload | null;
@@ -184,7 +186,9 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     input.status.reauthorizationRequired || (connected && input.status.stale)
   );
   const transientRefreshFailure = Boolean(input.status.transientRefreshFailure);
-  const oauthHealthy = connected && !reauthorizationRequired && !transientRefreshFailure;
+  const internalFailure = Boolean(input.status.internalFailure);
+  const oauthHealthy =
+    connected && !reauthorizationRequired && !transientRefreshFailure && !internalFailure;
 
   const invoiceMappings: XeroReadinessInvoiceMappings = {
     revenue: fieldState(
@@ -211,6 +215,7 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     stale: input.status.stale,
     reauthorizationRequired,
     transientRefreshFailure,
+    internalFailure,
     tenantId: input.status.tenantId,
     invoiceMappingsComplete: oauthHealthy ? invoiceMappingsComplete : null,
   });
@@ -223,6 +228,7 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
     stale: input.status.stale,
     reauthorizationRequired,
     transientRefreshFailure,
+    internalFailure,
     connectionState,
   };
 
@@ -317,7 +323,7 @@ export function computeXeroReadiness(input: XeroReadinessInput): Omit<XeroReadin
   let nextAction: XeroReadinessNextAction | null = null;
   if (reauthorizationRequired) {
     nextAction = { label: 'Reconnect Xero', sectionId: 'xero-connection' };
-  } else if (transientRefreshFailure) {
+  } else if (transientRefreshFailure || internalFailure) {
     nextAction = { label: 'Try again', href: '/workspace/connected/xero' };
   } else if (!connected) {
     nextAction = { label: 'Connect Accounting', sectionId: 'xero-connection' };

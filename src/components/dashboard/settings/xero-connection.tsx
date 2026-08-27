@@ -59,6 +59,7 @@ interface ConnectionStatus {
   stale?: boolean;
   reauthorizationRequired?: boolean;
   transientRefreshFailure?: boolean;
+  internalFailure?: boolean;
   connectionState?: string;
   tenantId?: string;
   expiresAt?: string;

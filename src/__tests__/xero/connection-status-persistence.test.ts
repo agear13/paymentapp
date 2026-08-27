@@ -252,6 +252,30 @@ describe('Xero connection status persistence', () => {
     });
   });
 
+  it('does not mark reconnect required on the production OpenID refresh TypeError', async () => {
+    persistRow();
+    mockRefreshAccessToken.mockRejectedValue(
+      new TypeError("Cannot read properties of undefined (reading 'refresh')")
+    );
+
+    const status = await getConnectionStatus(ORG_ID);
+
+    expect(status.connected).toBe(true);
+    expect(status.stale).toBeUndefined();
+    expect(status.reauthorizationRequired).toBeUndefined();
+    expect(status.transientRefreshFailure).toBeUndefined();
+    expect(status.internalFailure).toBe(true);
+    expect(status.connectionState).toBe('ERROR');
+    expect(status.refreshFailure).toEqual({
+      category: 'internal',
+      statusCode: null,
+      providerError: null,
+      message: "Cannot read properties of undefined (reading 'refresh')",
+    });
+    expect(decryptToken(row!.refresh_token)).toBe('refresh-old');
+    expect(decryptToken(row!.access_token)).toBe('access-old');
+  });
+
   it('surfaces persist_failed diagnostics without rotating stored credentials', async () => {
     persistRow();
     mockRefreshAccessToken.mockResolvedValue({

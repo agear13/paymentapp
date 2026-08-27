@@ -47,12 +47,12 @@ describe('computeXeroConnectionState', () => {
     ).toBe('READY');
   });
 
-  it('is ERROR for transient refresh failure without marking reauth', () => {
+  it('is ERROR for an internal refresh implementation failure without marking reauth', () => {
     expect(
       computeXeroConnectionState({
         connected: true,
         tenantId: 'tenant-1',
-        transientRefreshFailure: true,
+        internalFailure: true,
         invoiceMappingsComplete: true,
       })
     ).toBe('ERROR');

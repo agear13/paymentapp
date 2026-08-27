@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
           error: 'Provvy could not reach Xero just now. Try again shortly.',
           stale: false,
           transientRefreshFailure: Boolean(connectionResolved.transientRefreshFailure),
+          internalFailure: Boolean(connectionResolved.internalFailure),
         },
         { status: 503 }
       );

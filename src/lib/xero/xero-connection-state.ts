@@ -18,6 +18,7 @@ export type XeroConnectionStateInput = {
   stale?: boolean;
   reauthorizationRequired?: boolean;
   transientRefreshFailure?: boolean;
+  internalFailure?: boolean;
   tenantId?: string | null;
   invoiceMappingsComplete?: boolean | null;
 };
@@ -32,7 +33,7 @@ export function computeXeroConnectionState(
   const tenantSelected = Boolean(input.tenantId?.trim());
 
   if (reauthorizationRequired) return 'AUTH_REAUTH_REQUIRED';
-  if (input.transientRefreshFailure && connected) return 'ERROR';
+  if ((input.transientRefreshFailure || input.internalFailure) && connected) return 'ERROR';
   if (!connected && tenantSelected) return 'CONNECTED_UNVERIFIED';
   if (!connected) return 'DISCONNECTED';
   if (!tenantSelected) return 'TENANT_SELECTION_REQUIRED';

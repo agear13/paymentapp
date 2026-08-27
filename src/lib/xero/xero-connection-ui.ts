@@ -9,6 +9,7 @@ export function resolveXeroConnectionUiMode(status: {
   stale?: boolean;
   reauthorizationRequired?: boolean;
   transientRefreshFailure?: boolean;
+  internalFailure?: boolean;
   connectionState?: string;
 } | null | undefined): XeroConnectionUiMode {
   if (
@@ -18,7 +19,11 @@ export function resolveXeroConnectionUiMode(status: {
   ) {
     return 'needs_reauthorization';
   }
-  if (status?.connectionState === 'ERROR' || status?.transientRefreshFailure) {
+  if (
+    status?.connectionState === 'ERROR' ||
+    status?.transientRefreshFailure ||
+    status?.internalFailure
+  ) {
     return 'refresh_error';
   }
   if (status?.connected) return 'connected';

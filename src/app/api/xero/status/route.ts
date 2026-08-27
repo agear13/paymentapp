@@ -86,6 +86,7 @@ export async function GET(request: NextRequest) {
       expiresAt: status.expiresAt?.toISOString(),
       reauthorizationRequired: Boolean(status.reauthorizationRequired),
       transientRefreshFailure: Boolean(status.transientRefreshFailure),
+      internalFailure: Boolean(status.internalFailure),
       refreshFailureCategory: status.refreshFailure?.category ?? null,
       refreshFailureStatusCode: status.refreshFailure?.statusCode ?? null,
       refreshFailureProviderError: status.refreshFailure?.providerError ?? null,

@@ -5,11 +5,23 @@ const mockRefreshToken = jest.fn();
 const mockReadTokenSet = jest.fn(() => ({}));
 
 jest.mock('xero-node', () => ({
-  XeroClient: jest.fn().mockImplementation(() => ({
-    setTokenSet: mockSetTokenSet,
-    refreshToken: mockRefreshToken,
-    readTokenSet: mockReadTokenSet,
-  })),
+  XeroClient: jest.fn().mockImplementation(() => {
+    const instance: {
+      openIdClient?: { refresh: jest.Mock };
+      setTokenSet: jest.Mock;
+      refreshToken: jest.Mock;
+      readTokenSet: jest.Mock;
+      initialize: jest.Mock;
+    } = {
+      setTokenSet: mockSetTokenSet,
+      refreshToken: mockRefreshToken,
+      readTokenSet: mockReadTokenSet,
+      initialize: jest.fn(async () => {
+        instance.openIdClient = { refresh: jest.fn() };
+      }),
+    };
+    return instance;
+  }),
 }));
 
 jest.mock('@/lib/xero/xero-config', () => ({

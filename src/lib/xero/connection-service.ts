@@ -18,6 +18,7 @@ import {
 } from './token-set-trace';
 import {
   classifyXeroRefreshFailure,
+  isRetryableXeroRefreshCategory,
   toXeroRefreshFailureDiagnostics,
   XeroRefreshError,
   type XeroRefreshFailureDiagnostics,
@@ -503,6 +504,7 @@ export type XeroActiveConnectionLoad = {
   persisted: boolean;
   reauthorizationRequired: boolean;
   transientRefreshFailure: boolean;
+  internalFailure: boolean;
   refreshFailure?: XeroRefreshFailureDiagnostics | null;
 };
 
@@ -515,6 +517,7 @@ function emptyActiveLoad(
     persisted,
     reauthorizationRequired: false,
     transientRefreshFailure: false,
+    internalFailure: false,
     refreshFailure: extra?.refreshFailure ?? null,
     ...extra,
   };
@@ -589,6 +592,7 @@ export async function loadActiveXeroConnection(
         persisted: true,
         reauthorizationRequired: false,
         transientRefreshFailure: false,
+        internalFailure: false,
         refreshFailure: null,
       };
     }
@@ -621,6 +625,7 @@ export async function loadActiveXeroConnection(
         persisted: true,
         reauthorizationRequired: false,
         transientRefreshFailure: false,
+        internalFailure: false,
         refreshFailure: null,
       };
     } catch (error: unknown) {
@@ -646,6 +651,7 @@ export async function loadActiveXeroConnection(
             persisted: true,
             reauthorizationRequired: false,
             transientRefreshFailure: false,
+            internalFailure: false,
             refreshFailure: null,
           };
         }
@@ -681,14 +687,19 @@ export async function loadActiveXeroConnection(
           persisted: true,
           reauthorizationRequired: false,
           transientRefreshFailure:
-            classified.category === 'transient' || classified.category === 'unclassified',
+            isRetryableXeroRefreshCategory(classified.category) ||
+            classified.category === 'unclassified',
+          internalFailure: classified.category === 'internal',
           refreshFailure,
         };
       }
 
       return emptyActiveLoad(true, {
-        transientRefreshFailure: classified.category !== 'persist_failed',
+        transientRefreshFailure:
+          isRetryableXeroRefreshCategory(classified.category) ||
+          classified.category === 'unclassified',
         reauthorizationRequired: classified.category === 'persist_failed',
+        internalFailure: classified.category === 'internal',
         refreshFailure,
       });
     }
@@ -704,6 +715,7 @@ export async function resolveXeroConnectionForApi(organizationId: string): Promi
   stale: boolean;
   reauthorizationRequired: boolean;
   transientRefreshFailure: boolean;
+  internalFailure: boolean;
 }> {
   const loaded = await loadActiveXeroConnection(organizationId);
   return {
@@ -712,6 +724,7 @@ export async function resolveXeroConnectionForApi(organizationId: string): Promi
     stale: loaded.reauthorizationRequired,
     reauthorizationRequired: loaded.reauthorizationRequired,
     transientRefreshFailure: loaded.transientRefreshFailure,
+    internalFailure: loaded.internalFailure,
   };
 }
 
@@ -720,6 +733,7 @@ export type XeroConnectionStatus = {
   stale?: boolean;
   reauthorizationRequired?: boolean;
   transientRefreshFailure?: boolean;
+  internalFailure?: boolean;
   refreshFailure?: XeroRefreshFailureDiagnostics | null;
   connectionState: XeroConnectionState;
   tenantId?: string;
@@ -780,6 +794,7 @@ export async function getConnectionStatus(
       stale: loaded.reauthorizationRequired,
       reauthorizationRequired: loaded.reauthorizationRequired,
       transientRefreshFailure: loaded.transientRefreshFailure && !loaded.connection,
+      internalFailure: loaded.internalFailure && !loaded.connection,
       tenantId,
     }),
   };
@@ -790,6 +805,9 @@ export async function getConnectionStatus(
   }
   if (loaded.transientRefreshFailure && !loaded.connection) {
     status.transientRefreshFailure = true;
+  }
+  if (loaded.internalFailure && !loaded.connection) {
+    status.internalFailure = true;
   }
   if (loaded.refreshFailure) {
     status.refreshFailure = loaded.refreshFailure;

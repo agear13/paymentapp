@@ -1,5 +1,6 @@
 import {
   classifyXeroRefreshFailure,
+  isRetryableXeroRefreshCategory,
   sanitizeXeroRefreshMessage,
   toXeroRefreshFailureDiagnostics,
   XeroRefreshError,
@@ -89,6 +90,22 @@ describe('classifyXeroRefreshFailure', () => {
       category: 'persist_failed',
       providerError: 'P2024',
     });
+  });
+
+  it('classifies programming TypeErrors as internal, not transient', () => {
+    const classified = classifyXeroRefreshFailure(
+      new TypeError("Cannot read properties of undefined (reading 'refresh')")
+    );
+    expect(classified.category).toBe('internal');
+    expect(isRetryableXeroRefreshCategory(classified.category)).toBe(false);
+  });
+
+  it('classifies missing OpenID client as internal', () => {
+    expect(
+      classifyXeroRefreshFailure(
+        new Error('Xero OpenID client is not initialized; cannot refresh tokens')
+      ).category
+    ).toBe('internal');
   });
 
   it('does not treat malformed or unrecognised provider errors as transient', () => {

@@ -21,7 +21,7 @@ import {
 } from './token-set-trace';
 import { applyConnectionToXeroClient } from './apply-connection-token-set';
 import type { XeroOAuthTokenBundle } from './token-set-trace';
-import { xeroRefreshErrorFromUnknown } from './xero-refresh-errors';
+import { XeroRefreshError, xeroRefreshErrorFromUnknown } from './xero-refresh-errors';
 
 /**
  * Check if Xero OAuth credentials are present (client id/secret/redirect).
@@ -178,6 +178,21 @@ export async function refreshAccessToken(
   try {
     loggers.xero.debug('xero_refresh_construct_client', { step: 'construct_xero_client' });
     const client = getXeroClient();
+
+    // xero-node 13.x refreshToken() calls this.openIdClient.refresh(...).
+    // openIdClient is only assigned in initialize() (also used by buildConsentUrl /
+    // apiCallback). A new client from getXeroClient() has openIdClient === undefined,
+    // which produces: Cannot read properties of undefined (reading 'refresh').
+    if (!client.openIdClient) {
+      loggers.xero.debug('xero_refresh_initialize_openid', { step: 'initialize_openid_client' });
+      await client.initialize();
+    }
+    if (!client.openIdClient || typeof client.openIdClient.refresh !== 'function') {
+      throw new XeroRefreshError(
+        'Xero OpenID client is not initialized; cannot refresh tokens',
+        'internal'
+      );
+    }
 
     loggers.xero.debug('xero_refresh_set_token', { step: 'set_refresh_token' });
     await applyConnectionToXeroClient(

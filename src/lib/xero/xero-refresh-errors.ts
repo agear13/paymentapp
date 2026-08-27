@@ -2,6 +2,7 @@ export type XeroRefreshFailureCategory =
   | 'invalid_grant'
   | 'transient'
   | 'persist_failed'
+  | 'internal'
   | 'unclassified';
 
 export type XeroRefreshFailureClassification = {
@@ -22,6 +23,8 @@ const INVALID_GRANT_PATTERN = /invalid[_\s-]?grant|invalid refresh token|unautho
 const TRANSIENT_NETWORK_PATTERN =
   /econnreset|etimedout|enotfound|eai_again|econnrefused|socket hang up|network|fetch failed|temporarily unavailable|timeout/i;
 const PERSIST_FAILURE_PATTERN = /persist|database|prisma/i;
+const INTERNAL_ERROR_PATTERN =
+  /cannot read propert(?:y|ies) of undefined|is not a function|is not defined|openid client is not initialized/i;
 const PROVIDER_ERROR_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/;
 const SANITIZE_PATTERNS: Array<[RegExp, string]> = [
   [/bearer\s+[A-Za-z0-9._\-+=\/]+/gi, 'Bearer [redacted]'],
@@ -95,6 +98,25 @@ export function extractXeroRefreshMessage(error: unknown): string {
   }
 
   return 'Unknown Xero refresh failure';
+}
+
+function isTypeErrorLike(error: unknown): boolean {
+  if (error instanceof TypeError || error instanceof ReferenceError) {
+    return true;
+  }
+  const name =
+    error instanceof Error
+      ? error.name
+      : typeof asRecord(error)?.name === 'string'
+        ? String(asRecord(error)?.name)
+        : '';
+  return name === 'TypeError' || name === 'ReferenceError';
+}
+
+export function isRetryableXeroRefreshCategory(
+  category: XeroRefreshFailureCategory
+): boolean {
+  return category === 'transient';
 }
 
 function isPrismaLikeError(error: unknown): boolean {
@@ -202,6 +224,24 @@ export function classifyXeroRefreshFailure(error: unknown): XeroRefreshFailureCl
   const sanitizedMessage = sanitizeXeroRefreshMessage(message);
   const statusCode = extractXeroRefreshStatusCode(error);
   const providerError = extractXeroProviderError(error);
+
+  if (isTypeErrorLike(error) || INTERNAL_ERROR_PATTERN.test(sanitizedMessage)) {
+    return {
+      category: 'internal',
+      statusCode,
+      providerError,
+      message: sanitizedMessage,
+    };
+  }
+
+  if (error instanceof Error && error.name === 'XeroConfigurationError') {
+    return {
+      category: 'internal',
+      statusCode,
+      providerError,
+      message: sanitizedMessage,
+    };
+  }
 
   if (statusCode === 400 || statusCode === 401 || INVALID_GRANT_PATTERN.test(message)) {
     return {

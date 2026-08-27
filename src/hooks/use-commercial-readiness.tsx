@@ -152,6 +152,7 @@ async function fetchCommercialReadiness(
         stale?: boolean;
         reauthorizationRequired?: boolean;
         transientRefreshFailure?: boolean;
+        internalFailure?: boolean;
       })
     : { connected: false };
 
