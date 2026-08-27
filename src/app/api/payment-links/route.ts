@@ -170,6 +170,7 @@ function transformPaymentLink(link: Record<string, unknown>) {
     paidAt,
     fxSummary,
     pilotDealId: (link as { pilot_deal_id?: string | null }).pilot_deal_id ?? null,
+    invoiceOrigin: (link as { invoice_origin?: string | null }).invoice_origin ?? null,
   };
 }
 
@@ -387,13 +388,11 @@ export async function POST(request: NextRequest) {
         organizationId,
         sourceParticipantId: sourceParticipantHint,
       });
-      if (resolved.kind !== 'ok') {
-        return NextResponse.json(
-          { error: 'Invalid invoice origin' },
-          { status: 403 }
-        );
+      if (resolved.kind === 'ok') {
+        invoiceOriginProvenance = resolved.provenance;
       }
-      invoiceOriginProvenance = resolved.provenance;
+      // Denied provenance: create an ordinary invoice. Attribution gaps must not
+      // block invoice creation, and origin is never stamped without a server match.
     }
 
     let pilotDealIdToStore: string | null = null;
@@ -524,6 +523,7 @@ export async function POST(request: NextRequest) {
         correlationId: auditCtx.correlationId,
         ipAddress: auditCtx.ipAddress,
         userAgent: auditCtx.userAgent,
+        invoiceOrigin: invoiceOriginProvenance?.invoiceOrigin ?? null,
       },
     });
 

@@ -7,14 +7,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import {
   ArrowLeft,
-  ArrowRight,
-  Check,
-  Copy,
   CreditCard,
   FileText,
   Landmark,
   Loader2,
-  Send,
   User,
 } from 'lucide-react';
 import { CurrencySelect } from '@/components/payment-links/currency-select';
@@ -59,9 +55,6 @@ import { EntitlementUpgradePanel } from '@/components/entitlements/entitlement-u
 import { StripeConnectReadinessSummary } from '@/components/commercial-os/stripe-connect-readiness-summary';
 import { EntitlementLoading } from '@/components/entitlements/entitlement-loading';
 import {
-  invoicePublicReference,
-} from '@/lib/payment-links/invoice-display-status';
-import {
   buildInvoicePaymentMethodOptions,
   computePaymentLinkRailSetup,
   isPaymentRailConfiguredForMerchant,
@@ -70,8 +63,7 @@ import {
 } from '@/lib/payment-links/setup-status';
 import type { PaymentMethod } from '@prisma/client';
 import { isValidShortCode } from '@/lib/short-code';
-import { CommercialOsNextStepBanner } from '@/components/journey/lovable/commercial-os-next-step-banner';
-import { AccountingFirstInvoiceBanner } from '@/components/journey/lovable/accounting-first-invoice-banner';
+import { CreateInvoiceSuccess } from '@/components/journey/lovable/create-invoice-success';
 import { CreateInvoicePreviewSidebar } from '@/components/journey/lovable/create-invoice-preview-sidebar';
 import { CreateInvoiceContextualGuidance } from '@/components/journey/lovable/create-invoice-contextual-guidance';
 import {
@@ -153,79 +145,6 @@ function parseDateInput(value: string): Date | undefined {
   if (!value.trim()) return undefined;
   const d = new Date(`${value}T12:00:00`);
   return Number.isNaN(d.getTime()) ? undefined : d;
-}
-
-function CreateInvoiceSuccess({
-  created,
-  onCopyLink,
-  copied,
-}: {
-  created: CreatePaymentLinkResult;
-  onCopyLink: () => void;
-  copied: boolean;
-}) {
-  const reference = invoicePublicReference(created);
-  const detailHref = COMMERCIAL_OS_ROUTES.invoiceDetail(reference, { id: created.id });
-  const sendHref = `${detailHref}?send=1`;
-
-  return (
-    <div className="animate-fade-up mx-auto max-w-2xl space-y-8 pb-24 pt-4">
-      <div className="text-center">
-        <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-          <Check className="h-8 w-8" />
-        </div>
-        <h1 className="mt-6 text-3xl font-semibold tracking-[-0.03em]">Invoice created</h1>
-        <p className="mt-3 text-[15px] text-ink-soft">
-          {reference} is ready to send
-          {created.amount != null && created.currency
-            ? ` · ${formatCurrency(Number(created.amount), created.currency)}`
-            : ''}
-          .
-        </p>
-      </div>
-
-      <CommercialOsNextStepBanner
-        title="Next recommended action"
-        message="Send this invoice to your customer so they can view details and pay."
-        action={
-          <Link
-            href={sendHref}
-            className="inline-flex h-11 items-center gap-2 rounded-xl bg-gradient-purple px-5 text-[13.5px] font-semibold text-primary-foreground shadow-glow transition-all hover:brightness-110"
-          >
-            <Send className="h-4 w-4" />
-            Send invoice
-          </Link>
-        }
-      />
-
-      <AccountingFirstInvoiceBanner returnTo={detailHref} />
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Link
-          href={detailHref}
-          className="inline-flex h-12 flex-col items-center justify-center gap-1 rounded-2xl border border-border bg-card px-4 text-[13px] font-semibold transition-colors hover:bg-secondary"
-        >
-          <FileText className="h-4 w-4" />
-          Open invoice
-        </Link>
-        <button
-          type="button"
-          onClick={onCopyLink}
-          className="inline-flex h-12 flex-col items-center justify-center gap-1 rounded-2xl border border-border bg-card px-4 text-[13px] font-semibold transition-colors hover:bg-secondary"
-        >
-          {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
-          {copied ? 'Copied' : 'Copy payment link'}
-        </button>
-        <Link
-          href={COMMERCIAL_OS_ROUTES.workspace}
-          className="inline-flex h-12 flex-col items-center justify-center gap-1 rounded-2xl border border-border bg-card px-4 text-[13px] font-semibold transition-colors hover:bg-secondary"
-        >
-          <ArrowRight className="h-4 w-4" />
-          Return to workspace
-        </Link>
-      </div>
-    </div>
-  );
 }
 
 export function WorkspaceCreateInvoiceScreen({
@@ -765,7 +684,12 @@ export function WorkspaceCreateInvoiceScreen({
 
   if (created) {
     return (
-      <CreateInvoiceSuccess created={created} onCopyLink={() => void handleCopyLink()} copied={copied} />
+      <CreateInvoiceSuccess
+        created={created}
+        onCopyLink={() => void handleCopyLink()}
+        copied={copied}
+        organizationId={organizationId}
+      />
     );
   }
 

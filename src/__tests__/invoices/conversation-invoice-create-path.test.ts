@@ -95,6 +95,8 @@ describe('conversation mode stays off participant portal Create Invoice', () => 
     expect(screen).not.toContain('extractAgreementFromText');
     expect(screen).not.toMatch(/invoiceOrigin:\s*['"]conversation['"]/);
     expect(screen).not.toMatch(/body\.conversationText/);
+    expect(screen).toContain('<CreateInvoiceSuccess');
+    expect(screen).toContain('created={created}');
   });
 
   it('Door A blank create still uses the +14 day factory', () => {

@@ -23,6 +23,8 @@ export type CreatePaymentLinkResult = {
   amount?: number;
   currency?: string;
   description?: string;
+  /** Server-stamped origin. Present only when participant-portal provenance resolved. */
+  invoiceOrigin?: string | null;
 };
 
 export async function createPaymentLinkFromDraft(

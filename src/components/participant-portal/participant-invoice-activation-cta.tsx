@@ -9,6 +9,7 @@ import {
   participantInvoiceActivationHref,
 } from '@/lib/invoices/participant-invoice-activation';
 import { persistInvoiceActivationIntent } from '@/lib/journey/journey-invoice-activation.client';
+import { trackParticipantInvoiceActivation } from '@/lib/invoices/participant-activation-analytics';
 
 type Props = {
   sourceParticipantId: string;
@@ -44,6 +45,9 @@ export function ParticipantInvoiceActivationCta({
             <Link
               href={href}
               onClick={() => {
+                trackParticipantInvoiceActivation('generate_invoice_clicked', {
+                  hasConvertedOrganization: Boolean(convertedOrganizationId?.trim()),
+                });
                 if (!convertedOrganizationId?.trim()) {
                   persistInvoiceActivationIntent(sourceParticipantId);
                 }

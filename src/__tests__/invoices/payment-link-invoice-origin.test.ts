@@ -185,7 +185,7 @@ describe('POST /api/payment-links participant portal provenance', () => {
     );
   });
 
-  it('rejects spoofed participant_portal origin when the server denies the relationship', async () => {
+  it('creates an ordinary invoice when participant-portal provenance cannot be resolved', async () => {
     mockResolveOrigin.mockResolvedValue({ kind: 'denied' });
     const request = new NextRequest('http://localhost/api/payment-links', {
       method: 'POST',
@@ -199,7 +199,32 @@ describe('POST /api/payment-links participant portal provenance', () => {
     });
 
     const response = await POST(request);
-    expect(response.status).toBe(403);
-    expect(mockInsert).not.toHaveBeenCalled();
+    expect(response.status).toBe(201);
+    expect(mockInsert).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        invoiceOriginProvenance: null,
+        pilotDealIdToStore: null,
+      })
+    );
+    const json = (await response.json()) as { data: { invoiceOrigin?: string | null } };
+    expect(json.data.invoiceOrigin).toBeNull();
+  });
+
+  it('returns server-stamped invoiceOrigin on a successful participant-portal create', async () => {
+    const request = new NextRequest('http://localhost/api/payment-links', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(
+        invoiceBody({
+          invoiceOrigin: 'participant_portal',
+          sourceParticipantId: 'p-sarah-1',
+        })
+      ),
+    });
+    const response = await POST(request);
+    expect(response.status).toBe(201);
+    const json = (await response.json()) as { data: { invoiceOrigin?: string | null } };
+    expect(json.data.invoiceOrigin).toBe('participant_portal');
   });
 });
