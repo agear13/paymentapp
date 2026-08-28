@@ -1,5 +1,8 @@
--- Migration: Add user_organizations junction table for proper multi-tenancy
--- This fixes the data isolation bug where all users see all organizations' data
+-- HISTORICAL LOOSE SQL — not a dated Prisma migration folder.
+-- `prisma migrate deploy` never applied this file. The canonical migration is:
+-- prisma/migrations/20260828120000_user_organizations/migration.sql
+--
+-- Original purpose: user_organizations junction table for multi-tenancy.
 
 -- Create user_organizations junction table
 CREATE TABLE IF NOT EXISTS user_organizations (

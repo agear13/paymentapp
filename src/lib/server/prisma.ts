@@ -18,6 +18,7 @@ try {
 }
 import { PrismaClient } from '@prisma/client';
 import { incrementOperationalApiDbQueryCount } from '@/lib/operations/dev/api-route-diagnostics.server';
+import { resolvePrismaRuntimeDatabaseUrl } from '@/lib/server/prisma-database-url';
 
 // Runtime guard: Throw if accidentally imported in browser
 if (typeof window !== 'undefined') {
@@ -33,13 +34,9 @@ if (!process.env.DATABASE_URL) {
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient | undefined };
 
 function resolveDatabaseUrl(): string {
-  const raw = process.env.DATABASE_URL ?? '';
-  const limit = process.env.PRISMA_CONNECTION_LIMIT?.trim();
-  if (!limit || raw.includes('connection_limit=')) {
-    return raw;
-  }
-  const separator = raw.includes('?') ? '&' : '?';
-  return `${raw}${separator}connection_limit=${encodeURIComponent(limit)}`;
+  return resolvePrismaRuntimeDatabaseUrl(process.env.DATABASE_URL ?? '', {
+    connectionLimit: process.env.PRISMA_CONNECTION_LIMIT,
+  });
 }
 
 function createPrismaClient(): PrismaClient {
