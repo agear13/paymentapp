@@ -8,7 +8,10 @@ import { Label } from '@/components/ui/label';
 import { CsrfBootstrap } from '@/components/security/csrf-bootstrap';
 import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import { CSRF_PREPARING_LABEL, useClientCsrfReady } from '@/hooks/use-client-csrf-ready';
-import { postLoginDestination } from '@/lib/journey/commercial-os-routes';
+import {
+  postLoginDestination,
+  resolvePostLoginDestination,
+} from '@/lib/journey/commercial-os-routes';
 import { MFA_ENROLL_PATH, MFA_STEP_UP_MESSAGES, type MfaStepUpCode } from '@/lib/auth/mfa-assurance';
 
 type Factor = { id: string; status: string; friendlyName: string | null };
@@ -56,7 +59,7 @@ export function MfaChallengeClient() {
       window.location.href = next;
       return;
     }
-    router.replace(isSafeNext(next) ? next : postLoginDestination());
+    router.replace(isSafeNext(next) ? resolvePostLoginDestination(next) : postLoginDestination());
     router.refresh();
   };
 

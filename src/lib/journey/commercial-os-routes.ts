@@ -176,6 +176,26 @@ export function postLoginDestination(): string {
   return COMMERCIAL_OS_ROUTES.provisioningBuild;
 }
 
+/**
+ * Internal QA mint tool — not a restorable post-login home.
+ * Keep in sync with PARTICIPANT_TEST_CONTEXT_DEVELOPER_PATH.
+ */
+const PARTICIPANT_TEST_DEVELOPER_PATH = '/dashboard/admin/developer/participant-portal';
+
+/** True when login may return the user to this in-app path. */
+export function isRestorablePostLoginPath(path: string | null | undefined): path is string {
+  if (!path || !path.startsWith('/') || path.startsWith('//')) return false;
+  const pathname = path.split('?')[0] ?? '';
+  if (pathname === PARTICIPANT_TEST_DEVELOPER_PATH) return false;
+  if (pathname.startsWith(`${PARTICIPANT_TEST_DEVELOPER_PATH}/`)) return false;
+  return true;
+}
+
+/** Honour a safe redirectedFrom, otherwise the default post-login destination. */
+export function resolvePostLoginDestination(redirectedFrom?: string | null): string {
+  return isRestorablePostLoginPath(redirectedFrom) ? redirectedFrom : postLoginDestination();
+}
+
 /** Destination after journey assessment auth (workspace bootstrap + assessment save). */
 export function journeyPostAuthDestination(): string {
   return COMMERCIAL_OS_ROUTES.journeyPostAuth;
