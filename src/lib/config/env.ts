@@ -117,6 +117,9 @@ const envSchema = z.object({
   // Sentry (optional)
   SENTRY_DSN: z.string().url().optional(),
 
+  // Google Analytics 4 web stream (optional; public measurement ID only)
+  NEXT_PUBLIC_GA_MEASUREMENT_ID: z.string().optional(),
+
   // Object storage — Cloudflare R2 (optional locally; required for production uploads)
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
@@ -181,6 +184,7 @@ function buildTimePlaceholderRecord(): Record<string, string | undefined> {
     ADMIN_EMAILS: process.env.ADMIN_EMAILS,
     CRON_SECRET: process.env.CRON_SECRET,
     SENTRY_DSN: process.env.SENTRY_DSN,
+    NEXT_PUBLIC_GA_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
     R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
     R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
     R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,

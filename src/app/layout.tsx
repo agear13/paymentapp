@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import CookieConsent from "@/components/legal/CookieConsent";
+import GoogleAnalytics from "@/components/analytics/google-analytics";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -31,6 +32,7 @@ export default function RootLayout({
       >
         {children}
         <Toaster />
+        <GoogleAnalytics />
         <CookieConsent />
       </body>
     </html>

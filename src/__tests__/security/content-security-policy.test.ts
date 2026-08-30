@@ -21,6 +21,12 @@ describe('Content-Security-Policy', () => {
     expect(CONTENT_SECURITY_POLICY).toContain('wss://*.supabase.co');
   });
 
+  it('allows the GA4 Google tag (gtag.js) without a GTM container', () => {
+    expect(CONTENT_SECURITY_POLICY).toContain('https://*.googletagmanager.com');
+    expect(CONTENT_SECURITY_POLICY).toContain('https://*.google-analytics.com');
+    expect(CONTENT_SECURITY_POLICY).toContain('https://*.analytics.google.com');
+  });
+
   it('allows Pinch CaptureJS script load and client-side tokenisation', () => {
     expect(CONTENT_SECURITY_POLICY).toContain('https://cdn.getpinch.com.au');
     expect(CONTENT_SECURITY_POLICY).toContain('https://api.getpinch.com.au');

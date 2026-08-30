@@ -23,6 +23,7 @@ export function buildContentSecurityPolicy(options?: {
     'https://cdn.getpinch.com.au', // Pinch CaptureJS (client-side tokenisation)
     'https://*.supabase.co',
     'https://challenges.cloudflare.com',
+    'https://*.googletagmanager.com', // GA4 Google tag (gtag.js), not a GTM container
   ];
 
   const directives = [
@@ -35,7 +36,7 @@ export function buildContentSecurityPolicy(options?: {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
-    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://checkout.stripe.com https://api.getpinch.com.au https://*.upstash.io https://challenges.cloudflare.com",
+    "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.stripe.com https://checkout.stripe.com https://api.getpinch.com.au https://*.upstash.io https://challenges.cloudflare.com https://*.google-analytics.com https://*.analytics.google.com https://*.googletagmanager.com",
     "frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com https://challenges.cloudflare.com",
     "worker-src 'self' blob:",
   ];
