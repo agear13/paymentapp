@@ -15,6 +15,8 @@ import {
 } from '@/lib/commercial-network/canton-workflow-persistence';
 import {
   buildRequiredParticipantsForDeal,
+  cantonRequiredPartiesEqual,
+  cantonRequiredPartiesMissing,
   resolveCantonPartyForParticipant,
   resolveCantonPlatformParty,
 } from '@/lib/commercial-network/server/canton-party-mapping.server';
@@ -139,7 +141,10 @@ async function persistProjection(
 }
 
 /**
- * Create CommercialAgreementProposal when operator shares agreement with participants.
+ * Create (or revise) CommercialAgreementProposal so every current People-flow
+ * participant is a required Canton party. An existing proposal is reused only
+ * when its required set already matches; otherwise we archive it and create a
+ * new revision. Bound agreements cannot gain new required parties in place.
  */
 export async function syncCantonProposalOnAgreementShare(input: {
   dealId: string;
@@ -147,16 +152,6 @@ export async function syncCantonProposalOnAgreementShare(input: {
   const ctx = await loadDealContext(input.dealId);
   if (!ctx) {
     return { ok: false, error: 'Deal not found' };
-  }
-
-  const existing = readCantonWorkflowFromDeal(ctx.deal);
-  if (existing?.proposalContractId || existing?.agreementContractId) {
-    return {
-      ok: true,
-      stage: existing.stage,
-      workflow: existing,
-      proposalContractId: existing.proposalContractId ?? undefined,
-    };
   }
 
   const cantonParticipants = agreementParticipantsForCanton(ctx.participants);
@@ -167,7 +162,49 @@ export async function syncCantonProposalOnAgreementShare(input: {
   await persistParticipantCantonParties(cantonParticipants);
 
   const requiredParticipants = buildRequiredParticipantsForDeal(ctx.deal, cantonParticipants);
-  const platformParty = resolveCantonPlatformParty();
+  if (requiredParticipants.length === 0) {
+    return { ok: false, error: 'No required Canton parties for this deal' };
+  }
+
+  const existing = readCantonWorkflowFromDeal(ctx.deal);
+  if (existing?.agreementContractId) {
+    const missingOnBound = cantonRequiredPartiesMissing(
+      requiredParticipants,
+      existing.requiredParticipants
+    );
+    if (missingOnBound.length === 0) {
+      return {
+        ok: true,
+        stage: existing.stage,
+        workflow: existing,
+        agreementContractId: existing.agreementContractId,
+        proposalContractId: existing.proposalContractId ?? undefined,
+      };
+    }
+    return {
+      ok: false,
+      error:
+        'CommercialAgreement is already bound without this participant as a required party. Withdraw and create a new proposal revision before they can Accept.',
+    };
+  }
+
+  if (
+    existing?.proposalContractId &&
+    cantonRequiredPartiesEqual(existing.requiredParticipants, requiredParticipants)
+  ) {
+    return {
+      ok: true,
+      stage: existing.stage,
+      workflow: existing,
+      proposalContractId: existing.proposalContractId,
+    };
+  }
+
+  const platformParty = existing?.platformParty || resolveCantonPlatformParty();
+  const revision =
+    existing?.proposalContractId && existing.sharedTerms?.revision != null
+      ? existing.sharedTerms.revision + 1
+      : 0;
   const commandId = `sca-create-${Date.now()}`;
 
   const network = openCantonNetwork(ctx.organizationId, ctx.deal.id);
@@ -180,7 +217,7 @@ export async function syncCantonProposalOnAgreementShare(input: {
     acceptedParties: [],
     sharedTerms: {
       provvypayAgreementId: ctx.deal.id,
-      revision: 0,
+      revision,
       title: ctx.deal.dealName,
       currency: ctx.deal.projectValueCurrency ?? 'AUD',
       summary: ctx.deal.projectDescription ?? ctx.deal.dealName,
@@ -201,7 +238,7 @@ export async function syncCantonProposalOnAgreementShare(input: {
       requiredParticipants,
       currency: ctx.deal.projectValueCurrency ?? 'AUD',
       summary: ctx.deal.projectDescription ?? ctx.deal.dealName,
-      revision: 0,
+      revision,
     },
     occurredAt: new Date().toISOString(),
   });
@@ -251,17 +288,19 @@ export async function syncCantonParticipantApproval(input: {
     return { ok: false, error: 'Deal not found' };
   }
 
-  let workflow = readCantonWorkflowFromDeal(ctx.deal);
-  if (!workflow?.proposalContractId && !workflow?.agreementContractId) {
-    const proposal = await syncCantonProposalOnAgreementShare({ dealId: input.dealId });
-    if (!proposal.ok) {
-      return proposal;
-    }
-    const refreshed = await loadDealContext(input.dealId);
-    workflow = refreshed ? readCantonWorkflowFromDeal(refreshed.deal) : proposal.workflow ?? null;
+  const proposal = await syncCantonProposalOnAgreementShare({ dealId: input.dealId });
+  if (!proposal.ok) {
+    return proposal;
   }
 
-  const cantonParty = resolveCantonPartyForParticipant(input.participant);
+  const refreshed = await loadDealContext(input.dealId);
+  let workflow = refreshed
+    ? readCantonWorkflowFromDeal(refreshed.deal)
+    : proposal.workflow ?? null;
+
+  const mappedParticipant =
+    refreshed?.participants.find((p) => p.id === input.participant.id) ?? input.participant;
+  const cantonParty = resolveCantonPartyForParticipant(mappedParticipant);
   if (workflow?.acceptedParties.includes(cantonParty) && workflow.agreementContractId) {
     return {
       ok: true,

@@ -77,6 +77,18 @@ export function mergeCantonWorkflowIntoDeal(
   } as RecentDeal;
 }
 
+/** Snapshot sync often sends a stale deal without cantonWorkflow — keep the stored one. */
+export function preserveCantonWorkflowOnDeal(
+  existing: RecentDeal | null | undefined,
+  incoming: RecentDeal
+): RecentDeal {
+  const incomingWorkflow = readCantonWorkflowFromDeal(incoming);
+  if (incomingWorkflow) return incoming;
+  const existingWorkflow = existing ? readCantonWorkflowFromDeal(existing) : null;
+  if (!existingWorkflow) return incoming;
+  return mergeCantonWorkflowIntoDeal(incoming, existingWorkflow);
+}
+
 export function cantonWorkflowFromProjection(input: {
   projection: {
     provvypayAgreementId: string;

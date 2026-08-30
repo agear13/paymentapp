@@ -6,6 +6,10 @@ import {
   materializeConversationImportHistoryForDeal,
   mergeConversationImportHistoryOnDeal,
 } from '@/lib/operations/audit/conversation-import-audit';
+import {
+  mergeCantonWorkflowIntoDeal,
+  readCantonWorkflowFromDeal,
+} from '@/lib/commercial-network/canton-workflow-persistence';
 
 function baseDeal(): RecentDeal {
   return {
@@ -167,5 +171,31 @@ describe('conversation import history persistence', () => {
     const timeline = deriveConversationImportAuditTimeline([legacyOnly], legacyOnly.id);
     expect(timeline).toHaveLength(1);
     expect(timeline[0]?.conversationImport?.importId).toBe(`legacy-${legacyOnly.id}`);
+  });
+
+  it('keeps persisted cantonWorkflow when a stale snapshot omits it', () => {
+    const stored = mergeCantonWorkflowIntoDeal(baseDeal(), {
+      provvypayAgreementId: 'deal-audit-1',
+      stage: 'Proposed',
+      platformParty: 'party::provvypay-platform',
+      requiredParticipants: [{ party: 'party::participant-kai', role: 'Contributor' }],
+      acceptedParties: [],
+      sharedTerms: {
+        provvypayAgreementId: 'deal-audit-1',
+        revision: 0,
+        title: 'Audit Trail Project',
+        currency: 'AUD',
+        summary: 'Audit Trail Project',
+      },
+      proposalContractId: 'prop_keep',
+      agreementContractId: null,
+      settlementReadyContractId: null,
+    });
+
+    const merged = mergeConversationImportHistoryOnDeal(stored, baseDeal());
+    expect(readCantonWorkflowFromDeal(merged)?.proposalContractId).toBe('prop_keep');
+    expect(readCantonWorkflowFromDeal(merged)?.requiredParticipants).toEqual([
+      { party: 'party::participant-kai', role: 'Contributor' },
+    ]);
   });
 });

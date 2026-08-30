@@ -37,6 +37,7 @@ import type {
   ConversationImportAuditRecord,
   ConversationImportPartyRecord,
 } from '@/lib/operations/audit/conversation-import-audit-types';
+import { preserveCantonWorkflowOnDeal } from '@/lib/commercial-network/canton-workflow-persistence';
 
 export function buildAgreementTypeLabel(stats: ExtractionSummaryStats): string {
   const parts: string[] = [];
@@ -209,10 +210,10 @@ export function mergeConversationImportHistoryOnDeal(
         ? incomingHistory
         : existingHistory;
 
-  return {
+  return preserveCantonWorkflowOnDeal(existingDeal, {
     ...incoming,
     conversationImportHistory: history.length > 0 ? history : undefined,
-  };
+  });
 }
 
 export function appendConversationImportToDeal(

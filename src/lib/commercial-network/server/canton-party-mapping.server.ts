@@ -67,12 +67,30 @@ export function buildRequiredParticipantsForDeal(
   deal: RecentDeal,
   participants: DemoParticipant[]
 ): RequiredParticipant[] {
-  const dealParticipants = participants.filter(
-    (p) => p.dealId === deal.id && p.approvalStatus !== undefined
-  );
+  // Caller already scoped the deal. Only drop rows that explicitly belong elsewhere.
+  // Do not require approvalStatus — People-flow invitees are Pending and must still
+  // be written onto CommercialAgreementProposal.requiredParticipants.
+  return participants
+    .filter((p) => !p.dealId || p.dealId === deal.id)
+    .map((participant) => ({
+      party: resolveCantonPartyForParticipant(participant),
+      role: resolveCantonRoleLabel(participant, deal),
+    }));
+}
 
-  return dealParticipants.map((participant) => ({
-    party: resolveCantonPartyForParticipant(participant),
-    role: resolveCantonRoleLabel(participant, deal),
-  }));
+export function cantonRequiredPartiesEqual(
+  left: RequiredParticipant[],
+  right: RequiredParticipant[]
+): boolean {
+  if (left.length !== right.length) return false;
+  const parties = new Set(left.map((row) => row.party));
+  return right.every((row) => parties.has(row.party));
+}
+
+export function cantonRequiredPartiesMissing(
+  required: RequiredParticipant[],
+  existing: RequiredParticipant[]
+): RequiredParticipant[] {
+  const have = new Set(existing.map((row) => row.party));
+  return required.filter((row) => !have.has(row.party));
 }
