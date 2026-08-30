@@ -2,7 +2,10 @@ import 'server-only';
 
 import { prisma } from '@/lib/server/prisma';
 import { log } from '@/lib/logger';
-import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
+import {
+  getPilotSnapshotForUser,
+  type PilotSnapshotPayload,
+} from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { computePaymentLinkRailSetup } from '@/lib/payment-links/setup-status';
 import config from '@/lib/config/env';
 import { orchestrateOperationalMutation } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
@@ -64,12 +67,15 @@ export async function ensureWorkspaceExists(
 
 export async function ensureProjectBootstrapComplete(
   userId: string,
-  projectId?: string | null
+  projectId?: string | null,
+  options?: { snapshot?: PilotSnapshotPayload | Promise<PilotSnapshotPayload> }
 ): Promise<{ ready: boolean; projectId: string | null }> {
-  const snapshot = await getPilotSnapshotForUser(userId).catch(() => ({
-    deals: [],
-    participants: [],
-  }));
+  const snapshot = options?.snapshot
+    ? await options.snapshot
+    : await getPilotSnapshotForUser(userId).catch(() => ({
+        deals: [],
+        participants: [],
+      }));
 
   const candidateId = projectId ?? snapshot.deals.find((d) => !d.archived)?.id ?? null;
   if (!candidateId) {

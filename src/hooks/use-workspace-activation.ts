@@ -9,13 +9,11 @@ import {
   createFallbackActivation,
   createFallbackNextAction,
 } from '@/lib/onboarding/workspace-activation-fallback';
-import {
-  hasActiveOperationalPageLoadTrace,
-  parseOperationalApiJson,
-  readOperationalApiResponseDiagnostics,
-} from '@/lib/operations/dev/operational-api-fetch-diagnostics';
 import { logCoordinationFetch } from '@/lib/operations/dev/coordination-fetch-trace';
-import { recordCoordinationActivationRequest } from '@/lib/operations/dev/coordination-request-count';
+import {
+  fetchSharedWorkspaceActivation,
+  invalidateWorkspaceActivationSharedFetch,
+} from '@/lib/onboarding/workspace-activation-shared-fetch';
 
 export const WORKSPACE_ACTIVATION_REFRESH_EVENT = 'workspace-activation-refresh';
 
@@ -41,6 +39,7 @@ export function useWorkspaceActivation(options?: { enabled?: boolean }) {
   const [version, setVersion] = React.useState(0);
 
   const refresh = React.useCallback(() => {
+    invalidateWorkspaceActivationSharedFetch();
     setVersion((v) => v + 1);
   }, []);
 
@@ -50,94 +49,33 @@ export function useWorkspaceActivation(options?: { enabled?: boolean }) {
     let cancelled = false;
     setLoading(true);
     const activationRequestId = logCoordinationFetch('activation-start', {});
-    recordCoordinationActivationRequest();
     const activationStartedAt = performance.now();
 
-    void (async () => {
-      try {
-        const fetchStartedAt = performance.now();
-        const res = await fetch('/api/workspace/activation', { cache: 'no-store' });
-        const diagnostics = await readOperationalApiResponseDiagnostics(
-          '/api/workspace/activation',
-          res,
-          hasActiveOperationalPageLoadTrace()
-            ? { pageLoadLabel: 'A-activation', startedAt: fetchStartedAt }
-            : undefined
-        );
-        if (!diagnostics.shouldParseJson) {
-          if (!cancelled) {
-            setDegraded(true);
-            setData({
-              activation: createFallbackActivation(),
-              nextAction: createFallbackNextAction(),
-            });
-          }
-          logCoordinationFetch('activation-complete', {
-            requestId: activationRequestId,
-            durationMs: Math.round(performance.now() - activationStartedAt),
-            success: false,
-          });
-          return;
-        }
-        const json = parseOperationalApiJson<{
-          activation?: WorkspaceActivationSnapshot;
-          nextAction?: NextRecommendedAction;
-          operationalOnboarding?: OperationalOnboardingState;
-          operationalInitialization?: OperationalInitializationSnapshot;
-          correlationId?: string;
-          data?: ActivationResponse;
-        }>('/api/workspace/activation', diagnostics.bodyText);
-        const payload = json.data ?? {
-          activation: json.activation,
-          nextAction: json.nextAction,
-          operationalOnboarding: json.operationalOnboarding,
-          operationalInitialization: json.operationalInitialization,
-          correlationId: json.correlationId,
-        };
-        if (!cancelled && payload?.activation && payload?.nextAction) {
-          setData({
-            activation: payload.activation,
-            nextAction: payload.nextAction,
-            operationalOnboarding: payload.operationalOnboarding,
-            operationalInitialization: payload.operationalInitialization,
-            correlationId: payload.correlationId,
-          });
-          setDegraded(Boolean(payload.activation.degraded));
-          logCoordinationFetch('activation-complete', {
-            requestId: activationRequestId,
-            projectId: payload.activation.primaryProjectId ?? null,
-            durationMs: Math.round(performance.now() - activationStartedAt),
-            success: true,
-          });
-        } else if (!cancelled) {
-          setDegraded(true);
-          setData({
-            activation: createFallbackActivation(),
-            nextAction: createFallbackNextAction(),
-          });
-          logCoordinationFetch('activation-complete', {
-            requestId: activationRequestId,
-            durationMs: Math.round(performance.now() - activationStartedAt),
-            success: false,
-          });
-        }
-      } catch {
-        if (!cancelled) {
-          setDegraded(true);
-          setData({
-            activation: createFallbackActivation(),
-            nextAction: createFallbackNextAction(),
-          });
-        }
+    void fetchSharedWorkspaceActivation().then((result) => {
+      if (cancelled) return;
+      if (result.status === 'ok') {
+        setData(result.payload);
+        setDegraded(Boolean(result.payload.activation.degraded));
+        logCoordinationFetch('activation-complete', {
+          requestId: activationRequestId,
+          projectId: result.payload.activation.primaryProjectId ?? null,
+          durationMs: Math.round(performance.now() - activationStartedAt),
+          success: true,
+        });
+      } else {
+        setDegraded(true);
+        setData({
+          activation: createFallbackActivation(),
+          nextAction: createFallbackNextAction(),
+        });
         logCoordinationFetch('activation-complete', {
           requestId: activationRequestId,
           durationMs: Math.round(performance.now() - activationStartedAt),
           success: false,
         });
-      } finally {
-        if (!cancelled) setLoading(false);
       }
-    })();
+      setLoading(false);
+    });
 
     return () => {
       cancelled = true;

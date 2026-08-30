@@ -27,6 +27,7 @@ import {
   type ConvergenceRunResult,
 } from '@/lib/operations/onboarding/build-operational-onboarding-state.server';
 import { assertConvergenceInvariants } from '@/lib/operations/dev/operational-invariants';
+import type { PilotSnapshotPayload } from '@/lib/deal-network-demo/pilot-snapshot.server';
 
 export type { ConvergenceRunResult };
 
@@ -315,6 +316,8 @@ export async function resolveOperationalInitializationSnapshot(input: {
   userId: string;
   organizationId?: string | null;
   correlationId?: string;
+  /** Same-request pilot snapshot. Not returned to the client. */
+  pilotSnapshot?: PilotSnapshotPayload | Promise<PilotSnapshotPayload>;
   runtime?: {
     workspace: Awaited<ReturnType<typeof ensureWorkspaceExists>>;
     project: Awaited<ReturnType<typeof ensureProjectBootstrapComplete>>;
@@ -344,7 +347,9 @@ export async function resolveOperationalInitializationSnapshot(input: {
     (await ensureWorkspaceExists(input.userId, orgId));
   const project =
     input.runtime?.project ??
-    (await ensureProjectBootstrapComplete(input.userId, null));
+    (await ensureProjectBootstrapComplete(input.userId, null, {
+      snapshot: input.pilotSnapshot,
+    }));
   const rails =
     input.runtime?.rails ??
     (await ensureSettlementRailsInitialized(workspace.organizationId));

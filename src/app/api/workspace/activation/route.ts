@@ -3,7 +3,10 @@ import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { apiError, apiResponse } from '@/lib/api/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { getOperatorOnboardingState } from '@/lib/onboarding/operator-onboarding.server';
-import { getPilotSnapshotForUser } from '@/lib/deal-network-demo/pilot-snapshot.server';
+import {
+  getPilotSnapshotForUser,
+  type PilotSnapshotPayload,
+} from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { merchantRowToRailFlags } from '@/lib/onboarding/workspace-activation-state';
 import config from '@/lib/config/env';
 import { evaluateWorkspaceCompensationReadiness } from '@/lib/participants/participant-compensation';
@@ -74,10 +77,16 @@ export async function GET(request: Request) {
         return apiResponse({ activation, nextAction });
       }
 
+      const emptyPilotSnapshot: PilotSnapshotPayload = { deals: [], participants: [] };
+      const pilotSnapshotPromise = getPilotSnapshotForUser(user.id).catch(
+        () => emptyPilotSnapshot
+      );
+
       const initStartedAt = Date.now();
       const initSnapshot = await resolveOperationalInitializationSnapshot({
         userId: user.id,
         organizationId: org.id,
+        pilotSnapshot: pilotSnapshotPromise,
       });
       const initializationDurationMs = Date.now() - initStartedAt;
       logOperationalApiRoutePhase(ctx, {
@@ -115,7 +124,7 @@ export async function GET(request: Request) {
             },
           }),
           getOperatorOnboardingState(org.id),
-          getPilotSnapshotForUser(user.id).catch(() => ({ deals: [], participants: [] })),
+          pilotSnapshotPromise,
           prisma.payment_links.count({ where: { organization_id: org.id } }).catch(() => 0),
           prisma.payout_batches.count({ where: { organization_id: org.id } }).catch(() => 0),
         ]);
