@@ -1918,3 +1918,17 @@ model user_mfa_recovery_codes {
 
   @@index([user_id])
 }
+
+/// Public campaign waitlist (e.g. Jarvis). Not an account and not an Agreement Analyzer lead.
+model marketing_waitlist_signups {
+  id                      String   @id @default(uuid()) @db.Uuid
+  email                   String   @db.VarChar(320)
+  source                  String   @db.VarChar(64)
+  landing_page            String?  @db.VarChar(255)
+  privacy_acknowledged_at DateTime @db.Timestamptz(6)
+  created_at              DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([email, source])
+  @@index([source])
+  @@index([created_at(sort: Desc)])
+}
