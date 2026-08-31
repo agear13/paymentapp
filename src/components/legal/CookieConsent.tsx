@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { ProvvypayPrivacyLink } from "@/components/legal/provvypay-legal-links";
+import { isJarvisRecordingMode } from "@/lib/jarvis/jarvis-recording-mode";
 
 type CookiePreferences = {
   essential: boolean;
@@ -11,6 +13,8 @@ type CookiePreferences = {
 };
 
 export default function CookieConsent() {
+  const pathname = usePathname();
+  const hideForDevRecording = isJarvisRecordingMode(pathname);
   const [showBanner, setShowBanner] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
   const [preferences, setPreferences] = useState<CookiePreferences>({
@@ -20,6 +24,7 @@ export default function CookieConsent() {
   });
 
   useEffect(() => {
+    if (hideForDevRecording) return;
     // Check if user has already made a cookie choice
     const consent = localStorage.getItem("cookie_consent");
     if (!consent) {
@@ -35,7 +40,7 @@ export default function CookieConsent() {
         console.error("Error loading cookie preferences:", error);
       }
     }
-  }, []);
+  }, [hideForDevRecording]);
 
   const applyCookiePreferences = (prefs: CookiePreferences) => {
     // Apply analytics cookies
@@ -108,7 +113,7 @@ export default function CookieConsent() {
     }));
   };
 
-  if (!showBanner) return null;
+  if (hideForDevRecording || !showBanner) return null;
 
   return (
     <>

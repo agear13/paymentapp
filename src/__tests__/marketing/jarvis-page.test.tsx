@@ -44,7 +44,20 @@ describe('JarvisPage', () => {
     expect(
       screen.getByText(/examples of the intended future experience/i)
     ).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /what if your business had a jarvis/i })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /meet jarvis for your business/i })).toBeInTheDocument();
+    expect(document.querySelector('.jarvis-demo-engine')).not.toBeNull();
+    expect(document.querySelector('.jarvis-demo-engine')).toHaveAttribute(
+      'data-execution',
+      'simulated'
+    );
+    expect(document.querySelector('.jarvis-demo-engine')).toHaveAttribute(
+      'data-hero-scenario',
+      'invoice-execution'
+    );
+    expect(screen.getByRole('link', { name: /explore what provvy can do today/i })).toHaveAttribute(
+      'href',
+      '/journey'
+    );
   });
 
   it('requires an explicit privacy consent checkbox with the existing Privacy Policy link', () => {
