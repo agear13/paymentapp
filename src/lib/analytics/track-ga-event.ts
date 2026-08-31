@@ -13,6 +13,7 @@ export const JARVIS_GA_EVENTS = {
   waitlistStarted: 'jarvis_waitlist_started',
   waitlistSubmitted: 'jarvis_waitlist_submitted',
   waitlistSuccess: 'jarvis_waitlist_success',
+  exploreProvvyClicked: 'jarvis_explore_provvy_clicked',
 } as const;
 
 export type GaEventParams = Record<string, string | number | boolean>;

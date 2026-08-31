@@ -23,6 +23,7 @@ jest.mock('@/lib/analytics/track-ga-event', () => ({
     waitlistStarted: 'jarvis_waitlist_started',
     waitlistSubmitted: 'jarvis_waitlist_submitted',
     waitlistSuccess: 'jarvis_waitlist_success',
+    exploreProvvyClicked: 'jarvis_explore_provvy_clicked',
   },
   trackGaEvent: jest.fn(),
 }));
@@ -114,5 +115,25 @@ describe('JarvisWaitlistForm', () => {
       ['jarvis_waitlist_success'],
     ]);
     expect(JSON.stringify(trackGaEvent.mock.calls)).not.toContain('ada@provvy.com');
+  });
+
+  it('shows Explore Provvy after signup without exposing the email', async () => {
+    render(<JarvisWaitlistForm />);
+    fireEvent.change(screen.getByLabelText(/email address/i), {
+      target: { value: 'ada@provvy.com' },
+    });
+    fireEvent.click(
+      screen.getByRole('checkbox', {
+        name: /i agree to provvy's privacy policy and to being contacted about the jarvis early-access program/i,
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: /join the jarvis waitlist/i }));
+
+    expect(await screen.findByRole('link', { name: /explore provvy/i })).toHaveAttribute(
+      'href',
+      '/journey'
+    );
+    expect(screen.getByText(/we'll let you know when jarvis early access opens/i)).toBeInTheDocument();
+    expect(screen.queryByText('ada@provvy.com')).not.toBeInTheDocument();
   });
 });

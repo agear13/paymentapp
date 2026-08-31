@@ -6,6 +6,7 @@ import {
   JARVIS_WAITLIST_SOURCE,
   normalizeJarvisWaitlistEmail,
 } from '@/lib/marketing/jarvis-waitlist';
+import { sendJarvisWaitlistWelcomeEmail } from '@/lib/marketing/send-jarvis-waitlist-welcome.server';
 
 export type JoinJarvisWaitlistInput = {
   email: string;
@@ -14,6 +15,7 @@ export type JoinJarvisWaitlistInput = {
 
 export type JoinJarvisWaitlistResult = {
   ok: true;
+  signup: 'created' | 'existing';
 };
 
 export class JarvisWaitlistConsentError extends Error {
@@ -48,7 +50,9 @@ export const joinJarvisWaitlist = async (
     if (!isUniqueConstraintError(error)) {
       throw error;
     }
+    return { ok: true, signup: 'existing' };
   }
 
-  return { ok: true };
+  await sendJarvisWaitlistWelcomeEmail({ to: email });
+  return { ok: true, signup: 'created' };
 };

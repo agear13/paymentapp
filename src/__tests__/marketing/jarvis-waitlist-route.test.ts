@@ -59,7 +59,7 @@ describe('POST /api/jarvis/waitlist', () => {
   });
 
   it('accepts a valid signup with consent and does not return the email', async () => {
-    joinMock.mockResolvedValue({ ok: true });
+    joinMock.mockResolvedValue({ ok: true, signup: 'created' });
     const res = await POST(
       request({ email: 'ada@provvy.com', consent: true }, 'https://app.example/secret?token=abc') as never
     );
@@ -69,6 +69,9 @@ describe('POST /api/jarvis/waitlist', () => {
     expect(json.message).toMatch(/waitlist/i);
     expect(JSON.stringify(json)).not.toContain('ada@provvy.com');
     expect(json).not.toHaveProperty('email');
+    expect(json).not.toHaveProperty('signup');
+    expect(json).not.toHaveProperty('created');
+    expect(json).not.toHaveProperty('existing');
     expect(joinMock).toHaveBeenCalledWith({
       email: 'ada@provvy.com',
       consent: true,
@@ -90,7 +93,9 @@ describe('POST /api/jarvis/waitlist', () => {
   });
 
   it('returns the same success payload for new and duplicate signups', async () => {
-    joinMock.mockResolvedValue({ ok: true });
+    joinMock
+      .mockResolvedValueOnce({ ok: true, signup: 'created' })
+      .mockResolvedValueOnce({ ok: true, signup: 'existing' });
     const first = await POST(request({ email: 'ada@provvy.com', consent: true }) as never);
     const second = await POST(request({ email: 'ada@provvy.com', consent: true }) as never);
     const firstJson = await first.json();

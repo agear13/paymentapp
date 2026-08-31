@@ -1,0 +1,170 @@
+import { PROVVYPAY_PRIVACY_PATH } from '@/lib/legal/provvypay-legal-paths';
+
+export const JARVIS_WAITLIST_WELCOME_SUBJECT = "You're on the list for Provvy Jarvis.";
+
+export const JARVIS_WAITLIST_WELCOME_PREHEADER =
+  "You're on the list. Here's where Provvy is going next — and what you can use today.";
+
+export const JARVIS_WAITLIST_WELCOME_EXAMPLES = [
+  'Provvy, generate the invoice for Apex Promotions and send it to Sarah.',
+  "Provvy, follow up with everyone who hasn't approved the agreement.",
+  "Provvy, tell me what's holding up the deal.",
+] as const;
+
+export type JarvisWaitlistWelcomeEmailParams = {
+  exploreUrl: string;
+  privacyUrl: string;
+};
+
+const FONT =
+  "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif";
+
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+const preheaderPad =
+  '&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;';
+
+const quoteRow = (example: string): string => `
+                      <tr>
+                        <td style="padding:0 0 10px;">
+                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="border-collapse:collapse;table-layout:fixed;width:100%;">
+                            <tr>
+                              <td width="3" bgcolor="#7C5CFF" style="width:3px;font-size:0;line-height:0;">&nbsp;</td>
+                              <td bgcolor="#221c32" style="padding:12px 16px;font-family:${FONT};font-size:15px;line-height:1.55;color:#ece8f4;word-break:break-word;overflow-wrap:break-word;">
+                                “${escapeHtml(example)}”
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>`;
+
+export function buildJarvisWaitlistWelcomeEmail(
+  params: JarvisWaitlistWelcomeEmailParams
+): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const exploreUrl = params.exploreUrl;
+  const privacyUrl = params.privacyUrl || PROVVYPAY_PRIVACY_PATH;
+  const safeExplore = escapeHtml(exploreUrl);
+  const safePrivacy = escapeHtml(privacyUrl);
+  const subject = JARVIS_WAITLIST_WELCOME_SUBJECT;
+  const examplesHtml = JARVIS_WAITLIST_WELCOME_EXAMPLES.map(quoteRow).join('');
+  const examplesText = JARVIS_WAITLIST_WELCOME_EXAMPLES.map((example) => `“${example}”`).join('\n\n');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
+  <title>${escapeHtml(subject)}</title>
+  <style type="text/css">
+    @media screen and (max-width: 600px) {
+      .jarvis-email-card {
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;width:100%;max-width:100%;background-color:#100e18;font-family:${FONT};">
+  <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">
+    ${escapeHtml(JARVIS_WAITLIST_WELCOME_PREHEADER)}${preheaderPad}
+  </div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#100e18" style="background-color:#100e18;margin:0;padding:0;width:100%;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <div class="jarvis-email-card" style="width:100%;max-width:560px;margin:0 auto;">
+        <!--[if (gte mso 9)|(IE)]>
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" border="0" align="center"><tr><td>
+        <![endif]-->
+        <table class="jarvis-email-card" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100% !important;max-width:560px;border-collapse:collapse;table-layout:fixed;">
+          <tr>
+            <td bgcolor="#17141f" style="background-color:#17141f;border:1px solid #3d3554;border-radius:12px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;table-layout:fixed;">
+                <tr>
+                  <td style="padding:28px 24px 12px;border-bottom:1px solid #3d3554;">
+                    <p style="margin:0;font-family:${FONT};font-size:12px;font-weight:700;letter-spacing:0.18em;text-transform:uppercase;color:#c4b5fd;">Provvy</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:28px 24px 8px;word-break:break-word;overflow-wrap:break-word;">
+                    <h1 style="margin:0 0 12px;font-family:${FONT};font-size:24px;line-height:1.25;font-weight:700;color:#f5f3ff;">You're on the list for Jarvis.</h1>
+                    <p style="margin:0 0 24px;font-family:${FONT};font-size:16px;line-height:1.6;color:#c9c2d8;">You're officially on the early-access list for the next way to interact with Provvy.</p>
+                    <h2 style="margin:0 0 10px;font-family:${FONT};font-size:18px;line-height:1.35;font-weight:600;color:#f5f3ff;">Tell Provvy what needs to happen.</h2>
+                    <p style="margin:0 0 20px;font-family:${FONT};font-size:15px;line-height:1.65;color:#c9c2d8;">Jarvis is being built so you can speak naturally to Provvy and have it understand the commercial context of your business — then coordinate the work.</p>
+                    <p style="margin:0 0 12px;font-family:${FONT};font-size:12px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#9b7dff;">For example</p>
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                      ${examplesHtml}
+                    </table>
+                    <h2 style="margin:24px 0 10px;font-family:${FONT};font-size:18px;line-height:1.35;font-weight:600;color:#f5f3ff;">You don't have to wait for Provvy.</h2>
+                    <p style="margin:0 0 24px;font-family:${FONT};font-size:15px;line-height:1.65;color:#c9c2d8;">Jarvis is the next interface we're building for Provvy. The commercial intelligence underneath it is already here.</p>
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 12px;">
+                      <tr>
+                        <td bgcolor="#7C5CFF" style="background-color:#7C5CFF;border-radius:8px;">
+                          <a href="${safeExplore}" style="display:inline-block;padding:14px 28px;font-family:${FONT};font-size:15px;font-weight:600;line-height:1.2;color:#ffffff;text-decoration:none;">Explore Provvy →</a>
+                        </td>
+                      </tr>
+                    </table>
+                    <p style="margin:0 0 20px;font-family:${FONT};font-size:12px;line-height:1.5;color:#8b8499;word-break:break-all;">If the button does not work, copy this link:<br>${safeExplore}</p>
+                    <p style="margin:0;font-family:${FONT};font-size:15px;line-height:1.65;color:#c9c2d8;">We'll let you know when Jarvis opens for early access.</p>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:20px 24px 28px;border-top:1px solid #3d3554;word-break:break-word;overflow-wrap:break-word;">
+                    <p style="margin:0 0 8px;font-family:${FONT};font-size:12px;line-height:1.55;color:#8b8499;">You're receiving this because you joined the Provvy Jarvis early-access waitlist.</p>
+                    <p style="margin:0;font-family:${FONT};font-size:12px;line-height:1.55;color:#8b8499;">
+                      <a href="${safePrivacy}" style="color:#c4b5fd;text-decoration:underline;">Privacy Policy</a>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+        <!--[if (gte mso 9)|(IE)]>
+        </td></tr></table>
+        <![endif]-->
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  const text = [
+    JARVIS_WAITLIST_WELCOME_PREHEADER,
+    '',
+    "You're on the list for Jarvis.",
+    '',
+    "You're officially on the early-access list for the next way to interact with Provvy.",
+    '',
+    'Tell Provvy what needs to happen.',
+    '',
+    'Jarvis is being built so you can speak naturally to Provvy and have it understand the commercial context of your business — then coordinate the work.',
+    '',
+    'For example:',
+    examplesText,
+    '',
+    "You don't have to wait for Provvy.",
+    '',
+    "Jarvis is the next interface we're building for Provvy. The commercial intelligence underneath it is already here.",
+    '',
+    `Explore Provvy → ${exploreUrl}`,
+    '',
+    "We'll let you know when Jarvis opens for early access.",
+    '',
+    "You're receiving this because you joined the Provvy Jarvis early-access waitlist.",
+    `Privacy Policy: ${privacyUrl}`,
+  ].join('\n');
+
+  return { subject, html, text };
+}

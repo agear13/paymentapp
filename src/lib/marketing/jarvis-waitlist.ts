@@ -3,6 +3,7 @@ import { turnstileTokenSchema } from '@/lib/auth/auth-api.shared';
 
 export const JARVIS_WAITLIST_SOURCE = 'jarvis_campaign';
 export const JARVIS_LANDING_PATH = '/jarvis';
+export { PROVVY_TODAY_PATH } from '@/lib/marketing/provvy-today';
 
 export const jarvisWaitlistEmailSchema = z
   .string()

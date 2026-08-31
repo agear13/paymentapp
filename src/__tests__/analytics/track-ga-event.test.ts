@@ -29,11 +29,13 @@ describe('trackGaEvent', () => {
     trackGaEvent('jarvis_waitlist_started');
     trackGaEvent('jarvis_waitlist_submitted');
     trackGaEvent('jarvis_waitlist_success');
+    trackGaEvent('jarvis_explore_provvy_clicked');
     expect(gtag.mock.calls).toEqual([
       ['event', 'jarvis_landing_view', undefined],
       ['event', 'jarvis_waitlist_started', undefined],
       ['event', 'jarvis_waitlist_submitted', undefined],
       ['event', 'jarvis_waitlist_success', undefined],
+      ['event', 'jarvis_explore_provvy_clicked', undefined],
     ]);
     const serialized = JSON.stringify(gtag.mock.calls);
     expect(serialized).not.toMatch(/@/);

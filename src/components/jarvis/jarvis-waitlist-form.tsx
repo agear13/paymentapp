@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { ProvvypayPrivacyLink } from '@/components/legal/provvypay-legal-links';
 import { TurnstileWidget } from '@/components/auth/turnstile-widget';
+import { ExploreProvvyLink } from '@/components/jarvis/explore-provvy-link';
 import { JARVIS_GA_EVENTS, trackGaEvent } from '@/lib/analytics/track-ga-event';
 
 type FormStatus = 'idle' | 'submitting' | 'success' | 'error';
@@ -103,9 +104,29 @@ export function JarvisWaitlistForm({
         <div className="flex items-start gap-3">
           <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
           <div>
-            <p className="text-[15px] font-semibold">You're on the list</p>
-            <p className="mt-1 text-[13.5px] text-ink-soft">{message}</p>
+            <p className="text-[15px] font-semibold">You're on the list.</p>
+            <p className="mt-1 text-[13.5px] text-ink-soft">
+              We&apos;ll let you know when Jarvis early access opens.
+            </p>
           </div>
+        </div>
+        <div className="mt-5 border-t border-primary/15 pt-4">
+          <p className="text-[15px] font-semibold">While you wait, meet the Provvy that&apos;s already here.</p>
+          <p className="mt-2 text-[13.5px] leading-relaxed text-ink-soft">
+            Jarvis is where we&apos;re taking Provvy next. Today, Provvy already gives businesses a
+            commercial operating system that understands agreements, people, obligations and
+            payments.
+          </p>
+          <ExploreProvvyLink className="group mt-4 inline-flex items-center gap-2 rounded-2xl bg-gradient-purple px-5 py-3 text-[15px] font-medium text-primary-foreground shadow-glow">
+            Explore Provvy →
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          </ExploreProvvyLink>
+          <a
+            href="#jarvis-demo-heading"
+            className="mt-3 block text-[13px] text-ink-soft underline-offset-2 hover:text-foreground hover:underline"
+          >
+            Keep exploring Jarvis
+          </a>
         </div>
       </div>
     );
