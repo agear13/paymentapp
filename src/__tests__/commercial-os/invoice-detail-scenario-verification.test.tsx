@@ -21,6 +21,10 @@ import type { LifecycleSnapshot } from '@/lib/payment-links/payment-link-merchan
 const BASE_CREATED = '2026-08-13T10:00:00.000Z';
 const BASE_SENT = '2026-08-14T09:00:00.000Z';
 const BASE_PAID = '2026-08-15T12:00:00.000Z';
+const MS_DAY = 24 * 60 * 60 * 1000;
+const futureDueDate = () => new Date(Date.now() + 14 * MS_DAY);
+const pastDueDate = () => new Date(Date.now() - 14 * MS_DAY);
+const futureExpiry = () => new Date(Date.now() + 45 * MS_DAY);
 
 const NOT_CONNECTED = { connected: false, syncReady: false };
 const CONNECTED_READY = { connected: true, syncReady: true };
@@ -38,8 +42,8 @@ function baseDetail(overrides: Partial<PaymentLinkDetails> = {}): PaymentLinkDet
     customerName: 'Verify Co',
     customerPhone: null,
     invoiceDate: new Date('2026-08-01T00:00:00Z'),
-    dueDate: new Date('2026-08-31T00:00:00Z'),
-    expiresAt: new Date('2026-09-30T00:00:00Z'),
+    dueDate: futureDueDate(),
+    expiresAt: futureExpiry(),
     paymentMethod: 'STRIPE',
     createdAt: new Date(BASE_CREATED),
     updatedAt: new Date(BASE_CREATED),
@@ -400,6 +404,30 @@ describe('invoice detail scenario verification (view-model + UI surfaces)', () =
     });
   });
 
+  it('G: unpaid past due is Overdue even after send', () => {
+    const detail = baseDetail({
+      dueDate: pastDueDate(),
+      lastSentAt: new Date(BASE_SENT),
+      lastSentToEmail: 'client@example.com',
+    });
+
+    const vm = deriveInvoiceDetailViewModel({
+      detail,
+      lifecycle: OUTSTANDING_LIFECYCLE,
+      accountingConnection: NOT_CONNECTED,
+    });
+    const s = deriveUiSurfaces(vm, detail);
+
+    expectSurfaces('G sent + past due', s, {
+      headerBadge: 'Overdue',
+      heroHeadline: 'Overdue',
+      heroPaymentStatus: 'Unpaid',
+      sidebarPayment: 'Unpaid',
+      sidebarSent: 'Sent',
+      sendInvoiceCtaLabel: 'Resend invoice',
+    });
+  });
+
   it('deduplicates duplicate invoice created events in commercial activity', () => {
     const detail = baseDetail({
       lastSentAt: new Date('2026-08-13T13:55:00.000Z'),
@@ -705,5 +733,18 @@ describe('invoice detail scenario verification (rendered DOM)', () => {
     const { vm } = renderAndExpect('6');
     expect(vm.accountingState).toBe('synced');
     expect(screen.getAllByText('Synced').length).toBeGreaterThan(0);
+  });
+
+  it('DOM matches view-model for overdue unpaid invoice', () => {
+    mockDetail = baseDetail({
+      dueDate: pastDueDate(),
+      lastSentAt: new Date(BASE_SENT),
+      lastSentToEmail: 'client@example.com',
+    });
+    mockLifecycle = OUTSTANDING_LIFECYCLE;
+    mockReadiness = NOT_CONNECTED;
+    const { vm } = renderAndExpect('overdue');
+    expect(vm.displayStatus).toBe('Overdue');
+    expect(screen.getAllByText('Overdue').length).toBeGreaterThan(0);
   });
 });

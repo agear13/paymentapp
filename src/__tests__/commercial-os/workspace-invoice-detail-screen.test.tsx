@@ -1,9 +1,14 @@
 /** @jest-environment jsdom */
 
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { cleanup, render, screen } from '@testing-library/react';
 import type { PaymentLinkDetails } from '@/components/payment-links/payment-link-detail-dialog';
 import { WorkspaceInvoiceDetailScreen } from '@/components/journey/lovable/workspace-invoice-detail-screen';
+
+const MS_DAY = 24 * 60 * 60 * 1000;
+const futureDueDate = () => new Date(Date.now() + 14 * MS_DAY);
+const pastDueDate = () => new Date(Date.now() - 14 * MS_DAY);
+const futureExpiry = () => new Date(Date.now() + 45 * MS_DAY);
 
 const mockDetail: PaymentLinkDetails = {
   id: 'plink-001',
@@ -17,8 +22,8 @@ const mockDetail: PaymentLinkDetails = {
   customerName: 'Acme Pty Ltd',
   customerPhone: null,
   invoiceDate: new Date('2026-08-01T00:00:00Z'),
-  dueDate: new Date('2026-08-31T00:00:00Z'),
-  expiresAt: new Date('2026-09-30T00:00:00Z'),
+  dueDate: futureDueDate(),
+  expiresAt: futureExpiry(),
   paymentMethod: 'STRIPE',
   createdAt: new Date('2026-08-13T00:00:00Z'),
   updatedAt: new Date('2026-08-13T00:00:00Z'),
@@ -74,7 +79,11 @@ jest.mock('@/components/payment-links/payment-lifecycle-panel', () => ({
 }));
 
 describe('WorkspaceInvoiceDetailScreen', () => {
+  afterEach(() => cleanup());
+
   it('renders unsent invoice state without contradictory sent/sync labels', () => {
+    mockDetail.dueDate = futureDueDate();
+
     render(
       <WorkspaceInvoiceDetailScreen
         invoiceNumber="INV-2026-001"
@@ -88,6 +97,21 @@ describe('WorkspaceInvoiceDetailScreen', () => {
     expect(screen.getAllByText('Accounting not connected').length).toBeGreaterThan(0);
     expect(screen.queryByText('Sync in progress')).not.toBeInTheDocument();
     expect(screen.queryByText('Last synced')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Acme Pty Ltd' })).toBeInTheDocument();
+  });
+
+  it('shows Overdue when an unpaid invoice due date is in the past', () => {
+    mockDetail.dueDate = pastDueDate();
+
+    render(
+      <WorkspaceInvoiceDetailScreen
+        invoiceNumber="INV-2026-001"
+        paymentLinkId={mockDetail.id}
+      />
+    );
+
+    expect(screen.getAllByText('Overdue').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Unsent')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Acme Pty Ltd' })).toBeInTheDocument();
   });
 });
