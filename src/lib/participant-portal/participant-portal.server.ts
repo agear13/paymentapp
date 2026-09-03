@@ -7,6 +7,7 @@
 import 'server-only';
 import { v4 as uuidv4 } from 'uuid';
 import type { Prisma } from '@prisma/client';
+import { log } from '@/lib/logger';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { prisma } from '@/lib/server/prisma';
 import {
@@ -167,8 +168,16 @@ export async function resolveParticipantAuthDestinationForUser(user: {
   email?: string | null;
   id: string;
 }): Promise<ParticipantAuthDestination> {
-  const workspaces = await listAuthorisedParticipantWorkspacesForUser(user);
-  return resolveAuthorizedParticipantDestination(workspaces.map((row) => row.path));
+  try {
+    const workspaces = await listAuthorisedParticipantWorkspacesForUser(user);
+    return resolveAuthorizedParticipantDestination(workspaces.map((row) => row.path));
+  } catch (error) {
+    log.warn('participant auth destination lookup failed', {
+      userId: user.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return { kind: 'none' };
+  }
 }
 
 export async function listAuthorisedParticipantWorkspacesForUser(user: {

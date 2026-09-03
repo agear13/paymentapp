@@ -70,7 +70,7 @@ async function recordVerifiedLogin(input: {
   user: User;
   request: NextRequest;
   type: string | null;
-}) {
+}): Promise<boolean> {
   const verified = isEmailVerified(input.user);
   if (input.type === 'signup' || input.type === 'email' || verified) {
     recordAuthAuditEvent({
@@ -82,19 +82,109 @@ async function recordVerifiedLogin(input: {
   }
   if (!verified) return false;
 
-  await recordSuccessfulLogin({
-    userId: input.user.id,
-    email: input.user.email ?? undefined,
-    request: input.request,
-  });
-  recordAuthAuditEvent({
-    eventType: AuditEventType.AUTH_LOGIN_SUCCESS,
-    userId: input.user.id,
-    email: input.user.email ?? undefined,
-    request: input.request,
-    metadata: { source: 'email_callback' },
-  });
+  try {
+    await recordSuccessfulLogin({
+      userId: input.user.id,
+      email: input.user.email ?? undefined,
+      request: input.request,
+    });
+    recordAuthAuditEvent({
+      eventType: AuditEventType.AUTH_LOGIN_SUCCESS,
+      userId: input.user.id,
+      email: input.user.email ?? undefined,
+      request: input.request,
+      metadata: { source: 'email_callback' },
+    });
+  } catch (error) {
+    loggers.auth.warn('participant_auth_callback_login_tracking_failed', {
+      userId: input.user.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   return true;
+}
+
+function merchantFallbackDestination(candidateReturn: string | null): string {
+  return merchantPostVerificationDestination(candidateReturn);
+}
+
+async function resolvePostExchangeRedirect(input: {
+  callbackUser: User;
+  candidateReturn: string | null;
+  exchangedUser: User;
+  getUserResult: User | null;
+  request: NextRequest;
+  type: string | null;
+  origin: string;
+}): Promise<string> {
+  if (isParticipantInvitationReturn(input.candidateReturn)) {
+    const token = participantTokenFromReturnPath(input.candidateReturn);
+    const { findParticipantByPortalToken } = await import(
+      '@/lib/participant-portal/participant-portal.server'
+    );
+    let found: Awaited<ReturnType<typeof findParticipantByPortalToken>> = null;
+    try {
+      found = token ? await findParticipantByPortalToken(token) : null;
+    } catch (error) {
+      loggers.auth.warn('participant_auth_callback_portal_lookup_failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    const plan = planParticipantCallbackSession({
+      candidateReturn: input.candidateReturn,
+      exchangeSucceeded: true,
+      exchangedUser: toSessionUser(input.exchangedUser),
+      getUserResult: toSessionUser(input.getUserResult),
+      participant: found
+        ? {
+            invitedEmail: found.participantEmail,
+            authenticatedUserId: found.authenticatedUserId,
+            dealOwnerUserId: found.dealUserId,
+          }
+        : null,
+    });
+
+    if (!isEmailVerified(input.callbackUser)) {
+      const verify = new URL('/auth/verify-email', input.origin);
+      verify.searchParams.set('redirectedFrom', input.candidateReturn);
+      return `${verify.pathname}${verify.search}`;
+    }
+
+    await recordVerifiedLogin({
+      user: input.callbackUser,
+      request: input.request,
+      type: input.type,
+    });
+    return plan.redirectPath;
+  }
+
+  const verified = await recordVerifiedLogin({
+    user: input.callbackUser,
+    request: input.request,
+    type: input.type,
+  });
+  if (!verified) {
+    const verify = new URL('/auth/verify-email', input.origin);
+    if (input.candidateReturn) {
+      verify.searchParams.set('redirectedFrom', input.candidateReturn);
+    }
+    return `${verify.pathname}${verify.search}`;
+  }
+
+  const { resolveParticipantAuthDestinationForUser } = await import(
+    '@/lib/participant-portal/participant-portal.server'
+  );
+  const restored = await resolveParticipantAuthDestinationForUser({
+    email: input.callbackUser.email,
+    id: input.callbackUser.id,
+  });
+  if (restored.kind === 'unique' || restored.kind === 'chooser') {
+    return restored.path;
+  }
+
+  return merchantFallbackDestination(input.candidateReturn);
 }
 
 export async function GET(request: NextRequest) {
@@ -231,55 +321,27 @@ export async function GET(request: NextRequest) {
 
   let redirectPath = completeSignInPath(candidateReturn);
 
-  if (isParticipantInvitationReturn(candidateReturn)) {
-    const token = participantTokenFromReturnPath(candidateReturn);
-    const { findParticipantByPortalToken } = await import(
-      '@/lib/participant-portal/participant-portal.server'
-    );
-    const found = token ? await findParticipantByPortalToken(token) : null;
-    const plan = planParticipantCallbackSession({
-      candidateReturn,
-      exchangeSucceeded: true,
-      exchangedUser: toSessionUser(exchangedUser),
-      getUserResult: toSessionUser(getUserResult),
-      participant: found
-        ? {
-            invitedEmail: found.participantEmail,
-            authenticatedUserId: found.authenticatedUserId,
-            dealOwnerUserId: found.dealUserId,
-          }
-        : null,
-    });
-
-    if (callbackUser && !isEmailVerified(callbackUser)) {
-      const verify = new URL('/auth/verify-email', origin);
-      verify.searchParams.set('redirectedFrom', candidateReturn);
-      redirectPath = `${verify.pathname}${verify.search}`;
-    } else {
-      await recordVerifiedLogin({ user: callbackUser, request, type });
-      redirectPath = plan.redirectPath;
-    }
-  } else if (callbackUser) {
-    const verified = await recordVerifiedLogin({ user: callbackUser, request, type });
-    if (!verified) {
-      const verify = new URL('/auth/verify-email', origin);
-      if (candidateReturn) {
-        verify.searchParams.set('redirectedFrom', candidateReturn);
-      }
-      redirectPath = `${verify.pathname}${verify.search}`;
-    } else {
-      const { resolveParticipantAuthDestinationForUser } = await import(
-        '@/lib/participant-portal/participant-portal.server'
-      );
-      const restored = await resolveParticipantAuthDestinationForUser({
-        email: callbackUser.email,
-        id: callbackUser.id,
+  if (callbackUser) {
+    try {
+      redirectPath = await resolvePostExchangeRedirect({
+        callbackUser,
+        candidateReturn,
+        exchangedUser,
+        getUserResult,
+        request,
+        type,
+        origin,
       });
-      if (restored.kind === 'unique' || restored.kind === 'chooser') {
-        redirectPath = restored.path;
-      } else {
-        redirectPath = merchantPostVerificationDestination(candidateReturn);
-      }
+    } catch (error) {
+      loggers.auth.error('participant_auth_callback_post_exchange_failed', {
+        ...logBase,
+        error: error instanceof Error ? error.message : String(error),
+        exchangedUserId: exchangedUser.id,
+      });
+      redirectPath =
+        isEmailVerified(callbackUser) && !isParticipantInvitationReturn(candidateReturn)
+          ? merchantFallbackDestination(candidateReturn)
+          : completeSignInPath(candidateReturn, 'callback_failed');
     }
   }
 

@@ -51,6 +51,13 @@ function AuthCallbackCompleteInner() {
         return;
       }
 
+      if (errorParam === 'callback_failed') {
+        setStatus(
+          'Sign-in completed but Provvy could not finish routing your account. Try opening your workspace again or sign in from the login page.'
+        );
+        return;
+      }
+
       setStatus(
         'Sign-in did not complete. This page never received an auth code. Open the newest sign-in email (not the original Review agreement invitation) in this browser.'
       );

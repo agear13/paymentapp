@@ -37,8 +37,10 @@ jest.mock('@/lib/audit/auth-audit.server', () => ({
   recordAuthAuditEvent: jest.fn(),
 }));
 
+const mockRecordSuccessfulLogin = jest.fn();
+
 jest.mock('@/lib/auth/login-tracking.server', () => ({
-  recordSuccessfulLogin: jest.fn(),
+  recordSuccessfulLogin: (...args: unknown[]) => mockRecordSuccessfulLogin(...args),
 }));
 
 jest.mock('@/lib/runtime/customer-facing-url', () => ({
@@ -54,6 +56,10 @@ jest.mock('@/lib/logger', () => ({
       warn: jest.fn(),
       error: jest.fn(),
     },
+  },
+  log: {
+    warn: jest.fn(),
+    error: jest.fn(),
   },
 }));
 
@@ -120,6 +126,7 @@ describe('Commercial OS signup verification destination', () => {
 describe('auth callback merchant signup', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRecordSuccessfulLogin.mockResolvedValue({ suspicious: false });
     mockResolveParticipantAuthDestinationForUser.mockResolvedValue({ kind: 'none' });
     mockExchangeCodeForSession.mockResolvedValue({
       data: { user: VERIFIED_USER, session: { user: VERIFIED_USER } },
@@ -176,6 +183,42 @@ describe('auth callback merchant signup', () => {
     expect(response.headers.get('location')).toContain('/auth/callback/complete');
     expect(response.headers.get('location')).toContain(
       encodeURIComponent(COMMERCIAL_OS_ROUTES.journeyPostAuth)
+    );
+  });
+
+  it('still routes new merchants to provisioning when login tracking fails', async () => {
+    mockRecordSuccessfulLogin.mockRejectedValue(new Error('user_auth_profiles unavailable'));
+
+    const response = await authCallback(
+      callbackRequest({
+        code: 'signup-code',
+        type: 'signup',
+        redirectedFrom: COMMERCIAL_OS_ROUTES.journeyPostAuth,
+      })
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(
+      `https://www.provvypay.com${COMMERCIAL_OS_ROUTES.journeyPostAuth}`
+    );
+  });
+
+  it('still routes new merchants to provisioning when participant destination lookup fails', async () => {
+    mockResolveParticipantAuthDestinationForUser.mockRejectedValue(
+      new Error('deal_network_pilot_participants unavailable')
+    );
+
+    const response = await authCallback(
+      callbackRequest({
+        code: 'signup-code',
+        type: 'signup',
+        redirectedFrom: COMMERCIAL_OS_ROUTES.journeyPostAuth,
+      })
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(
+      `https://www.provvypay.com${COMMERCIAL_OS_ROUTES.journeyPostAuth}`
     );
   });
 });
