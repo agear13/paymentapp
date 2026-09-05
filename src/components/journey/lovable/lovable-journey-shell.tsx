@@ -1,22 +1,16 @@
 'use client';
 
 import './lovable-journey.css';
-import { useEffect, useState } from 'react';
+import { useProvvyTheme } from '@/hooks/use-provvy-theme';
 
 type LovableJourneyShellProps = {
   children: React.ReactNode;
   className?: string;
 };
 
-/** Wraps journey pages with Lovable design tokens and optional dark mode from localStorage. */
+/** Wraps journey pages with Lovable design tokens and the shared Provvy theme. */
 export function LovableJourneyShell({ children, className = '' }: LovableJourneyShellProps) {
-  const [dark, setDark] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('theme');
-    const prefers = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setDark(stored ? stored === 'dark' : prefers);
-  }, []);
+  const { dark } = useProvvyTheme();
 
   return (
     <div className={`lovable-journey min-h-screen ${dark ? 'dark' : ''} ${className}`.trim()}>
@@ -25,21 +19,4 @@ export function LovableJourneyShell({ children, className = '' }: LovableJourney
   );
 }
 
-export function useLovableThemeToggle() {
-  const [dark, setDark] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('theme');
-    const prefers = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const isDark = stored ? stored === 'dark' : prefers;
-    setDark(isDark);
-  }, []);
-
-  const toggle = () => {
-    const next = !dark;
-    setDark(next);
-    localStorage.setItem('theme', next ? 'dark' : 'light');
-  };
-
-  return { dark, toggle };
-}
+export { useProvvyTheme as useLovableThemeToggle } from '@/hooks/use-provvy-theme';

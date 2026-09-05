@@ -3,7 +3,6 @@
 import '@/components/journey/lovable/lovable-journey.css';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useState } from 'react';
 import {
   Moon,
   Sun,
@@ -18,6 +17,7 @@ import {
 import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark';
 import { WorkspaceAccountMenu } from '@/components/commercial-os/workspace-account-menu';
 import { WorkspaceAccountingBanners } from '@/components/journey/lovable/workspace-accounting-banners';
+import { useProvvyTheme } from '@/hooks/use-provvy-theme';
 
 type NavItem = {
   to: string;
@@ -55,22 +55,7 @@ const NAV: NavItem[] = [
 
 export function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '';
-  const [dark, setDark] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('theme');
-    const prefers = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const isDark = stored ? stored === 'dark' : prefers;
-    setDark(isDark);
-    document.documentElement.classList.toggle('dark', isDark);
-  }, []);
-
-  const toggle = () => {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.classList.toggle('dark', next);
-    localStorage.setItem('theme', next ? 'dark' : 'light');
-  };
+  const { dark, toggle } = useProvvyTheme();
 
   return (
     <div className={`lovable-journey min-h-screen bg-background text-foreground antialiased ${dark ? 'dark' : ''}`}>

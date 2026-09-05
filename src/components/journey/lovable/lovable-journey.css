@@ -44,7 +44,9 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
+  --color-ink-soft: var(--ink-soft);
 
+  color-scheme: light;
   background-color: var(--background);
   color: var(--foreground);
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
@@ -52,6 +54,7 @@
   -webkit-font-smoothing: antialiased;
 }
 
+html.dark .lovable-journey,
 .lovable-journey.dark {
   --background: oklch(0.16 0.015 275);
   --foreground: oklch(0.97 0.005 275);
@@ -76,6 +79,7 @@
   --shadow-soft: 0 1px 2px oklch(0 0 0 / 0.4);
   --shadow-glow: 0 1px 2px oklch(0 0 0 / 0.4), 0 8px 24px -12px oklch(0.68 0.2 293 / 0.35);
   --shadow-card: 0 1px 2px oklch(0 0 0 / 0.4), 0 1px 0 oklch(1 0 0 / 0.03);
+  color-scheme: dark;
 }
 
 .lovable-journey .bg-background { background-color: var(--background); }
@@ -101,9 +105,22 @@
 .lovable-journey .bg-background { background-color: var(--background); }
 .lovable-journey .border-input { border-color: var(--border); }
 .lovable-journey .text-destructive { color: var(--destructive); }
+.lovable-journey .bg-foreground { background-color: var(--foreground); }
+.lovable-journey .text-background { color: var(--background); }
+.lovable-journey .text-ink-soft\/80 { color: color-mix(in oklch, var(--ink-soft) 80%, transparent); }
+.lovable-journey .text-foreground\/60 { color: color-mix(in oklch, var(--foreground) 60%, transparent); }
+.lovable-journey .divide-border\/60 > :not([hidden]) ~ :not([hidden]) {
+  border-color: color-mix(in oklch, var(--border) 60%, transparent);
+}
 .lovable-journey .glass {
   background: var(--card);
   border: 1px solid var(--border);
+}
+html.dark .lovable-journey .glass,
+.lovable-journey.dark .glass {
+  background: color-mix(in oklch, var(--card) 82%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 .lovable-journey .bg-gradient-purple { background: var(--gradient-purple); }
 .lovable-journey .bg-mesh { background: none; }
@@ -128,6 +145,12 @@
 .lovable-journey select {
   color: var(--foreground);
   background-color: var(--card);
+}
+
+html.dark .lovable-journey option,
+.lovable-journey.dark option {
+  background-color: var(--card);
+  color: var(--foreground);
 }
 
 .lovable-journey input::placeholder,

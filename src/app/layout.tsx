@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import { Toaster } from "@/components/ui/sonner";
 import CookieConsent from "@/components/legal/CookieConsent";
 import GoogleAnalytics from "@/components/analytics/google-analytics";
+import { THEME_BOOTSTRAP_SCRIPT } from "@/lib/theme/provvy-theme";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -29,7 +31,11 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning
       >
+        <Script id="provvy-theme" strategy="beforeInteractive">
+          {THEME_BOOTSTRAP_SCRIPT}
+        </Script>
         {children}
         <Toaster />
         <GoogleAnalytics />

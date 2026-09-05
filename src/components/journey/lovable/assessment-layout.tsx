@@ -3,9 +3,10 @@
 import './lovable-journey.css';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { Moon, Sun, ArrowLeft } from 'lucide-react';
 import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark';
+import { useProvvyTheme } from '@/hooks/use-provvy-theme';
 import {
   JOURNEY_ROUTES,
   JOURNEY_STEPS,
@@ -19,24 +20,11 @@ export function AssessmentLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? '';
   const searchParams = useSearchParams();
   const search = searchParams?.toString() ?? '';
-  const [dark, setDark] = useState(false);
+  const { dark, toggle } = useProvvyTheme();
 
   useEffect(() => {
     restoreJourneyAssessment();
   }, []);
-
-  useEffect(() => {
-    const stored = localStorage.getItem('theme');
-    const prefers = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const isDark = stored ? stored === 'dark' : prefers;
-    setDark(isDark);
-  }, []);
-
-  const toggle = () => {
-    const next = !dark;
-    setDark(next);
-    localStorage.setItem('theme', next ? 'dark' : 'light');
-  };
 
   const currentIndex = journeyStepIndex(pathname, search);
   const provisioningBuild = isJourneyProvisioningBuild(pathname, search);

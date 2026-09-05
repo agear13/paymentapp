@@ -180,6 +180,7 @@ body {
 }
 
 .dark {
+  color-scheme: dark;
   --background: 10 10 10;
   --foreground: 237 237 237;
   --card: 23 23 23;
