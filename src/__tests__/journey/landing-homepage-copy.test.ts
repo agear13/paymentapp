@@ -8,6 +8,10 @@ function read(rel: string) {
 describe('homepage narrative and control principles', () => {
   const landing = read('components/journey/lovable/journey-landing-page.tsx');
   const intelligenceUi = read('components/journey/lovable/landing-payment-intelligence.tsx');
+  const subscribe = read(
+    'components/journey/lovable/landing-payment-intelligence-subscribe.tsx'
+  );
+  const subscribeCopy = read('lib/marketing/payment-intelligence-subscribe.ts');
   const watchlist = read('components/journey/lovable/landing-rail-watchlist.tsx');
   const demo = read('components/journey/lovable/landing-watch-provvy-think.tsx');
   const story = read('components/journey/lovable/landing-public-to-personal.tsx');
@@ -39,8 +43,12 @@ describe('homepage narrative and control principles', () => {
     expect(search).not.toContain('Transaction type');
     expect(landing).toContain('LandingPaymentSearch');
     expect(landing).toContain('LandingPaymentIntelligence');
+    expect(landing).toContain('LandingPaymentIntelligenceSubscribe');
     expect(landing.indexOf('<LandingPaymentIntelligence')).toBeLessThan(
       landing.lastIndexOf('<LandingPaymentSearch')
+    );
+    expect(landing.lastIndexOf('<LandingPaymentSearch')).toBeLessThan(
+      landing.indexOf('<LandingPaymentIntelligenceSubscribe')
     );
     expect(landing).toContain('Compare routes');
     expect(landing).not.toContain('Introducing the Commercial Operating System');
@@ -125,6 +133,16 @@ describe('homepage narrative and control principles', () => {
     expect(search).toContain('registerCompare');
     expect(intelligenceUi).toContain('PAYMENT_SIGNAL_LABELS');
     expect(intelligenceUi).toContain('not live quotes');
+    expect(subscribeCopy).toContain('Payment Intelligence, in your inbox');
+    expect(subscribe).toContain('Get Payment Intelligence');
+    expect(subscribe).toContain('Your work email');
+    expect(subscribe).toContain('presentPaymentIntelligenceSubscribe');
+    expect(`${subscribe}\n${subscribeCopy}`).not.toMatch(/newsletter/i);
+    expect(`${subscribe}\n${subscribeCopy}`).not.toMatch(/marketing updates/i);
+    expect(`${subscribe}\n${subscribeCopy}`).not.toMatch(/fintech news/i);
+    expect(`${subscribe}\n${subscribeCopy}`).not.toMatch(/company updates/i);
+    expect(advisor).toContain('Not ready to connect your business?');
+    expect(advisor).toContain('get-payment-intelligence');
     expect(watchlist).toContain('10 payment rails Provvy is watching today');
     expect(demo).toContain('Watch Provvy think about a payment');
     expect(feed).not.toMatch(/live transaction/i);

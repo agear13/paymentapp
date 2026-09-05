@@ -60,7 +60,8 @@ export type AdvisorActionId =
   | 'exclude-digital-dollar'
   | 'show-developments'
   | 'show-affected-routes'
-  | 'see-how-provvy-works';
+  | 'see-how-provvy-works'
+  | 'get-payment-intelligence';
 
 export type AdvisorAction = {
   id: AdvisorActionId;
@@ -118,6 +119,11 @@ export const ADVISOR_VISION_LINES = [
   "I'm not just here to answer questions.",
   'As I understand more of your business, I can help you spot opportunities, make decisions and coordinate work across payments and finance.',
   'Think of me as an extra pair of hands for your commercial operations.',
+] as const;
+
+export const ADVISOR_SUBSCRIBE_LINES = [
+  'Not ready to connect your business?',
+  'Get the payment intelligence Provvy is watching in your inbox.',
 ] as const;
 
 const ADVISOR_EYEBROW = 'PROVVY ADVISOR';
@@ -403,6 +409,7 @@ export function presentAdvisor(
   const lines: string[] = [
     "These results are based on the transaction details you've given me.",
     ADVISOR_PERSONALISE_SUPPORT,
+    ...ADVISOR_SUBSCRIBE_LINES,
   ];
   if (context.priorityChanged) {
     lines.unshift(resultConclusion(context));
@@ -422,6 +429,11 @@ export function presentAdvisor(
     actions: [
       { id: 'personalise', label: 'Connect your business' },
       { id: 'see-how-provvy-works', label: 'See how Provvy works' },
+      {
+        id: 'get-payment-intelligence',
+        label: 'Get Payment Intelligence',
+        href: '#payment-intelligence-inbox',
+      },
       ...routeActions(context),
     ],
     explainer,

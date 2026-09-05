@@ -50,6 +50,8 @@ export const CSRF_EXEMPT_PATH_PREFIXES = [
   '/api/agreement-analyzer/email/webhook',
   // Public Jarvis waitlist: no session, consent + Turnstile + rate limit.
   '/api/jarvis/waitlist',
+  // Public Payment Intelligence inbox: no session, consent + Turnstile + rate limit.
+  '/api/payment-intelligence/subscribe',
 ] as const;
 
 export function isMutatingMethod(method: string): boolean {

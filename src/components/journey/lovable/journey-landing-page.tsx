@@ -27,6 +27,7 @@ import { LandingAdvisorProvider } from '@/components/journey/lovable/landing-adv
 import { LandingAdvisor } from '@/components/journey/lovable/landing-advisor';
 import { LandingIntelligenceProvider } from '@/components/journey/lovable/landing-intelligence-context';
 import { LandingPaymentIntelligence } from '@/components/journey/lovable/landing-payment-intelligence';
+import { LandingPaymentIntelligenceSubscribe } from '@/components/journey/lovable/landing-payment-intelligence-subscribe';
 import { LandingPublicToPersonal } from '@/components/journey/lovable/landing-public-to-personal';
 import { LandingRailWatchlist } from '@/components/journey/lovable/landing-rail-watchlist';
 import { LandingWatchProvvyThink } from '@/components/journey/lovable/landing-watch-provvy-think';
@@ -211,6 +212,10 @@ function Hero() {
 
       <div className="relative mx-auto mt-3 max-w-5xl animate-fade-up">
         <LandingPaymentSearch />
+      </div>
+
+      <div className="relative mx-auto mt-4 max-w-5xl animate-fade-up">
+        <LandingPaymentIntelligenceSubscribe />
       </div>
     </section>
   );

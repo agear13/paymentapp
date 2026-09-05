@@ -36,7 +36,10 @@ function AdvisorMark() {
 }
 
 const PRIMARY_ACTIONS = new Set<AdvisorActionId>(['personalise']);
-const LOW_EMPHASIS_ACTIONS = new Set<AdvisorActionId>(['see-how-provvy-works']);
+const LOW_EMPHASIS_ACTIONS = new Set<AdvisorActionId>([
+  'see-how-provvy-works',
+  'get-payment-intelligence',
+]);
 
 export function LandingAdvisor() {
   const advisor = useOptionalLandingAdvisor();
@@ -149,6 +152,12 @@ export function LandingAdvisor() {
         setActiveAction(null);
         advisor.changePriority('lowest_cost');
         return;
+      case 'get-payment-intelligence':
+        document.getElementById('payment-intelligence-inbox')?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+        return;
       case 'personalise':
         markAdvisorIntroSeen();
         return;
@@ -195,6 +204,26 @@ export function LandingAdvisor() {
         >
           {action.label} →
         </Link>
+      );
+    }
+    if (action.href) {
+      return (
+        <a
+          key={action.id}
+          href={action.href}
+          onClick={() => handleAction(action)}
+          className={
+            kind === 'quiet'
+              ? 'text-[12px] font-medium text-ink-soft underline-offset-2 hover:text-foreground hover:underline'
+              : `rounded-lg border px-2.5 py-1.5 text-[12px] font-medium hover:bg-accent ${
+                  activeAction === action.id
+                    ? 'border-primary/40 bg-accent text-foreground'
+                    : 'border-border bg-background'
+                }`
+          }
+        >
+          {action.label} →
+        </a>
       );
     }
     return (

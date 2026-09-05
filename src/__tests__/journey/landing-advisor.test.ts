@@ -1,5 +1,6 @@
 import {
   ADVISOR_PERSONALISE_SUPPORT,
+  ADVISOR_SUBSCRIBE_LINES,
   ADVISOR_VISION_LINES,
   EMPTY_ADVISOR_CONTEXT,
   advisorExcludeDigitalDollarFilters,
@@ -92,6 +93,7 @@ describe('presentAdvisor', () => {
       /These results are based on the transaction details you've given me/
     );
     expect(presentation.lines).toContain(ADVISOR_PERSONALISE_SUPPORT);
+    expect(presentation.lines).toEqual(expect.arrayContaining([...ADVISOR_SUBSCRIBE_LINES]));
     expect(presentation.actions[0]).toEqual({
       id: 'personalise',
       label: 'Connect your business',
@@ -99,6 +101,11 @@ describe('presentAdvisor', () => {
     expect(presentation.actions[1]).toEqual({
       id: 'see-how-provvy-works',
       label: 'See how Provvy works',
+    });
+    expect(presentation.actions[2]).toEqual({
+      id: 'get-payment-intelligence',
+      label: 'Get Payment Intelligence',
+      href: '#payment-intelligence-inbox',
     });
     expect(presentation.actions.map((action) => action.label)).toEqual(
       expect.arrayContaining(['Why is this #1?', "What's faster?", "What's simpler?"])

@@ -120,6 +120,10 @@ describe('LandingAdvisor', () => {
       '/journey/assessment'
     );
     expect(within(advisor).getByRole('button', { name: 'See how Provvy works' })).toBeInTheDocument();
+    expect(within(advisor).getByRole('link', { name: /get payment intelligence/i })).toHaveAttribute(
+      'href',
+      '#payment-intelligence-inbox'
+    );
     expect(within(advisor).getByRole('button', { name: 'Why is this #1?' })).toBeInTheDocument();
     expect(advisor.querySelector('input, textarea')).toBeNull();
 
