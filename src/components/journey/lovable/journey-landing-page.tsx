@@ -9,12 +9,10 @@ import {
   ArrowRight,
   ArrowUpRight,
   Beaker,
-  Brain,
   Calendar,
   Check,
   Clock,
   Menu,
-  MessageSquare,
   Moon,
   Sun,
   X,
@@ -27,9 +25,15 @@ import { PROVVYPAY_PRIVACY_PATH, PROVVYPAY_TERMS_PATH } from '@/lib/legal/provvy
 import { useProvvyTheme } from '@/hooks/use-provvy-theme';
 import { LandingAdvisorProvider } from '@/components/journey/lovable/landing-advisor-context';
 import { LandingAdvisor } from '@/components/journey/lovable/landing-advisor';
+import { LandingIntelligenceProvider } from '@/components/journey/lovable/landing-intelligence-context';
+import { LandingPaymentIntelligence } from '@/components/journey/lovable/landing-payment-intelligence';
+import { LandingPublicToPersonal } from '@/components/journey/lovable/landing-public-to-personal';
+import { LandingRailWatchlist } from '@/components/journey/lovable/landing-rail-watchlist';
+import { LandingWatchProvvyThink } from '@/components/journey/lovable/landing-watch-provvy-think';
 
 const LANDING_NAV = [
   { label: 'Explore', href: '#compare' },
+  { label: 'Intelligence', href: '#payment-intelligence' },
   { label: 'How it works', href: '#how-it-works' },
   { label: 'Workflows', href: '#workflow-library' },
   { label: 'Pricing', href: '#pricing' },
@@ -47,21 +51,6 @@ const LANDING_WORKFLOWS = WORKFLOW_LIBRARY.filter((entry) =>
   ].includes(entry.slug)
 );
 
-const NARRATIVE_STEPS = [
-  {
-    title: 'See what is generally available',
-    body: 'Explore a concrete payment and the tradeoffs between cost, speed and simplicity. Anyone can do this.',
-  },
-  {
-    title: 'Connect the context that changes the answer',
-    body: 'Cash, terms, rails, approvals and history determine what is actually optimal for this business.',
-  },
-  {
-    title: 'Provvy recommends. You decide.',
-    body: 'Provvy explains why. You authorise the next step. Provvy coordinates what you approved, and automates only what you permit.',
-  },
-] as const;
-
 const PRODUCT_LAYERS = [
   {
     title: 'Discovery is public.',
@@ -77,19 +66,12 @@ const PRODUCT_LAYERS = [
   },
 ] as const;
 
-const CONTROL_PRINCIPLES = [
-  'Provvy understands.',
-  'Provvy recommends.',
-  'Provvy explains why.',
-  'You decide what to authorise.',
-  'Provvy coordinates what you approved.',
-] as const;
-
 export function JourneyLandingPage() {
   const { dark, toggle } = useProvvyTheme();
 
   return (
     <LandingAdvisorProvider>
+    <LandingIntelligenceProvider>
     <div
       className={`lovable-journey min-h-screen bg-background text-foreground overflow-x-hidden antialiased ${dark ? 'dark' : ''}`}
     >
@@ -97,8 +79,9 @@ export function JourneyLandingPage() {
       <div className="relative">
         <Nav dark={dark} onToggleDark={toggle} />
         <Hero />
-        <HowItWorks />
-        <AdvisorAndTimeline />
+        <LandingRailWatchlist />
+        <LandingWatchProvvyThink />
+        <LandingPublicToPersonal />
         <WorkflowLibrary />
         <ContextReveal />
         <Pricing />
@@ -107,6 +90,7 @@ export function JourneyLandingPage() {
       </div>
       <LandingAdvisor />
     </div>
+    </LandingIntelligenceProvider>
     </LandingAdvisorProvider>
   );
 }
@@ -204,21 +188,28 @@ function Nav({ dark, onToggleDark }: { dark: boolean; onToggleDark: () => void }
 
 function Hero() {
   return (
-    <section id="compare" className="relative px-6 pt-8 pb-6 sm:pt-12 sm:pb-8">
+    <section id="compare" className="relative px-6 pt-6 pb-4 sm:pt-8 sm:pb-5">
       <div
         className="pointer-events-none absolute inset-x-0 top-0 h-[420px]"
         style={{ background: 'var(--gradient-hero)' }}
       />
-      <div className="relative mx-auto max-w-4xl text-center animate-fade-up">
-        <h1 className="text-balance text-4xl font-semibold tracking-[-0.03em] sm:text-5xl md:text-6xl">
-          <span className="text-gradient">What&apos;s the best way to move this money?</span>
+      <div className="relative mx-auto max-w-5xl text-center animate-fade-up">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-soft">
+          Provvy payment intelligence
+        </p>
+        <h1 className="mt-2 text-balance text-[1.85rem] font-semibold tracking-[-0.03em] sm:text-4xl md:text-5xl">
+          <span className="text-gradient">Payment infrastructure changes every day.</span>
         </h1>
-        <p className="mx-auto mt-3 max-w-2xl text-balance text-base text-ink-soft sm:text-lg">
-          Compare payment routes. Then connect Provvy to find what&apos;s best for your business.
+        <p className="mx-auto mt-2 max-w-2xl text-balance text-[15px] text-ink-soft sm:text-base">
+          Provvy helps you understand what changed — and what it means for your business.
         </p>
       </div>
 
-      <div className="relative mx-auto mt-5 max-w-5xl animate-fade-up">
+      <div className="relative mx-auto mt-4 max-w-6xl animate-fade-up">
+        <LandingPaymentIntelligence />
+      </div>
+
+      <div className="relative mx-auto mt-3 max-w-5xl animate-fade-up">
         <LandingPaymentSearch />
       </div>
     </section>
@@ -254,52 +245,6 @@ function ContextReveal() {
               <p className="mt-2 text-[14px] text-ink-soft">{layer.body}</p>
             </div>
           ))}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function HowItWorks() {
-  return (
-    <section id="how-it-works" className="px-6 py-10 sm:py-12">
-      <div className="mx-auto max-w-5xl">
-        <div className="mb-12 max-w-2xl">
-          <div className="mb-3 text-[12px] uppercase tracking-[0.2em] text-ink-soft">How it works</div>
-          <h2 className="text-balance text-4xl font-semibold tracking-[-0.02em] sm:text-5xl">
-            From a useful first answer to a decision you still own.
-          </h2>
-        </div>
-        <div className="grid gap-3">
-          {NARRATIVE_STEPS.map((step, index) => (
-            <div
-              key={step.title}
-              className="grid gap-4 rounded-2xl border border-border/60 bg-card p-5 shadow-soft sm:grid-cols-[72px_1fr] sm:items-start"
-            >
-              <div className="text-[13px] font-medium text-ink-soft">0{index + 1}</div>
-              <div>
-                <div className="text-[17px] font-semibold tracking-tight">{step.title}</div>
-                <p className="mt-1.5 text-[14px] text-ink-soft">{step.body}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="mt-6 rounded-3xl border border-border/60 bg-card p-6 shadow-card sm:p-8">
-          <div className="text-[12px] uppercase tracking-[0.16em] text-ink-soft">
-            You stay in control
-          </div>
-          <p className="mt-3 max-w-2xl text-[16px] text-foreground">
-            Provvy never silently takes control of money. The progression is recommend → approve
-            → automate, and you define the rules and permissions.
-          </p>
-          <ul className="mt-5 grid gap-2 sm:grid-cols-2">
-            {CONTROL_PRINCIPLES.map((line) => (
-              <li key={line} className="flex items-center gap-2 text-[14px]">
-                <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-                {line}
-              </li>
-            ))}
-          </ul>
         </div>
       </div>
     </section>
@@ -358,65 +303,6 @@ function WorkflowLibrary() {
               </div>
             );
           })}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function AdvisorAndTimeline() {
-  return (
-    <section id="ai-advisor" className="px-6 py-10 sm:py-12">
-      <div className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-2">
-        <div className="rounded-3xl border border-border/60 bg-card p-6 shadow-card sm:p-8">
-          <div className="mb-3 inline-flex items-center gap-2 text-[12px] uppercase tracking-[0.2em] text-ink-soft">
-            <MessageSquare className="h-3.5 w-3.5" /> After you connect
-          </div>
-          <h2 className="text-balance text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">
-            Recommendations for this transaction — grounded in your position.
-          </h2>
-          <p className="mt-4 text-[15px] text-ink-soft">
-            Once Provvy can see invoices, agreements, cash and rails, it can recommend what
-            should happen next and explain why. You decide whether to authorise it.
-          </p>
-          <div className="mt-6 space-y-2">
-            {[
-              'Should we collect this on card or wait for the bank run?',
-              'What happens if this customer pays late?',
-              'Which suppliers are tying up cash this week?',
-            ].map((question) => (
-              <div
-                key={question}
-                className="rounded-2xl border border-border/60 bg-background px-4 py-3 text-[14px]"
-              >
-                {question}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div id="timeline" className="rounded-3xl border border-border/60 bg-card p-6 shadow-card sm:p-8">
-          <div className="mb-3 inline-flex items-center gap-2 text-[12px] uppercase tracking-[0.2em] text-ink-soft">
-            <Brain className="h-3.5 w-3.5" /> What is happening now
-          </div>
-          <h2 className="text-balance text-3xl font-semibold tracking-[-0.02em] sm:text-4xl">
-            A live commercial timeline, not a static ledger.
-          </h2>
-          <p className="mt-4 text-[15px] text-ink-soft">
-            Invoices, payments, agreements, approvals and the work you authorised — in one stream
-            so the next decision is made with the current position.
-          </p>
-          <div className="mt-6 divide-y divide-border/60 rounded-2xl border border-border/60 bg-background">
-            {[
-              'Invoice issued · awaiting the authorised collection route',
-              'Supplier payment held for the next approved run',
-              'Agreement terms extracted · approval still required',
-              'Recommendation ready · waiting for you to authorise',
-            ].map((event) => (
-              <div key={event} className="px-4 py-3 text-[14px] text-foreground/90">
-                {event}
-              </div>
-            ))}
-          </div>
         </div>
       </div>
     </section>

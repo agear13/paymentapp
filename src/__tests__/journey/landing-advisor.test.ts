@@ -21,11 +21,76 @@ describe('presentAdvisor', () => {
     expect(presentation.status).toBe('Ready to analyse a payment');
     expect(presentation.conclusion).toBeNull();
     expect(presentation.lines.join(' ')).toMatch(/interpret the routes against your criteria/i);
-    expect(presentation.actions.map((action) => action.id)).toEqual(['theme-light', 'theme-dark']);
+    expect(presentation.developments).toEqual([]);
+    expect(presentation.actions).toEqual([]);
+    expect(presentation.lines.join(' ')).not.toMatch(/lighter or darker/i);
     expect(presentation.lines.join(' ')).not.toMatch(/live quote/i);
     expect(JSON.stringify(presentation)).not.toMatch(/cash balance/i);
     expect(JSON.stringify(presentation)).not.toMatch(/\bChat\b/);
     expect(JSON.stringify(presentation)).not.toMatch(/textarea|Ask me anything/i);
+  });
+
+  it('surfaces corridor developments as the interface to the intelligence layer', () => {
+    const presentation = presentAdvisor(
+      context({
+        stage: 'search',
+        origin: 'AU',
+        destination: 'ID',
+        showThemeChoice: false,
+      })
+    );
+    expect(presentation.status).toBe('Watching this corridor');
+    expect(presentation.lines.join(' ')).toMatch(/3 developments that could affect payments on Australia → Indonesia/);
+    expect(presentation.actions.map((action) => action.id)).toEqual(['show-developments']);
+    expect(presentation.actions[0]?.label).toBe('Show me');
+    expect(presentation.developments).toEqual([]);
+  });
+
+  it('references the highlighted intelligence item without inventing live data', () => {
+    const presentation = presentAdvisor(
+      context({
+        stage: 'search',
+        origin: 'AU',
+        destination: 'ID',
+        highlightedIntelligenceId: 'rba-psr-review-2026-06',
+      })
+    );
+    expect(presentation.lines[0]).toMatch(/^This matters because this could change which payment methods/);
+    expect(presentation.actions.map((action) => action.id)).toEqual([
+      'show-affected-routes',
+      'personalise',
+    ]);
+    expect(presentation.actions.map((action) => action.label)).toEqual([
+      'Show me routes affected by this',
+      'What does this mean for my business?',
+    ]);
+    expect(presentation.personaliseSupport).toBeNull();
+    expect(JSON.stringify(presentation)).not.toMatch(/live quote|your cash balance|minutes ago/i);
+  });
+
+  it('keeps result actions intact while naming the highlighted development', () => {
+    const presentation = presentAdvisor(
+      context({
+        stage: 'results',
+        origin: 'AU',
+        destination: 'ID',
+        amount: 10000,
+        currency: 'AUD',
+        transactionType: 'supplier_payment',
+        priority: 'lowest_cost',
+        recommendedProvider: 'Wise',
+        recommendedProviderId: 'wise',
+        highlightedIntelligenceId: 'swift-retail-framework-2026-03',
+      })
+    );
+    expect(presentation.conclusion).toMatch(/Wise is the strongest starting point/);
+    expect(presentation.lines.join(' ')).toMatch(/^This matters because/);
+    expect(presentation.actions.map((action) => action.label)).toEqual([
+      'Why is this #1?',
+      "What's faster?",
+      "What's simpler?",
+      'Personalise this answer',
+    ]);
   });
 
   it('skips theme choice when a preference already exists', () => {

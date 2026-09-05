@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { LandingComparisonResults } from '@/components/journey/lovable/landing-comparison-results';
 import { useOptionalLandingAdvisor } from '@/components/journey/lovable/landing-advisor-context';
+import { useOptionalLandingIntelligence } from '@/components/journey/lovable/landing-intelligence-context';
 import {
   persistJourneyBusiness,
   persistJourneyObjective,
@@ -22,8 +23,15 @@ import {
   type LandingSearchQuery,
   type LandingTransactionTypeId,
 } from '@/lib/journey/landing-route-comparison';
-import { PAYMENT_METHOD_OPTIONS, recommendedWhyLine, scanTraits } from '@/lib/journey/landing-result-labels';
+import {
+  PAYMENT_METHOD_OPTIONS,
+  recommendedWhyLine,
+  scanTraits,
+  type LandingResultFilters,
+} from '@/lib/journey/landing-result-labels';
 import { markAdvisorIntroSeen } from '@/lib/journey/landing-advisor';
+import { filtersFromSearchHint } from '@/lib/journey/payment-intelligence-rank';
+import type { PaymentIntelligenceSearchHint } from '@/lib/journey/payment-intelligence-types';
 
 const fieldClass =
   'mt-1.5 w-full rounded-xl border border-border bg-card px-3 py-2.5 text-[14px] text-foreground outline-none transition-colors focus-visible:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary/20';
@@ -65,9 +73,12 @@ export function LandingPaymentSearch() {
   const [priority, setPriority] = useState<LandingPriorityId>(DEFAULT_LANDING_SEARCH.priority);
   const [amountError, setAmountError] = useState<string | null>(null);
   const [hasCompared, setHasCompared] = useState(false);
+  const [seedFilters, setSeedFilters] = useState<LandingResultFilters | null>(null);
   const advisor = useOptionalLandingAdvisor();
+  const intelligence = useOptionalLandingIntelligence();
   const lastReportedPriority = useRef<LandingPriorityId | null>(null);
   const priorityChangedRef = useRef(false);
+  const runCompareRef = useRef<(hint?: PaymentIntelligenceSearchHint | null) => void>(() => {});
 
   const query = useMemo((): LandingSearchQuery | null => {
     const amount = parseLandingAmount(amountInput);
@@ -89,6 +100,12 @@ export function LandingPaymentSearch() {
 
   const advisorUpdate = advisor?.update;
   const registerPriorityChange = advisor?.registerPriorityChange;
+  const registerCompare = intelligence?.registerCompare;
+  const setIntelligenceCorridor = intelligence?.setCorridor;
+
+  useEffect(() => {
+    setIntelligenceCorridor?.({ origin: originCountry, destination: destinationCountry });
+  }, [setIntelligenceCorridor, originCountry, destinationCountry]);
 
   useEffect(() => {
     if (!registerPriorityChange) return;
@@ -172,11 +189,17 @@ export function LandingPaymentSearch() {
     priority,
   ]);
 
-  const handleCompare = () => {
-    if (!query || !landingSearchIsValid(query)) {
+  const handleCompare = (hint?: PaymentIntelligenceSearchHint | null) => {
+    const nextPriority = hint?.priority ?? priority;
+    const nextQuery = query ? { ...query, priority: nextPriority } : null;
+    if (!nextQuery || !landingSearchIsValid(nextQuery)) {
       setAmountError('Enter an amount greater than zero.');
       return;
     }
+    if (hint?.priority && hint.priority !== priority) {
+      setPriority(hint.priority);
+    }
+    setSeedFilters(hint ? filtersFromSearchHint(hint) : null);
     setAmountError(null);
     setHasCompared(true);
     window.requestAnimationFrame(() => {
@@ -186,6 +209,14 @@ export function LandingPaymentSearch() {
       });
     });
   };
+
+  runCompareRef.current = handleCompare;
+
+  useEffect(() => {
+    if (!registerCompare) return;
+    registerCompare((hint) => runCompareRef.current(hint));
+    return () => registerCompare(null);
+  }, [registerCompare]);
 
   const handleRecommend = () => {
     if (!query) return;
@@ -198,7 +229,7 @@ export function LandingPaymentSearch() {
         className="rounded-2xl glass p-4 shadow-card sm:p-5"
         onSubmit={(event) => {
           event.preventDefault();
-          handleCompare();
+          handleCompare(null);
         }}
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -331,6 +362,7 @@ export function LandingPaymentSearch() {
           result={comparison}
           onPriorityChange={setPriority}
           onPersonalise={handleRecommend}
+          seedFilters={seedFilters}
         />
       ) : null}
     </div>

@@ -5,6 +5,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { LandingAdvisor } from '@/components/journey/lovable/landing-advisor';
 import { LandingAdvisorProvider } from '@/components/journey/lovable/landing-advisor-context';
+import { LandingIntelligenceProvider } from '@/components/journey/lovable/landing-intelligence-context';
 import { LandingPaymentSearch } from '@/components/journey/lovable/landing-payment-search';
 import { ADVISOR_INTRO_STORAGE_KEY } from '@/lib/journey/landing-advisor';
 import { THEME_STORAGE_KEY } from '@/lib/theme/provvy-theme';
@@ -34,8 +35,10 @@ function installDomMocks(desktop = true) {
 function RenderWithAdvisor({ children }: { children: ReactNode }) {
   return (
     <LandingAdvisorProvider>
-      {children}
-      <LandingAdvisor />
+      <LandingIntelligenceProvider>
+        {children}
+        <LandingAdvisor />
+      </LandingIntelligenceProvider>
     </LandingAdvisorProvider>
   );
 }
@@ -46,7 +49,7 @@ describe('LandingAdvisor', () => {
     installDomMocks(true);
   });
 
-  it('introduces itself and offers theme choice when no theme is saved', () => {
+  it('introduces itself as an analyst, not a theme or chat prompt', () => {
     render(
       <RenderWithAdvisor>
         <div />
@@ -55,8 +58,9 @@ describe('LandingAdvisor', () => {
     expect(screen.getByLabelText('Provvy Advisor')).toBeInTheDocument();
     expect(screen.getByText(/Ready to analyse a payment/i)).toBeInTheDocument();
     expect(screen.getByText(/interpret the routes against your criteria/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Light' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Dark' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Light' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Dark' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/lighter or darker/i)).not.toBeInTheDocument();
   });
 
   it('does not ask for theme when a preference is already saved', () => {
@@ -146,6 +150,21 @@ describe('LandingAdvisor', () => {
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Bank transfer' }));
     expect(
       screen.getByText(/You've narrowed this to bank-transfer routes/i)
+    ).toBeInTheDocument();
+  });
+
+  it('runs the existing compare when Show me is chosen before a highlight', () => {
+    localStorage.setItem(THEME_STORAGE_KEY, 'dark');
+    render(
+      <RenderWithAdvisor>
+        <LandingPaymentSearch />
+      </RenderWithAdvisor>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show me' }));
+    expect(screen.getByText(/payment routes found/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Wise is the strongest starting point for this payment based on what you've entered/i)
     ).toBeInTheDocument();
   });
 

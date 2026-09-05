@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import Link from 'next/link';
 import { X } from 'lucide-react';
 import { useOptionalLandingAdvisor } from '@/components/journey/lovable/landing-advisor-context';
+import { useOptionalLandingIntelligence } from '@/components/journey/lovable/landing-intelligence-context';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import {
   advisorExcludeDigitalDollarFilters,
@@ -15,6 +16,7 @@ import {
   type AdvisorAction,
   type AdvisorActionId,
 } from '@/lib/journey/landing-advisor';
+import { findIntelligenceItem, searchHintForItem } from '@/lib/journey/payment-intelligence-rank';
 import { persistJourneyBusiness, persistJourneyObjective } from '@/lib/journey/journey-assessment-storage.client';
 import { objectiveFromLandingSearch } from '@/lib/journey/landing-route-model';
 import { hasExplicitThemePreference, markThemeHintSeen } from '@/lib/theme/provvy-theme';
@@ -37,6 +39,7 @@ function AdvisorMark() {
 
 export function LandingAdvisor() {
   const advisor = useOptionalLandingAdvisor();
+  const intelligence = useOptionalLandingIntelligence();
   const { setTheme } = useProvvyTheme();
   const [open, setOpen] = useState(false);
   const [ready, setReady] = useState(false);
@@ -75,9 +78,13 @@ export function LandingAdvisor() {
 
   if (!advisor || !ready) return null;
 
+  const highlightedIntelligenceId =
+    intelligence?.highlightedId ?? advisor.context.highlightedIntelligenceId;
+
   const presentation = presentAdvisor(
     {
       ...advisor.context,
+      highlightedIntelligenceId,
       showThemeChoice: advisor.context.showThemeChoice && !hasExplicitThemePreference(),
     },
     activeAction
@@ -108,6 +115,17 @@ export function LandingAdvisor() {
       case 'keep-exploring':
         collapse(true);
         return;
+      case 'show-developments':
+      case 'show-affected-routes': {
+        const highlighted = findIntelligenceItem(highlightedIntelligenceId);
+        const hint =
+          action.id === 'show-affected-routes' && highlighted
+            ? searchHintForItem(highlighted)
+            : null;
+        intelligence?.requestCompare(hint);
+        setOpen(true);
+        return;
+      }
       case 'why-first':
         setActiveAction('why-first');
         return;
@@ -196,6 +214,16 @@ export function LandingAdvisor() {
       ) : null}
       {presentation.conclusion ? (
         <p className="text-[13px] font-medium leading-snug text-foreground">{presentation.conclusion}</p>
+      ) : null}
+      {presentation.developments.length ? (
+        <ul className="mt-2 space-y-2">
+          {presentation.developments.map((item) => (
+            <li key={item.headline} className="rounded-lg bg-background px-2.5 py-2">
+              <p className="text-[12px] font-medium leading-snug">{item.headline}</p>
+              <p className="mt-0.5 text-[11px] leading-snug text-ink-soft">{item.impact}</p>
+            </li>
+          ))}
+        </ul>
       ) : null}
       {presentation.lines.length ? (
         <div className={`space-y-1.5 text-[12px] leading-snug text-ink-soft ${presentation.conclusion ? 'mt-2' : ''}`}>

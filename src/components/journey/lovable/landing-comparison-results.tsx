@@ -25,15 +25,17 @@ type LandingComparisonResultsProps = {
   result: LandingComparisonResult;
   onPriorityChange: (priority: LandingPriorityId) => void;
   onPersonalise: () => void;
+  seedFilters?: LandingResultFilters | null;
 };
 
 export function LandingComparisonResults({
   result,
   onPriorityChange,
   onPersonalise,
+  seedFilters = null,
 }: LandingComparisonResultsProps) {
   const [sort, setSort] = useState<LandingResultSort>('recommended');
-  const [filters, setFilters] = useState<LandingResultFilters>(EMPTY_LANDING_FILTERS);
+  const [filters, setFilters] = useState<LandingResultFilters>(seedFilters ?? EMPTY_LANDING_FILTERS);
   const [selected, setSelected] = useState<string[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
   const advisor = useOptionalLandingAdvisor();
@@ -44,6 +46,10 @@ export function LandingComparisonResults({
     setSelected([]);
     setCompareOpen(false);
   }, [result.query]);
+
+  useEffect(() => {
+    setFilters(seedFilters ?? EMPTY_LANDING_FILTERS);
+  }, [seedFilters]);
 
   useEffect(() => {
     if (!registerFilterChange) return;

@@ -9,9 +9,15 @@ import {
   isLandingTransactionTypeId,
   priorityLabel,
   transactionTypeLabel,
+  type LandingCountryCode,
   type LandingPriorityId,
   type LandingTransactionTypeId,
 } from '@/lib/journey/landing-route-model';
+import {
+  developmentsForAdvisor,
+  findIntelligenceItem,
+  thisMattersBecause,
+} from '@/lib/journey/payment-intelligence-rank';
 
 export const ADVISOR_INTRO_STORAGE_KEY = 'provvy.advisorIntroSeen';
 export const LANDING_ADVISOR_SLOT_ID = 'landing-advisor-slot';
@@ -41,6 +47,7 @@ export type AdvisorContext = {
   characteristics: string | null;
   knownLimitation: string | null;
   filterNote: string | null;
+  highlightedIntelligenceId: string | null;
   connected: false;
   showThemeChoice: boolean;
 };
@@ -55,7 +62,9 @@ export type AdvisorActionId =
   | 'whats-simpler'
   | 'whats-cheaper'
   | 'what-is-digital-dollar'
-  | 'exclude-digital-dollar';
+  | 'exclude-digital-dollar'
+  | 'show-developments'
+  | 'show-affected-routes';
 
 export type AdvisorAction = {
   id: AdvisorActionId;
@@ -69,6 +78,7 @@ export type AdvisorPresentation = {
   criteria: string[];
   conclusion: string | null;
   lines: string[];
+  developments: { headline: string; impact: string }[];
   actions: AdvisorAction[];
   explainer: { title: string; body: string; action?: AdvisorAction } | null;
   personaliseSupport: string | null;
@@ -97,6 +107,7 @@ export const EMPTY_ADVISOR_CONTEXT: AdvisorContext = {
   characteristics: null,
   knownLimitation: null,
   filterNote: null,
+  highlightedIntelligenceId: null,
   connected: false,
   showThemeChoice: false,
 };
@@ -221,9 +232,21 @@ export function advisorCriteria(context: AdvisorContext): string[] {
   return chips;
 }
 
+function advisorDevelopments(context: AdvisorContext) {
+  if (!context.origin || !context.destination) return [];
+  if (!isLandingCountryCode(context.origin) || !isLandingCountryCode(context.destination)) return [];
+  return developmentsForAdvisor({
+    origin: context.origin,
+    destination: context.destination,
+    scope: 'all',
+  }).map((item) => ({ headline: item.headline, impact: item.businessImpact }));
+}
+
 function advisorStatus(context: AdvisorContext): string {
   if (context.stage === 'welcome' || context.stage === 'search') {
-    return 'Ready to analyse a payment';
+    return context.origin && context.destination
+      ? 'Watching this corridor'
+      : 'Ready to analyse a payment';
   }
   if (context.priorityChanged) return 'Recommendation changed';
   if (context.filterNote) return 'Criteria updated';
@@ -320,6 +343,10 @@ function supportingLines(context: AdvisorContext, action?: AdvisorActionId | nul
       `This is the ${context.selectedProvider} route for the payment you entered. Provvy has not sent this payment.`
     );
   }
+  const highlighted = findIntelligenceItem(context.highlightedIntelligenceId);
+  if (highlighted) {
+    lines.push(thisMattersBecause(highlighted));
+  }
   if (action === 'why-first') {
     lines.push(...whyThisFirst(context));
   }
@@ -331,16 +358,28 @@ export function presentAdvisor(
   action?: AdvisorActionId | null
 ): AdvisorPresentation {
   if (context.stage === 'welcome' || context.stage === 'search') {
-    const lines = [
-      'Compare a payment above and Provvy will interpret the routes against your criteria.',
-    ];
+    const developments = advisorDevelopments(context);
+    const highlighted = findIntelligenceItem(context.highlightedIntelligenceId);
+    const corridor =
+      context.origin &&
+      context.destination &&
+      isLandingCountryCode(context.origin) &&
+      isLandingCountryCode(context.destination)
+        ? `${countryName(context.origin as LandingCountryCode)} → ${countryName(context.destination as LandingCountryCode)}`
+        : 'this corridor';
+    const lines: string[] = [];
     const actions: AdvisorAction[] = [];
-    if (context.showThemeChoice) {
-      lines.push('Want a lighter or darker view?');
-      actions.push(
-        { id: 'theme-light', label: 'Light' },
-        { id: 'theme-dark', label: 'Dark' }
+    if (highlighted) {
+      lines.push(thisMattersBecause(highlighted));
+      actions.push({ id: 'show-affected-routes', label: 'Show me routes affected by this' });
+      actions.push({ id: 'personalise', label: 'What does this mean for my business?' });
+    } else if (developments.length) {
+      lines.push(
+        `Provvy is watching ${developments.length} developments that could affect payments on ${corridor}.`
       );
+      actions.push({ id: 'show-developments', label: 'Show me' });
+    } else {
+      lines.push('Compare a payment and Provvy will interpret the routes against your criteria.');
     }
     return {
       eyebrow: ADVISOR_EYEBROW,
@@ -348,6 +387,7 @@ export function presentAdvisor(
       criteria: advisorCriteria(context),
       conclusion: null,
       lines,
+      developments: [],
       actions,
       explainer: null,
       personaliseSupport: null,
@@ -372,6 +412,7 @@ export function presentAdvisor(
     criteria: advisorCriteria(context),
     conclusion: resultConclusion(context),
     lines: supportingLines(context, action),
+    developments: [],
     actions: resultActions(context),
     explainer,
     personaliseSupport: ADVISOR_PERSONALISE_SUPPORT,
