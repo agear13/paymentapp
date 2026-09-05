@@ -1,5 +1,6 @@
 import {
   ADVISOR_PERSONALISE_SUPPORT,
+  ADVISOR_VISION_LINES,
   EMPTY_ADVISOR_CONTEXT,
   advisorExcludeDigitalDollarFilters,
   advisorFilterNote,
@@ -13,40 +14,29 @@ function context(patch: Partial<AdvisorContext>): AdvisorContext {
 }
 
 describe('presentAdvisor', () => {
-  it('introduces itself on the public search without claiming connected data', () => {
+  it('introduces itself as the intelligence layer, not a chat or payment rail', () => {
     const presentation = presentAdvisor(
       context({ stage: 'welcome', showThemeChoice: true })
     );
     expect(presentation.eyebrow).toBe('PROVVY ADVISOR');
-    expect(presentation.status).toBe('Ready to analyse a payment');
-    expect(presentation.conclusion).toBeNull();
-    expect(presentation.lines.join(' ')).toMatch(/interpret the routes against your criteria/i);
-    expect(presentation.developments).toEqual([]);
-    expect(presentation.actions).toEqual([]);
+    expect(presentation.status).toBe('Watching payment infrastructure');
+    expect(presentation.conclusion).toBe("Hi, I'm Provvy.");
+    expect(presentation.lines.join(' ')).toMatch(
+      /Tell me what you're trying to pay below and I'll show you the routes available/
+    );
+    expect(presentation.lines.join(' ')).toMatch(
+      /The more I know about your business, the smarter my recommendations become/
+    );
+    expect(presentation.actions.map((action) => action.id)).toEqual(['see-how-provvy-works']);
     expect(presentation.lines.join(' ')).not.toMatch(/lighter or darker/i);
     expect(presentation.lines.join(' ')).not.toMatch(/live quote/i);
     expect(JSON.stringify(presentation)).not.toMatch(/cash balance/i);
     expect(JSON.stringify(presentation)).not.toMatch(/\bChat\b/);
     expect(JSON.stringify(presentation)).not.toMatch(/textarea|Ask me anything/i);
+    expect(JSON.stringify(presentation)).not.toMatch(/payment provider|another payment rail/i);
   });
 
-  it('surfaces corridor developments as the interface to the intelligence layer', () => {
-    const presentation = presentAdvisor(
-      context({
-        stage: 'search',
-        origin: 'AU',
-        destination: 'ID',
-        showThemeChoice: false,
-      })
-    );
-    expect(presentation.status).toBe('Watching this corridor');
-    expect(presentation.lines.join(' ')).toMatch(/3 developments that could affect payments on Australia → Indonesia/);
-    expect(presentation.actions.map((action) => action.id)).toEqual(['show-developments']);
-    expect(presentation.actions[0]?.label).toBe('Show me');
-    expect(presentation.developments).toEqual([]);
-  });
-
-  it('references the highlighted intelligence item without inventing live data', () => {
+  it('keeps the introduction until the visitor compares a payment', () => {
     const presentation = presentAdvisor(
       context({
         stage: 'search',
@@ -55,51 +45,27 @@ describe('presentAdvisor', () => {
         highlightedIntelligenceId: 'rba-psr-review-2026-06',
       })
     );
-    expect(presentation.lines[0]).toMatch(/^This matters because this could change which payment methods/);
-    expect(presentation.actions.map((action) => action.id)).toEqual([
-      'show-affected-routes',
-      'personalise',
-    ]);
-    expect(presentation.actions.map((action) => action.label)).toEqual([
-      'Show me routes affected by this',
-      'What does this mean for my business?',
-    ]);
-    expect(presentation.personaliseSupport).toBeNull();
-    expect(JSON.stringify(presentation)).not.toMatch(/live quote|your cash balance|minutes ago/i);
+    expect(presentation.conclusion).toBe("Hi, I'm Provvy.");
+    expect(presentation.lines.join(' ')).toMatch(/Tell me what you're trying to pay below/i);
+    expect(presentation.lines.join(' ')).toMatch(/smarter my recommendations become/i);
+    expect(presentation.actions.map((action) => action.id)).toEqual(['see-how-provvy-works']);
+    expect(JSON.stringify(presentation)).not.toMatch(/live quote|minutes ago/i);
   });
 
-  it('keeps result actions intact while naming the highlighted development', () => {
-    const presentation = presentAdvisor(
-      context({
-        stage: 'results',
-        origin: 'AU',
-        destination: 'ID',
-        amount: 10000,
-        currency: 'AUD',
-        transactionType: 'supplier_payment',
-        priority: 'lowest_cost',
-        recommendedProvider: 'Wise',
-        recommendedProviderId: 'wise',
-        highlightedIntelligenceId: 'swift-retail-framework-2026-03',
-      })
-    );
-    expect(presentation.conclusion).toMatch(/Wise is the strongest starting point/);
-    expect(presentation.lines.join(' ')).toMatch(/^This matters because/);
-    expect(presentation.actions.map((action) => action.label)).toEqual([
-      'Why is this #1?',
-      "What's faster?",
-      "What's simpler?",
-      'Personalise this answer',
-    ]);
+  it('reveals the longer-term role without overpromising live data', () => {
+    const presentation = presentAdvisor(context({ stage: 'welcome' }), 'see-how-provvy-works');
+    expect(presentation.lines.join(' ')).toContain(ADVISOR_VISION_LINES[0]);
+    expect(presentation.lines.join(' ')).toMatch(/extra pair of hands/i);
+    expect(JSON.stringify(presentation)).not.toMatch(/I can see your|live FX/i);
   });
 
   it('skips theme choice when a preference already exists', () => {
     const presentation = presentAdvisor(context({ stage: 'search', showThemeChoice: false }));
-    expect(presentation.actions).toEqual([]);
+    expect(presentation.actions.map((action) => action.id)).toEqual(['see-how-provvy-works']);
     expect(presentation.lines.join(' ')).not.toMatch(/lighter or darker/i);
   });
 
-  it('explains the public Wise recommendation after a lowest-cost search', () => {
+  it('after a search, frames the public answer and asks the visitor to connect', () => {
     const presentation = presentAdvisor(
       context({
         stage: 'results',
@@ -120,17 +86,48 @@ describe('presentAdvisor', () => {
     );
     expect(presentation.criteria.join(' ')).toMatch(/10,000/);
     expect(presentation.conclusion).toMatch(
-      /Wise is the strongest starting point for this payment based on what you've entered/
+      /You're comparing a .* supplier payment from Australia to Indonesia/
     );
-    expect(presentation.personaliseSupport).toBe(ADVISOR_PERSONALISE_SUPPORT);
-    expect(presentation.actions.map((action) => action.label)).toEqual([
-      'Why is this #1?',
-      "What's faster?",
-      "What's simpler?",
-      'Personalise this answer',
-    ]);
+    expect(presentation.lines.join(' ')).toMatch(
+      /These results are based on the transaction details you've given me/
+    );
+    expect(presentation.lines).toContain(ADVISOR_PERSONALISE_SUPPORT);
+    expect(presentation.actions[0]).toEqual({
+      id: 'personalise',
+      label: 'Connect your business',
+    });
+    expect(presentation.actions[1]).toEqual({
+      id: 'see-how-provvy-works',
+      label: 'See how Provvy works',
+    });
+    expect(presentation.actions.map((action) => action.label)).toEqual(
+      expect.arrayContaining(['Why is this #1?', "What's faster?", "What's simpler?"])
+    );
     expect(JSON.stringify(presentation)).not.toMatch(/live FX/i);
     expect(JSON.stringify(presentation)).not.toMatch(/your Wise account/i);
+  });
+
+  it('keeps ranking questions secondary after a highlighted development', () => {
+    const presentation = presentAdvisor(
+      context({
+        stage: 'results',
+        origin: 'AU',
+        destination: 'ID',
+        amount: 10000,
+        currency: 'AUD',
+        transactionType: 'supplier_payment',
+        priority: 'lowest_cost',
+        recommendedProvider: 'Wise',
+        recommendedProviderId: 'wise',
+        highlightedIntelligenceId: 'swift-retail-framework-2026-03',
+      })
+    );
+    expect(presentation.conclusion).toMatch(/You're comparing a/);
+    expect(presentation.lines.join(' ')).toMatch(/This matters because/);
+    expect(presentation.actions[0]?.label).toBe('Connect your business');
+    expect(presentation.actions.map((action) => action.label)).toEqual(
+      expect.arrayContaining(['Why is this #1?', "What's faster?", "What's simpler?"])
+    );
   });
 
   it('exposes ranking context when asked why a route is first', () => {
@@ -178,17 +175,20 @@ describe('presentAdvisor', () => {
       })
     );
     expect(presentation.status).toBe('Recommendation changed');
-    expect(presentation.conclusion).toMatch(
+    expect(presentation.lines.join(' ')).toMatch(
       /Digital-dollar transfer is now the strongest starting point because speed is your priority/
     );
     expect(JSON.stringify(presentation)).not.toMatch(/stablecoin/i);
     expect(JSON.stringify(presentation)).not.toMatch(/blockchain/i);
-    expect(presentation.actions.map((action) => action.label)).toEqual([
-      'Why is this fastest?',
-      'What is digital-dollar?',
-      "What's simpler?",
-      'Personalise this answer',
-    ]);
+    expect(presentation.actions.map((action) => action.label)).toEqual(
+      expect.arrayContaining([
+        'Connect your business',
+        'See how Provvy works',
+        'Why is this fastest?',
+        'What is digital-dollar?',
+        "What's simpler?",
+      ])
+    );
     const explained = presentAdvisor(
       context({
         stage: 'results',
@@ -215,7 +215,7 @@ describe('presentAdvisor', () => {
       })
     );
     expect(presentation.status).toBe('Recommendation changed');
-    expect(presentation.conclusion).toMatch(
+    expect(presentation.lines.join(' ')).toMatch(
       /Your existing bank is now the strongest starting point because simplicity is your priority/
     );
     expect(presentation.conclusion).not.toMatch(/Westpac|NAB|ANZ|CommBank|your bank is CommBank/i);
@@ -250,8 +250,7 @@ describe('presentAdvisor', () => {
       })
     );
     expect(presentation.status).toBe('Criteria updated');
-    expect(presentation.conclusion).toMatch(/Wise is the strongest starting point/i);
-    expect(presentation.lines[0]).toBe(note);
+    expect(presentation.lines).toContain(note);
     expect(presentation.lines.filter((line) => line === note)).toHaveLength(1);
   });
 

@@ -47,14 +47,24 @@ function Field({
   id,
   label,
   children,
+  asQuestion = false,
 }: {
   id: string;
   label: string;
   children: ReactNode;
+  asQuestion?: boolean;
 }) {
   return (
     <label htmlFor={id} className="block min-w-0">
-      <span className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">{label}</span>
+      <span
+        className={
+          asQuestion
+            ? 'text-[12px] font-medium text-ink-soft'
+            : 'text-[11px] font-medium uppercase tracking-wider text-ink-soft'
+        }
+      >
+        {label}
+      </span>
       {children}
     </label>
   );
@@ -225,15 +235,28 @@ export function LandingPaymentSearch() {
 
   return (
     <div className="space-y-4">
+      <div>
+        <h2
+          id="landing-search-heading"
+          className="text-balance text-[1.2rem] font-semibold tracking-[-0.02em] sm:text-xl"
+        >
+          Tell Provvy what you're paying
+        </h2>
+        <p className="mt-1 max-w-2xl text-[13px] leading-snug text-ink-soft sm:text-[14px]">
+          Enter the details of the transaction you want to make. Provvy will compare the available
+          routes and explain what matters.
+        </p>
+      </div>
       <form
         className="rounded-2xl glass p-4 shadow-card sm:p-5"
+        aria-labelledby="landing-search-heading"
         onSubmit={(event) => {
           event.preventDefault();
           handleCompare(null);
         }}
       >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Field id="landing-origin" label="Origin">
+          <Field id="landing-origin" label="From">
             <select
               id="landing-origin"
               value={originCountry}
@@ -249,7 +272,7 @@ export function LandingPaymentSearch() {
               ))}
             </select>
           </Field>
-          <Field id="landing-destination" label="Destination">
+          <Field id="landing-destination" label="To">
             <select
               id="landing-destination"
               value={destinationCountry}
@@ -265,7 +288,7 @@ export function LandingPaymentSearch() {
               ))}
             </select>
           </Field>
-          <Field id="landing-type" label="Transaction type">
+          <Field id="landing-type" label="What are you paying for?" asQuestion>
             <select
               id="landing-type"
               value={transactionType}
@@ -312,10 +335,8 @@ export function LandingPaymentSearch() {
             </select>
           </Field>
           <fieldset className="min-w-0 sm:col-span-2 lg:col-span-1">
-            <legend className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-              Priority
-            </legend>
-            <div className="mt-1.5 flex flex-wrap gap-2" role="radiogroup" aria-label="Priority">
+            <legend className="text-[12px] font-medium text-ink-soft">What matters most?</legend>
+            <div className="mt-1.5 flex flex-wrap gap-2" role="radiogroup" aria-label="What matters most?">
               {LANDING_PRIORITIES.map((item) => {
                 const selected = priority === item.id;
                 return (

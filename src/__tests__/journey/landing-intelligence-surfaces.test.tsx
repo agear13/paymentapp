@@ -71,25 +71,24 @@ describe('payment intelligence cross-surface interactions', () => {
     expect(within(highlight as HTMLElement).getByText(/For this corridor/i)).toBeInTheDocument();
 
     const advisor = screen.getByLabelText('Provvy Advisor');
-    expect(advisor).toHaveTextContent(/This matters because traditional bank transfers may become more competitive/i);
+    expect(advisor).toHaveTextContent(/Hi, I'm Provvy/i);
     expect(within(highlight as HTMLElement).getByRole('button', { name: 'Show me routes affected by this' })).toBeInTheDocument();
-    expect(within(advisor).getByRole('button', { name: 'Show me routes affected by this' })).toBeInTheDocument();
-    expect(within(advisor).getByRole('link', { name: /What does this mean for my business/i })).toBeInTheDocument();
 
     fireEvent.click(within(highlight as HTMLElement).getByRole('button', { name: 'Show me routes affected by this' }));
     expect(screen.getByText(/payment routes match your filters/i)).toBeInTheDocument();
+    expect(within(screen.getByLabelText('Provvy Advisor')).getByText(/You're comparing a/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/Wise is the strongest starting point for this payment based on what you've entered/i)
+      within(screen.getByLabelText('Provvy Advisor')).getByRole('link', { name: /connect your business/i })
     ).toBeInTheDocument();
   });
 
   it('keeps pulse corridor and search corridor aligned', () => {
     render(<RenderSurfaces />);
 
-    fireEvent.change(screen.getByLabelText('Destination'), {
+    fireEvent.change(screen.getByLabelText('To'), {
       target: { value: 'SG' },
     });
-    expect(screen.getByLabelText('Destination')).toHaveValue('SG');
+    expect(screen.getByLabelText('To')).toHaveValue('SG');
     expect(screen.getAllByText('Australia → Singapore').length).toBeGreaterThan(0);
   });
 });

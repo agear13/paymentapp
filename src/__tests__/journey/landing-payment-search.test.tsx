@@ -22,6 +22,22 @@ describe('LandingPaymentSearch', () => {
   it('lets anyone compare without an account, then shows a results interface', () => {
     render(<LandingPaymentSearch />);
 
+    expect(
+      screen.getByRole('heading', { name: /Tell Provvy what you're paying/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        /Enter the details of the transaction you want to make. Provvy will compare the available routes and explain what matters./i
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText('From')).toBeInTheDocument();
+    expect(screen.getByLabelText('To')).toBeInTheDocument();
+    expect(screen.getByLabelText('What are you paying for?')).toBeInTheDocument();
+    expect(screen.getByLabelText('Amount')).toBeInTheDocument();
+    expect(screen.getByLabelText('Currency')).toBeInTheDocument();
+    expect(screen.getByRole('radiogroup', { name: 'What matters most?' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Lowest total cost' })).toBeInTheDocument();
+    expect(screen.queryByText(/transaction type/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /compare routes/i })).toBeInTheDocument();
     expect(screen.queryByText(/routes found/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /connect your business/i })).not.toBeInTheDocument();
@@ -96,7 +112,7 @@ describe('LandingPaymentSearch', () => {
     fireEvent.click(screen.getByRole('button', { name: /compare routes/i }));
     expect(screen.getByText(/Australia → Indonesia/)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText('Destination'), { target: { value: 'TH' } });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: 'TH' } });
     expect(screen.getByText(/Australia → Thailand/)).toBeInTheDocument();
   });
 });

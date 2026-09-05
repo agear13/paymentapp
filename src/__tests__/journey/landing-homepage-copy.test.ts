@@ -28,6 +28,15 @@ describe('homepage narrative and control principles', () => {
     expect(landing).toContain('Provvy payment intelligence');
     expect(landing).toContain('Payment infrastructure changes every day.');
     expect(landing).toContain('what it means for your business');
+    expect(search).toContain("Tell Provvy what you're paying");
+    expect(search).toContain('Enter the details of the transaction you want to make');
+    expect(search).toContain('What are you paying for?');
+    expect(search).toContain('What matters most?');
+    expect(search).toContain('label="From"');
+    expect(search).toContain('label="To"');
+    expect(search).not.toContain('label="Origin"');
+    expect(search).not.toContain('label="Destination"');
+    expect(search).not.toContain('Transaction type');
     expect(landing).toContain('LandingPaymentSearch');
     expect(landing).toContain('LandingPaymentIntelligence');
     expect(landing.indexOf('<LandingPaymentIntelligence')).toBeLessThan(
@@ -88,7 +97,15 @@ describe('homepage narrative and control principles', () => {
     expect(advisor).toContain('PROVVY ADVISOR');
     expect(advisor).toContain('Based on your current criteria');
     expect(advisor).toContain('Recommendation changed');
+    expect(advisor).toContain("Hi, I'm Provvy.");
+    expect(advisor).toContain("Tell me what you're trying to pay below");
+    expect(advisor).toContain('smarter my recommendations become');
+    expect(advisor).toContain('Connect your business');
+    expect(advisor).toContain('extra pair of hands');
     expect(advisorUi).toContain('Provvy Advisor');
+    expect(advisorUi).toContain('data-advisor-placement');
+    expect(advisorUi).not.toContain('createPortal');
+    expect(results).not.toContain('LANDING_ADVISOR_SLOT_ID');
     expect(advisorUi).not.toMatch(/Need help\?/);
     expect(advisorUi).not.toMatch(/<textarea|<input type="text"/);
     expect(`${landing}\n${search}\n${results}\n${advisor}\n${advisorUi}`).not.toMatch(/Ask me anything/i);

@@ -9,15 +9,10 @@ import {
   isLandingTransactionTypeId,
   priorityLabel,
   transactionTypeLabel,
-  type LandingCountryCode,
   type LandingPriorityId,
   type LandingTransactionTypeId,
 } from '@/lib/journey/landing-route-model';
-import {
-  developmentsForAdvisor,
-  findIntelligenceItem,
-  thisMattersBecause,
-} from '@/lib/journey/payment-intelligence-rank';
+import { findIntelligenceItem, thisMattersBecause } from '@/lib/journey/payment-intelligence-rank';
 
 export const ADVISOR_INTRO_STORAGE_KEY = 'provvy.advisorIntroSeen';
 export const LANDING_ADVISOR_SLOT_ID = 'landing-advisor-slot';
@@ -64,7 +59,8 @@ export type AdvisorActionId =
   | 'what-is-digital-dollar'
   | 'exclude-digital-dollar'
   | 'show-developments'
-  | 'show-affected-routes';
+  | 'show-affected-routes'
+  | 'see-how-provvy-works';
 
 export type AdvisorAction = {
   id: AdvisorActionId;
@@ -116,7 +112,13 @@ export const DIGITAL_DOLLAR_ADVISOR_EXPLAINER =
   'Digital-dollar transfer uses a digital currency rail to move value between compatible wallets or accounts. It can settle quickly, but both sides need the right setup.';
 
 export const ADVISOR_PERSONALISE_SUPPORT =
-  'Connect your business so Provvy can consider your existing rails, cash position, negotiated FX, supplier terms and history.';
+  'Connect your business and I can make this recommendation using more of your actual context.';
+
+export const ADVISOR_VISION_LINES = [
+  "I'm not just here to answer questions.",
+  'As I understand more of your business, I can help you spot opportunities, make decisions and coordinate work across payments and finance.',
+  'Think of me as an extra pair of hands for your commercial operations.',
+] as const;
 
 const ADVISOR_EYEBROW = 'PROVVY ADVISOR';
 
@@ -232,25 +234,35 @@ export function advisorCriteria(context: AdvisorContext): string[] {
   return chips;
 }
 
-function advisorDevelopments(context: AdvisorContext) {
-  if (!context.origin || !context.destination) return [];
-  if (!isLandingCountryCode(context.origin) || !isLandingCountryCode(context.destination)) return [];
-  return developmentsForAdvisor({
-    origin: context.origin,
-    destination: context.destination,
-    scope: 'all',
-  }).map((item) => ({ headline: item.headline, impact: item.businessImpact }));
-}
-
 function advisorStatus(context: AdvisorContext): string {
   if (context.stage === 'welcome' || context.stage === 'search') {
-    return context.origin && context.destination
-      ? 'Watching this corridor'
-      : 'Ready to analyse a payment';
+    return 'Watching payment infrastructure';
   }
   if (context.priorityChanged) return 'Recommendation changed';
   if (context.filterNote) return 'Criteria updated';
   return 'Based on your current criteria';
+}
+
+function comparisonLead(context: AdvisorContext): string | null {
+  if (
+    !context.amount ||
+    !context.currency ||
+    !context.origin ||
+    !context.destination ||
+    !context.transactionType
+  ) {
+    return null;
+  }
+  if (!isLandingCountryCode(context.origin) || !isLandingCountryCode(context.destination)) {
+    return null;
+  }
+  if (!isLandingTransactionTypeId(context.transactionType)) return null;
+  const amount = formatLandingAmount(context.amount, context.currency);
+  const type = transactionTypeLabel(context.transactionType).toLowerCase();
+  if (context.origin === context.destination) {
+    return `You're comparing a ${amount} ${type} in ${countryName(context.origin)}.`;
+  }
+  return `You're comparing a ${amount} ${type} from ${countryName(context.origin)} to ${countryName(context.destination)}.`;
 }
 
 function resultConclusion(context: AdvisorContext): string {
@@ -312,7 +324,7 @@ function whyThisFirst(context: AdvisorContext): string[] {
   return uniqueLines(lines);
 }
 
-function resultActions(context: AdvisorContext): AdvisorAction[] {
+function routeActions(context: AdvisorContext): AdvisorAction[] {
   const actions: AdvisorAction[] = [];
   actions.push({
     id: 'why-first',
@@ -330,9 +342,7 @@ function resultActions(context: AdvisorContext): AdvisorAction[] {
   } else {
     actions.push({ id: 'whats-cheaper', label: "What's cheaper?" });
   }
-
-  actions.push({ id: 'personalise', label: 'Personalise this answer' });
-  return actions.slice(0, 4);
+  return actions.slice(0, 3);
 }
 
 function supportingLines(context: AdvisorContext, action?: AdvisorActionId | null): string[] {
@@ -358,37 +368,21 @@ export function presentAdvisor(
   action?: AdvisorActionId | null
 ): AdvisorPresentation {
   if (context.stage === 'welcome' || context.stage === 'search') {
-    const developments = advisorDevelopments(context);
-    const highlighted = findIntelligenceItem(context.highlightedIntelligenceId);
-    const corridor =
-      context.origin &&
-      context.destination &&
-      isLandingCountryCode(context.origin) &&
-      isLandingCountryCode(context.destination)
-        ? `${countryName(context.origin as LandingCountryCode)} → ${countryName(context.destination as LandingCountryCode)}`
-        : 'this corridor';
-    const lines: string[] = [];
-    const actions: AdvisorAction[] = [];
-    if (highlighted) {
-      lines.push(thisMattersBecause(highlighted));
-      actions.push({ id: 'show-affected-routes', label: 'Show me routes affected by this' });
-      actions.push({ id: 'personalise', label: 'What does this mean for my business?' });
-    } else if (developments.length) {
-      lines.push(
-        `Provvy is watching ${developments.length} developments that could affect payments on ${corridor}.`
-      );
-      actions.push({ id: 'show-developments', label: 'Show me' });
-    } else {
-      lines.push('Compare a payment and Provvy will interpret the routes against your criteria.');
+    const lines = [
+      "Tell me what you're trying to pay below and I'll show you the routes available.",
+      'The more I know about your business, the smarter my recommendations become.',
+    ];
+    if (action === 'see-how-provvy-works') {
+      lines.push(...ADVISOR_VISION_LINES);
     }
     return {
       eyebrow: ADVISOR_EYEBROW,
       status: advisorStatus(context),
-      criteria: advisorCriteria(context),
-      conclusion: null,
+      criteria: [],
+      conclusion: "Hi, I'm Provvy.",
       lines,
       developments: [],
-      actions,
+      actions: [{ id: 'see-how-provvy-works', label: 'See how Provvy works' }],
       explainer: null,
       personaliseSupport: null,
     };
@@ -406,16 +400,32 @@ export function presentAdvisor(
         }
       : null;
 
+  const lines: string[] = [
+    "These results are based on the transaction details you've given me.",
+    ADVISOR_PERSONALISE_SUPPORT,
+  ];
+  if (context.priorityChanged) {
+    lines.unshift(resultConclusion(context));
+  }
+  lines.push(...supportingLines(context, action));
+  if (action === 'see-how-provvy-works') {
+    lines.push(...ADVISOR_VISION_LINES);
+  }
+
   return {
     eyebrow: ADVISOR_EYEBROW,
     status: advisorStatus(context),
     criteria: advisorCriteria(context),
-    conclusion: resultConclusion(context),
-    lines: supportingLines(context, action),
+    conclusion: comparisonLead(context) ?? resultConclusion(context),
+    lines: uniqueLines(lines),
     developments: [],
-    actions: resultActions(context),
+    actions: [
+      { id: 'personalise', label: 'Connect your business' },
+      { id: 'see-how-provvy-works', label: 'See how Provvy works' },
+      ...routeActions(context),
+    ],
     explainer,
-    personaliseSupport: ADVISOR_PERSONALISE_SUPPORT,
+    personaliseSupport: null,
   };
 }
 

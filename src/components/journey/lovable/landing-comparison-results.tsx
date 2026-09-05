@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
-import { LANDING_ADVISOR_SLOT_ID, advisorFilterNote } from '@/lib/journey/landing-advisor';
+import { advisorFilterNote } from '@/lib/journey/landing-advisor';
 import { useOptionalLandingAdvisor } from '@/components/journey/lovable/landing-advisor-context';
 import { LandingCompareTable, LandingCompareTray } from '@/components/journey/lovable/landing-compare-panel';
 import { LandingResultCard } from '@/components/journey/lovable/landing-result-card';
@@ -155,8 +155,6 @@ export function LandingComparisonResults({
           onClose={() => setCompareOpen(false)}
         />
       ) : null}
-
-      <div id={LANDING_ADVISOR_SLOT_ID} />
 
       <section id="personalise" className="rounded-xl border border-primary/20 bg-card px-3 py-3">
         <h3 className="text-[14px] font-semibold tracking-tight">
