@@ -52,19 +52,19 @@ export function LandingPaymentIntelligence() {
 
   return (
     <section id="payment-intelligence">
-      <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-        <div className="rounded-2xl border border-border/70 bg-card/90 p-3 shadow-soft sm:p-4">
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-4">
+        <div className="rounded-2xl border border-border/70 bg-card/90 p-4 shadow-soft sm:p-5">
           <div className="flex flex-wrap items-end justify-between gap-2">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-soft">
                 Payment rail pulse
               </p>
-              <p className="mt-0.5 text-[13px] font-medium">{corridor}</p>
-              <p className="text-[11px] text-ink-soft">{ranked.snapshotLabel}</p>
+              <p className="mt-1 text-[13px] font-medium">{corridor}</p>
+              <p className="mt-0.5 text-[11px] text-ink-soft">{ranked.snapshotLabel}</p>
             </div>
           </div>
 
-          <div className="mt-2.5 flex gap-2 overflow-x-auto pb-0.5">
+          <div className="mt-4 flex gap-2 overflow-x-auto pb-0.5">
             {ranked.pulse.map((entry) => {
               const selected = entry.id === item?.id;
               const fit = corridorFit(entry, origin, destination);
@@ -108,7 +108,7 @@ export function LandingPaymentIntelligence() {
           <article
             data-intelligence-highlight={item.id}
             data-corridor-fit={itemFit}
-            className="rounded-2xl border border-border/70 border-l-2 border-l-primary/45 bg-card/90 p-3 shadow-soft sm:p-4"
+            className="rounded-2xl border border-border/70 border-l-2 border-l-primary/45 bg-card/90 p-4 shadow-soft sm:p-5"
             onMouseEnter={() => setPaused(true)}
             onMouseLeave={() => setPaused(false)}
           >
@@ -120,27 +120,27 @@ export function LandingPaymentIntelligence() {
                 <p className="text-[11px] text-ink-soft">{corridorFitLabel(itemFit)}</p>
               ) : null}
             </div>
-            <h3 className="mt-1.5 text-balance text-[18px] font-semibold leading-snug tracking-tight sm:text-[20px]">
+            <h3 className="mt-2.5 text-balance text-[18px] font-semibold leading-snug tracking-tight sm:text-[20px]">
               {item.headline}
             </h3>
-            <p className="mt-1.5 text-[12px] text-ink-soft">
+            <p className="mt-2 text-[12px] text-ink-soft">
               {item.source} · {formatItemDate(item.publishedAt)}
             </p>
-            <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Affected payment rails">
+            <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Affected payment rails">
               {item.rails.map((railId) => (
                 <PaymentRailMark key={railId} railId={railId} size="sm" />
               ))}
             </div>
             <div
               data-business-impact={item.id}
-              className="mt-2.5 rounded-xl border-l-2 border-l-primary/45 bg-background px-3 py-2"
+              className="mt-3.5 rounded-xl border-l-2 border-l-primary/45 bg-background px-3 py-2.5"
             >
               <p className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">
                 Business impact
               </p>
               <p className="mt-1 text-[13px] leading-snug">{item.businessImpact}</p>
             </div>
-            <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+            <div className="mt-3.5 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -179,7 +179,7 @@ export function LandingPaymentIntelligence() {
           </article>
         ) : null}
       </div>
-      <p className="mt-2 text-left text-[11px] text-ink-soft">
+      <p className="mt-3 text-left text-[11px] text-ink-soft">
         These are public announcements Provvy is interpreting — not live quotes, live FX, or a live
         payment network.
       </p>

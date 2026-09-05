@@ -234,7 +234,7 @@ export function LandingPaymentSearch() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div>
         <h2
           id="landing-search-heading"
@@ -242,7 +242,7 @@ export function LandingPaymentSearch() {
         >
           Tell Provvy what you're paying
         </h2>
-        <p className="mt-1 max-w-2xl text-[13px] leading-snug text-ink-soft sm:text-[14px]">
+        <p className="mt-2 max-w-2xl text-[13px] leading-snug text-ink-soft sm:text-[14px]">
           Enter the details of the transaction you want to make. Provvy will compare the available
           routes and explain what matters.
         </p>

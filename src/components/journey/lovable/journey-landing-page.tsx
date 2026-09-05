@@ -189,7 +189,7 @@ function Nav({ dark, onToggleDark }: { dark: boolean; onToggleDark: () => void }
 
 function Hero() {
   return (
-    <section id="compare" className="relative px-6 pt-6 pb-4 sm:pt-8 sm:pb-5">
+    <section id="compare" className="relative px-6 pt-10 pb-12 sm:pt-14 sm:pb-16">
       <div
         className="pointer-events-none absolute inset-x-0 top-0 h-[420px]"
         style={{ background: 'var(--gradient-hero)' }}
@@ -198,23 +198,23 @@ function Hero() {
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-soft">
           Provvy payment intelligence
         </p>
-        <h1 className="mt-2 text-balance text-[1.85rem] font-semibold tracking-[-0.03em] sm:text-4xl md:text-5xl">
+        <h1 className="mt-5 text-balance text-[1.85rem] font-semibold tracking-[-0.03em] sm:mt-6 sm:text-4xl md:text-5xl">
           <span className="text-gradient">Payment infrastructure changes every day.</span>
         </h1>
-        <p className="mx-auto mt-2 max-w-2xl text-balance text-[15px] text-ink-soft sm:text-base">
+        <p className="mx-auto mt-5 max-w-2xl text-balance text-[15px] text-ink-soft sm:mt-6 sm:text-base">
           Provvy helps you understand what changed — and what it means for your business.
         </p>
       </div>
 
-      <div className="relative mx-auto mt-4 max-w-6xl animate-fade-up">
+      <div className="relative mx-auto mt-10 max-w-6xl animate-fade-up sm:mt-14">
         <LandingPaymentIntelligence />
       </div>
 
-      <div className="relative mx-auto mt-3 max-w-5xl animate-fade-up">
+      <div className="relative mx-auto mt-12 max-w-5xl animate-fade-up sm:mt-16">
         <LandingPaymentSearch />
       </div>
 
-      <div className="relative mx-auto mt-4 max-w-5xl animate-fade-up">
+      <div className="relative mx-auto mt-10 max-w-5xl animate-fade-up sm:mt-14">
         <LandingPaymentIntelligenceSubscribe />
       </div>
     </section>
