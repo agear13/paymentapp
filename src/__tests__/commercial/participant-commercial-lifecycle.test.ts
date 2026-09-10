@@ -165,12 +165,12 @@ describe('participant-commercial-lifecycle', () => {
       payoutOnboardingPhase: 'APPROVED',
     };
     expectWorkflow(participant, {
-      stage: 'XERO_INVOICE',
-      badge: 'Ready for Xero',
-      cta: 'Push Supplier Bill to Xero',
-      readiness: 'ready',
-      progressStep: 7,
-      visibleButton: true,
+      stage: 'SETTLEMENT_READY',
+      badge: 'Ready for Settlement',
+      cta: 'Release Settlement',
+      readiness: 'complete',
+      progressStep: 8,
+      visibleButton: false,
     });
 
     participant = {
@@ -286,16 +286,16 @@ describe('participant-commercial-lifecycle', () => {
         readiness: 'ready',
       },
       {
-        name: 'commercial data verified and ready for Xero',
+        name: 'payout details verified without Xero export',
         participant: baseParticipant({
           approvalStatus: 'Approved',
           supplierOnboarding: { lifecycle: 'APPROVED' },
           payoutVerificationConfirmed: true,
         }),
-        stage: 'XERO_INVOICE',
-        badge: 'Ready for Xero',
-        nextAction: 'Push Supplier Bill to Xero',
-        readiness: 'ready',
+        stage: 'SETTLEMENT_READY',
+        badge: 'Ready for Settlement',
+        nextAction: 'Release Settlement',
+        readiness: 'complete',
       },
       {
         name: 'supplier bill created',
@@ -514,18 +514,18 @@ describe('participant-commercial-lifecycle', () => {
     expect(action.destination).toBe('review_payment');
   });
 
-  it('operator approved unlocks Xero stage', () => {
+  it('operator approved unlocks settlement readiness without Xero', () => {
     const p = baseParticipant({
       approvalStatus: 'Approved',
       supplierOnboarding: { lifecycle: 'APPROVED' },
       payoutVerificationConfirmed: true,
     });
-    expect(deriveParticipantCommercialLifecycle(p)).toBe('XERO_INVOICE');
+    expect(deriveParticipantCommercialLifecycle(p)).toBe('SETTLEMENT_READY');
     const action = deriveParticipantLifecycleAction(p);
-    expect(action.label).toBe('Push Supplier Bill to Xero');
+    expect(action.label).toBe('Release Settlement');
     const table = deriveParticipantCommercialTablePresentation(p);
-    expect(table.commercialChip).toBe('Ready for Xero');
-    expect(table.nextAction.label).toBe('Push Supplier Bill to Xero');
+    expect(table.commercialChip).toBe('Ready for Settlement');
+    expect(table.nextAction.label).toBe('Release Settlement');
   });
 
   it('supplier bill created moves to ready for settlement', () => {

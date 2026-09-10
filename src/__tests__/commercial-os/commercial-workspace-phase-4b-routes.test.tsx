@@ -423,7 +423,7 @@ describe('Phase 4B Commercial Workspace route adapters', () => {
     );
   });
 
-  it('routes xero and review card CTAs onto nested OS paths', () => {
+  it('routes review and verified-payout card CTAs onto nested OS paths', () => {
     const resolveCtaHref = createArrangementCtaHrefResolver(WORKSPACE_ID);
     render(
       <ApprovalCentreParticipantCard
@@ -448,9 +448,9 @@ describe('Phase 4B Commercial Workspace route adapters', () => {
         resolveCtaHref={resolveCtaHref}
       />
     );
-    expect(screen.getByTestId('approval-centre-cta-xero_export')).toHaveAttribute(
+    expect(screen.getByTestId('approval-centre-cta-settlement')).toHaveAttribute(
       'href',
-      `/workspace/arrangements/${WORKSPACE_ID}/money?section=accounting`
+      '/workspace/settlement'
     );
   });
 

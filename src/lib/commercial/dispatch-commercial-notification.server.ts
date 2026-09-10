@@ -81,8 +81,8 @@ const TEMPLATES: Partial<Record<CommercialEventKind, CommercialNotificationTempl
   supplier_details_submitted: {
     title: (ctx) => `${ctx.participantName} submitted payment information`,
     message: (ctx) =>
-      `${ctx.participantName} has submitted their bank details, ABN, and GST status. Verify payout details before pushing the supplier bill to Xero.`,
-    consequence: () => 'Verification is required before the supplier bill can be pushed to Xero.',
+      `${ctx.participantName} has submitted their bank details, ABN, and GST status. Verify payout details to continue.`,
+    consequence: () => 'Verification is required before payout details are approved.',
     action: 'Review payment information',
     actionPath: (ctx) =>
       ctx.participantId
@@ -93,11 +93,11 @@ const TEMPLATES: Partial<Record<CommercialEventKind, CommercialNotificationTempl
   supplier_onboarding_approved: {
     title: (ctx) => `${ctx.participantName}'s payment information approved`,
     message: (ctx) =>
-      `Payment details for ${ctx.participantName} have been verified. The invoice is ready to export to Xero.`,
-    consequence: () => 'Export the invoice to Xero to complete accounting before settlement.',
-    action: 'Export to Xero',
+      `Payment details for ${ctx.participantName} have been verified.`,
+    consequence: () => 'Settlement can proceed when funding and the remaining payment gates are satisfied. Xero export is optional.',
+    action: 'Review settlement',
     actionPath: (ctx) =>
-      `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/funding?section=accounting`,
+      `/dashboard/projects/${encodeURIComponent(ctx.projectId)}/payouts`,
   },
 
   supplier_invoice_generated: {

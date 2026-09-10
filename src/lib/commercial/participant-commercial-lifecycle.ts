@@ -70,7 +70,7 @@ export const PARTICIPANT_STATUS_DISPLAY: Record<ParticipantCommercialLifecycleSt
   PAYMENT_INFO_PENDING: 'Waiting for Participant',
   PAYMENT_INFO_SUBMITTED: 'Verify Payout Details',
   OPERATOR_REVIEW: 'Verify Payout Details',
-  XERO_INVOICE: 'Push Supplier Bill to Xero',
+  XERO_INVOICE: 'Optional Xero export',
   SETTLEMENT_READY: 'Ready for Settlement',
   PAID: 'Paid',
 };
@@ -89,7 +89,7 @@ export const LIFECYCLE_STAGE_OPERATOR_LABELS: Record<ParticipantCommercialLifecy
   PAYMENT_INFO_PENDING: 'Waiting for Participant',
   PAYMENT_INFO_SUBMITTED: 'Verify Payout Details',
   OPERATOR_REVIEW: 'Verify Payout Details',
-  XERO_INVOICE: 'Supplier Bill Exported',
+  XERO_INVOICE: 'Optional Xero export',
   SETTLEMENT_READY: 'Ready for Settlement',
   PAID: 'Paid',
 };
@@ -104,7 +104,7 @@ export const LIFECYCLE_TIMELINE_STEPS: readonly {
   { stage: 'AGREEMENT_ACCEPTED', label: 'Payout Details Requested' },
   { stage: 'PAYMENT_INFO_PENDING', label: 'Waiting for Participant' },
   { stage: 'OPERATOR_REVIEW', label: 'Verify Payout Details' },
-  { stage: 'XERO_INVOICE', label: 'Supplier Bill Exported' },
+  { stage: 'XERO_INVOICE', label: 'Optional Xero export' },
   { stage: 'SETTLEMENT_READY', label: 'Ready for Settlement' },
   { stage: 'PAID', label: 'Paid' },
 ];
@@ -352,21 +352,21 @@ const WORKFLOW_STAGE_CONFIG: Record<
     secondaryCtas: [],
   },
   XERO_INVOICE: {
-    badge: 'Ready for Xero',
-    statusText: 'Commercial data complete',
+    badge: 'Optional Xero export',
+    statusText: 'Accounting export available',
     readiness: 'ready',
     primaryCta: {
       kind: 'push_to_xero',
       label: 'Push Supplier Bill to Xero',
       destination: 'xero_export',
-      urgency: 'action_required',
-      buttonVariant: 'default',
+      urgency: 'attention',
+      buttonVariant: 'outline',
     },
     secondaryCtas: [],
   },
   SETTLEMENT_READY: {
     badge: 'Ready for Settlement',
-    statusText: 'Supplier bill created',
+    statusText: 'Payout details verified',
     readiness: 'complete',
     primaryCta: {
       kind: 'ready_for_settlement',
@@ -416,11 +416,11 @@ function workflowExplanation(
       return `Payout request sent to ${name}. Waiting for participant submission.`;
     case 'PAYMENT_INFO_SUBMITTED':
     case 'OPERATOR_REVIEW':
-      return `${name} submitted payout details. Verify them before exporting to Xero.`;
+      return `${name} submitted payout details. Verify them to continue.`;
     case 'XERO_INVOICE':
-      return `${name}'s commercial data is complete. Push the supplier bill to Xero.`;
+      return `${name}'s payout details are verified. Pushing the supplier bill to Xero is optional accounting export and does not gate payment.`;
     case 'SETTLEMENT_READY':
-      return `${name}'s supplier bill is in Xero and they are ready for settlement.`;
+      return `${name}'s payout details are verified. Settlement can proceed when funding and the remaining payment gates are satisfied.`;
     case 'PAID':
       return `${name} has been paid.`;
     default:
@@ -731,7 +731,7 @@ function notificationMessage(stage: ParticipantCommercialLifecycleStage, count: 
     case 'OPERATOR_REVIEW':
       return `${n} payment profile${plural ? 's' : ''} awaiting operator review`;
     case 'XERO_INVOICE':
-      return `${n} participant${plural ? 's' : ''} ready for invoicing`;
+      return `${n} participant${plural ? 's' : ''} have optional Xero export available`;
     case 'SETTLEMENT_READY':
       return `${n} settlement${plural ? 's' : ''} ready`;
     case 'PAID':

@@ -17,17 +17,18 @@ function mapFundingStatus(
 }
 
 function mapXeroStatus(
-  participant: DemoParticipant
+  participant: DemoParticipant,
+  xeroConnected?: boolean
 ): ParticipantTaskContext['accounting']['xeroStatus'] {
-  const ps = participant.paymentSetup;
-  if (!ps?.xeroExportedAt) return 'pending';
-  if (ps.xeroSyncStatus?.toLowerCase() === 'synced') return 'exported';
-  return ps.xeroExportedAt ? 'exported' : 'pending';
+  if (participant.paymentSetup?.xeroExportedAt) return 'exported';
+  if (xeroConnected === false) return 'not_required';
+  return 'pending';
 }
 
 /** Map participants to task engine context — no new business rules. */
 export function buildParticipantTaskContexts(
-  participants: DemoParticipant[]
+  participants: DemoParticipant[],
+  options?: { xeroConnected?: boolean }
 ): ParticipantTaskContext[] {
   return participants.map((participant) => {
     const settlementInput = buildParticipantSettlementInput(participant);
@@ -79,7 +80,7 @@ export function buildParticipantTaskContexts(
         status: mapFundingStatus(settlementInput.funding.status),
       },
       accounting: {
-        xeroStatus: mapXeroStatus(participant),
+        xeroStatus: mapXeroStatus(participant, options?.xeroConnected),
       },
       obligation: {
         amount: settlementInput.obligation.amount,

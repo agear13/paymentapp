@@ -67,6 +67,14 @@ describe('workflow independence', () => {
     expect(accounting.state).toBe('FAILED');
   });
 
+  it('legacy lifecycle maps operator approval to SETTLEMENT_READY without Xero export', () => {
+    const participant = approvedParticipantWithVerifiedPayout(deal);
+    const workflows = deriveParticipantWorkflows(participant);
+    expect(workflows.accounting.state).toBe('NOT_EXPORTED');
+    expect(mapLegacyParticipantLifecycleStage(participant, workflows)).toBe('SETTLEMENT_READY');
+    expect(deriveParticipantCommercialLifecycle(participant)).toBe('SETTLEMENT_READY');
+  });
+
   it('legacy lifecycle still maps accounting sync to SETTLEMENT_READY', () => {
     const participant = {
       ...approvedParticipantWithVerifiedPayout(deal),
@@ -82,9 +90,10 @@ describe('workflow independence', () => {
     expect(deriveParticipantCommercialLifecycle(participant)).toBe('SETTLEMENT_READY');
   });
 
-  it('legacy lifecycle keeps XERO_INVOICE before accounting export', () => {
+  it('legacy lifecycle does not keep XERO_INVOICE when settlement is ready without Xero', () => {
     const participant = approvedParticipantWithVerifiedPayout(deal);
-    expect(deriveParticipantCommercialLifecycle(participant)).toBe('XERO_INVOICE');
+    expect(deriveParticipantCommercialLifecycle(participant)).not.toBe('XERO_INVOICE');
+    expect(deriveParticipantCommercialLifecycle(participant)).toBe('SETTLEMENT_READY');
   });
 
   it('project-level derive functions return per-participant results', () => {

@@ -267,6 +267,13 @@ async function approvePayoutDetails(input: {
     throw new CommercialCoordinationError('Participant not found', 'NOT_FOUND', 404);
   }
 
+  await orchestrateOperationalMutation({
+    userId: input.userId,
+    mutation: 'payout_verification',
+    projectId: persisted.dealId ?? input.participant.dealId,
+    focusParticipant: persisted,
+  });
+
   void dispatchCommercialNotification({
     organizationId: input.organizationId,
     eventKind: 'supplier_onboarding_approved',

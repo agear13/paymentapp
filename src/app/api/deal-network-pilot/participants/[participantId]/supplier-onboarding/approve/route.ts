@@ -8,6 +8,7 @@ import {
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { dispatchCommercialNotification } from '@/lib/commercial/dispatch-commercial-notification.server';
 import { applyPayoutVerificationConfirmed } from '@/lib/projects/participant-lifecycle';
+import { orchestrateOperationalMutation } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 import {
   appendOnboardingEvent,
   buildSupplierVerification,
@@ -36,6 +37,8 @@ const approveBodySchema = z.object({
  *   4. Sets lifecycle = 'APPROVED'.
  *   5. Sets payoutVerificationConfirmed = true for backwards compatibility.
  *   6. Fires supplier_onboarding_approved notification.
+ *   7. Orchestrates payout_verification so persisted obligations refresh.
+ *      This does NOT export to Xero.
  */
 export async function POST(
   request: NextRequest,
@@ -120,6 +123,13 @@ export async function POST(
     if (!persisted) {
       return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
     }
+
+    await orchestrateOperationalMutation({
+      userId: user.id,
+      mutation: 'payout_verification',
+      projectId: persisted.dealId ?? snapshot.deals[0]?.id,
+      focusParticipant: persisted,
+    });
 
     const org = await getOrganizationForAuthenticatedUser(user.id);
     if (org) {

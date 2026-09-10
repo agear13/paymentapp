@@ -248,7 +248,7 @@ export type SupplierOnboardingOperatorViewProps = {
  * Surfaces the commercial review summary, all submitted details, and secondary review CTAs.
  *
  * Verification is a commercial decision. The parent workflow owns the primary
- * "Verify & Push Supplier Bill to Xero" CTA so this card never competes with it.
+ * "Verify supplier details" CTA so this card never competes with it.
  */
 export function SupplierOnboardingOperatorView({
   status,
@@ -506,7 +506,7 @@ export function SupplierOnboardingOperatorView({
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-blue-700 mb-2">
                 <CheckCircle2 className="h-4 w-4" />
-              <span className="text-sm font-medium">Supplier details verified — supplier bill can be pushed to Xero</span>
+              <span className="text-sm font-medium">Supplier details verified</span>
               </div>
             </div>
           ) : status.stage === 'submitted' ? (

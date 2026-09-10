@@ -41,7 +41,6 @@ import {
   projectPayoutsPath,
   projectPaymentRequestsPath,
   projectOperatorReviewPath,
-  projectXeroExportPath,
   projectActivityPath,
 } from '../../lib/projects/project-routes';
 import {
@@ -591,7 +590,7 @@ describe('Step 6 — Post-Approval Bottleneck Navigation (deriveNextBottleneck)'
     expect(next!.ctaLabel).toBe('Verify Payout Details');
   });
 
-  it('priority 4: commercial data complete → push supplier bill to Xero', () => {
+  it('priority 4: payout details verified → release settlement without Xero', () => {
     const next = deriveNextBottleneck(
       [
         workflowParticipant('xero', {
@@ -602,8 +601,8 @@ describe('Step 6 — Post-Approval Bottleneck Navigation (deriveNextBottleneck)'
       PROJECT_ID
     );
     expect(next).not.toBeNull();
-    expect(next!.href).toBe(projectXeroExportPath(PROJECT_ID));
-    expect(next!.ctaLabel).toBe('Push Supplier Bill to Xero');
+    expect(next!.href).toBe(projectPayoutsPath(PROJECT_ID));
+    expect(next!.ctaLabel).toBe('Release Settlement');
   });
 
   it('priority 5: supplier bill created → release settlement', () => {

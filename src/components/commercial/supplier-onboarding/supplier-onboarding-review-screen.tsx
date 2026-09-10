@@ -20,6 +20,7 @@ import { AgreementSummary } from '@/components/commercial/payment-tax/agreement-
 import { buildAgreementSummaryData } from '@/lib/commercial/participant-commercial-lifecycle';
 import { AccountingReconciliationCard } from '@/components/commercial/accounting-reconciliation-card';
 import { reconcileSupplierInvoiceToObligations } from '@/lib/commercial/accounting-reconciliation';
+import { deriveSupplierReviewSettlementActions } from '@/lib/commercial/supplier-review-settlement-actions';
 
 /**
  * Operator supplier-onboarding review.
@@ -46,6 +47,39 @@ export function SupplierOnboardingReviewScreen({
   const [isActing, setIsActing] = React.useState(false);
   const [actionError, setActionError] = React.useState<string | null>(null);
   const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
+  const [xeroStatus, setXeroStatus] = React.useState<{
+    connected: boolean;
+    stale?: boolean;
+    reauthorizationRequired?: boolean;
+  } | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void fetch('/api/xero/status')
+      .then(async (res) => {
+        if (!res.ok) return { connected: false as const };
+        return (await res.json()) as {
+          connected?: boolean;
+          stale?: boolean;
+          reauthorizationRequired?: boolean;
+        };
+      })
+      .then((data) => {
+        if (cancelled) return;
+        setXeroStatus({
+          connected: data.connected === true,
+          stale: data.stale,
+          reauthorizationRequired: data.reauthorizationRequired,
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setXeroStatus({ connected: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const accountingReconciliation = React.useMemo(() => {
     if (!participant?.paymentSetup?.draftInvoice) return null;
@@ -111,24 +145,6 @@ export function SupplierOnboardingReviewScreen({
     } catch (err: unknown) {
       setActionError(err instanceof Error ? err.message : 'Something went wrong.');
       return false;
-    } finally {
-      setIsActing(false);
-    }
-  };
-
-  const handleVerifyAndPushSupplierBill = async () => {
-    setIsActing(true);
-    setActionError(null);
-    setSuccessMessage(null);
-    try {
-      if (lifecycle !== 'APPROVED') {
-        const approved = await handleApprove();
-        if (!approved) return;
-      }
-      const pushed = await handleXeroExport();
-      if (pushed) {
-        setSuccessMessage('Supplier details verified and supplier bill pushed to Xero.');
-      }
     } finally {
       setIsActing(false);
     }
@@ -260,6 +276,12 @@ export function SupplierOnboardingReviewScreen({
   const input = buildSupplierOnboardingInput(participant, { id: deal.id, name: deal.dealName ?? '' });
   const status = deriveSupplierOnboardingStatus(input);
   const reviewSummary = buildCommercialReviewSummary(participant, { id: deal.id, name: deal.dealName ?? '' });
+  const reviewActions = deriveSupplierReviewSettlementActions({
+    lifecycle: lifecycle ?? '',
+    xeroConnected: xeroStatus ? xeroStatus.connected : null,
+    xeroStale: xeroStatus?.stale,
+    xeroReauthorizationRequired: xeroStatus?.reauthorizationRequired,
+  });
 
   return (
     <div className="max-w-xl mx-auto py-8 px-4" data-testid="supplier-onboarding-review-screen">
@@ -348,27 +370,47 @@ export function SupplierOnboardingReviewScreen({
           <div>
             <p className="text-sm font-medium text-blue-800">
               {lifecycle === 'APPROVED'
-                ? 'Supplier details verified — ready to push supplier bill to Xero'
-                : 'Verify supplier details and push supplier bill to Xero'}
+                ? 'Supplier details verified'
+                : 'Verify supplier details'}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              This single workflow action verifies the payout details and advances the participant to settlement readiness.
+              {lifecycle === 'APPROVED'
+                ? 'Payout details are approved. Settlement readiness follows funding and the existing payment gates — Xero export is optional accounting.'
+                : 'Verify these payout details to complete operator approval. This does not export to Xero.'}
             </p>
           </div>
           <div className="flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => void handleVerifyAndPushSupplierBill()}
-              disabled={isActing}
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-            >
-              {isActing
-                ? 'Pushing supplier bill…'
-                : lifecycle === 'APPROVED'
-                  ? 'Push Supplier Bill to Xero'
-                  : 'Verify & Push Supplier Bill to Xero'}
-              {!isActing && <CheckCircle2 className="h-4 w-4" />}
-            </button>
+            {reviewActions.showVerifyAction && (
+              <button
+                type="button"
+                data-testid="verify-supplier-details-button"
+                onClick={() => void handleApprove()}
+                disabled={isActing}
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+              >
+                {isActing ? 'Verifying…' : reviewActions.verifyLabel}
+                {!isActing && <CheckCircle2 className="h-4 w-4" />}
+              </button>
+            )}
+            {reviewActions.showPushToXeroAction && (
+              <button
+                type="button"
+                data-testid="push-supplier-bill-to-xero-button"
+                onClick={() => void handleXeroExport()}
+                disabled={isActing}
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-primary/30 bg-white text-primary px-4 py-2 text-sm font-medium hover:bg-primary/5 disabled:opacity-50 transition-colors"
+              >
+                {isActing ? 'Pushing supplier bill…' : reviewActions.pushToXeroLabel}
+              </button>
+            )}
+            {reviewActions.showXeroSkippedCopy && (
+              <p
+                data-testid="xero-export-skipped-copy"
+                className="text-xs text-muted-foreground"
+              >
+                {reviewActions.xeroSkippedCopy}
+              </p>
+            )}
             <Link
               href={accountingHref}
               data-testid="review-accounting-link"

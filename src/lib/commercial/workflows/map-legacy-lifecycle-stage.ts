@@ -3,6 +3,9 @@
  *
  * Preserves existing organiser UI and API behaviour while commercial,
  * settlement, and accounting remain decoupled at the source.
+ *
+ * Xero export is an accounting projection. Settlement readiness follows
+ * the commercial/settlement engines, not xeroExportedAt / xeroSyncStatus.
  */
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { ParticipantCommercialLifecycleStage } from '@/lib/commercial/participant-commercial-lifecycle';
@@ -15,9 +18,6 @@ import {
   hasApprovedAgreement,
   isParticipantCompensationExempt,
 } from '@/lib/operations/primitives/participant-earnings-primitives';
-import {
-  isParticipantAccountingSynced,
-} from '@/lib/commercial/workflows/derive-accounting-state';
 import {
   supplierLifecycleForParticipant,
 } from '@/lib/commercial/workflows/build-participant-workflow-inputs';
@@ -45,7 +45,7 @@ function deriveSetupLifecycleFromCommercial(
 function mapSupplierToLegacyStage(
   supplier: ReturnType<typeof supplierLifecycleForParticipant>
 ): ParticipantCommercialLifecycleStage {
-  if (supplier === 'APPROVED') return 'XERO_INVOICE';
+  if (supplier === 'APPROVED') return 'SETTLEMENT_READY';
   if (supplier === 'UNDER_REVIEW') return 'OPERATOR_REVIEW';
   if (supplier === 'SUBMITTED') return 'PAYMENT_INFO_SUBMITTED';
   if (
@@ -56,6 +56,18 @@ function mapSupplierToLegacyStage(
     return 'PAYMENT_INFO_PENDING';
   }
   return 'AGREEMENT_ACCEPTED';
+}
+
+function isCommerciallyReadyForSettlement(
+  workflows: ParticipantWorkflowBundle,
+  supplier: ReturnType<typeof supplierLifecycleForParticipant>
+): boolean {
+  return (
+    workflows.settlement.state === 'READY' ||
+    workflows.commercial.state === 'COMMERCIAL_SETTLEMENT_READY' ||
+    workflows.commercial.state === 'COMMERCIALLY_COMPLETE' ||
+    supplier === 'APPROVED'
+  );
 }
 
 /**
@@ -77,14 +89,13 @@ export function mapLegacyParticipantLifecycleStage(
     return deriveSetupLifecycleFromCommercial(participant, workflows.commercial.state);
   }
 
-  // Backward compatibility: legacy "Ready for Settlement" follows accounting sync.
-  if (isParticipantAccountingSynced(participant)) {
+  const supplier = supplierLifecycleForParticipant(participant);
+
+  if (isCommerciallyReadyForSettlement(workflows, supplier)) {
     return 'SETTLEMENT_READY';
   }
 
   if (isParticipantCompensationExempt(participant)) {
-    const supplier = supplierLifecycleForParticipant(participant);
-    if (supplier === 'APPROVED') return 'XERO_INVOICE';
     return 'AGREEMENT_ACCEPTED';
   }
 
@@ -92,5 +103,5 @@ export function mapLegacyParticipantLifecycleStage(
     return 'AGREEMENT_ACCEPTED';
   }
 
-  return mapSupplierToLegacyStage(supplierLifecycleForParticipant(participant));
+  return mapSupplierToLegacyStage(supplier);
 }

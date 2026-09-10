@@ -78,7 +78,7 @@ const SUPPLIER_STAGE_LABELS: Record<SupplierOnboardingStage, string> = {
   invoice_generated: 'Payout Details Requested',
   in_progress:       'Waiting for Participant',
   submitted:         'Verify Payout Details',
-  operator_approved: 'Push Supplier Bill to Xero',
+  operator_approved: 'Payout details verified',
   xero_exported:     'Complete',
 };
 
@@ -109,7 +109,7 @@ function lifecycleToSupplierStage(
   switch (stage) {
     case 'PAID':
     case 'SETTLEMENT_READY':
-      return 'xero_exported';
+      return p.paymentSetup?.xeroExportedAt ? 'xero_exported' : 'operator_approved';
     case 'XERO_INVOICE':
       return p.paymentSetup?.xeroExportedAt ? 'xero_exported' : 'operator_approved';
     case 'OPERATOR_REVIEW':
@@ -411,7 +411,7 @@ export function synthesizeSupplierTimelineEvents(
         type: 'supplier_onboarding_completed',
         title: 'Payout details submitted',
         description: `${p.name} submitted payout and tax details.`,
-        commercialImpact: 'Ready to verify payout details before pushing the supplier bill to Xero.',
+        commercialImpact: 'Ready to verify payout details.',
         occurredAt: submittedAt,
       });
     }
@@ -424,7 +424,7 @@ export function synthesizeSupplierTimelineEvents(
         type: 'supplier_onboarding_completed',
         title: 'Verify Payout Details',
         description: `${p.name}'s payout and tax details are ready for verification.`,
-        commercialImpact: 'Verify payout details before pushing the supplier bill to Xero.',
+        commercialImpact: 'Verify payout details to complete operator approval.',
         occurredAt: approvedAt,
       });
     }
@@ -442,7 +442,7 @@ export function synthesizeSupplierTimelineEvents(
         type: 'supplier_invoice_approved',
         title: 'Payout details verified',
         description: `${p.name}'s payout and tax details were verified.`,
-        commercialImpact: 'Supplier bill is ready to push to Xero.',
+        commercialImpact: 'Payout details are verified. Settlement follows funding and the existing payment gates.',
         occurredAt: approvedAt,
       });
     }
@@ -455,7 +455,7 @@ export function synthesizeSupplierTimelineEvents(
         type: 'supplier_invoice_exported_to_xero',
         title: 'Supplier bill pushed to Xero',
         description: `Supplier bill pushed to Xero for ${p.name}.`,
-        commercialImpact: 'Accounting record is in sync — settlement can proceed.',
+        commercialImpact: 'Accounting record is in sync.',
         occurredAt: p.paymentSetup.xeroExportedAt,
       });
     }
@@ -468,7 +468,7 @@ export function synthesizeSupplierTimelineEvents(
         type: 'supplier_invoice_exported_to_xero',
         title: 'Ready for Settlement',
         description: `${p.name} is cleared for settlement.`,
-        commercialImpact: 'All commercial and accounting steps are complete.',
+        commercialImpact: 'All commercial steps are complete. Funding remains a payment-release gate.',
         occurredAt: p.paymentSetup?.xeroExportedAt ?? approvedAt,
       });
     }
@@ -537,7 +537,7 @@ export function buildMinimalAccountingExportModels(
                 accountingView.blockerReason === 'invoice_not_received'
                   ? 'Payment & tax information has not been received from the participant.'
                   : accountingView.blockerReason === 'invoice_not_verified'
-                  ? 'Verify payout details before pushing the supplier bill to Xero.'
+                  ? 'Verify payout details before continuing.'
                   : 'Settlement readiness is incomplete.',
               consequence: 'Supplier bill cannot be pushed to Xero until this is resolved.',
               action: accountingView.nextAction ?? 'Complete the required step',
@@ -614,8 +614,8 @@ export function deriveWorkspaceOnboardingFromParticipants(
       : `${completedCount} of ${totalCount} suppliers have completed onboarding.`;
 
   const primaryCta =
-    readyForExportCount > 0
-      ? `Push Supplier Bill to Xero for ${readyForExportCount} supplier${readyForExportCount !== 1 ? 's' : ''}`
+    requiresReviewCount > 0
+      ? `Verify payout details for ${requiresReviewCount} supplier${requiresReviewCount !== 1 ? 's' : ''}`
       : notStartedCount > 0
       ? `Request payout details from ${notStartedCount} supplier${notStartedCount !== 1 ? 's' : ''}`
       : inProgressCount > 0

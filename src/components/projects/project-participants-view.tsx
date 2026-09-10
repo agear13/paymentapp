@@ -1120,7 +1120,7 @@ export function ProjectParticipantsView() {
             the SupplierOnboardingOperatorView shows:
               - Invoice summary and draft details
               - ABN / GST / bank detail status
-              - Verify payout details → pushes supplier bill to Xero
+              - Verify payout details (Xero export is optional)
 
             Replaces the old "Confirm payout details" checkbox pattern.
             ═══════════════════════════════════════════════════════════════════ */}
@@ -1130,7 +1130,7 @@ export function ProjectParticipantsView() {
               <h3 className="text-base font-semibold">Payment Preparation</h3>
               <p className="text-sm text-muted-foreground mt-0.5">
                 Each supplier reviews their draft invoice, provides payment details, ABN, and GST status.
-                Approve each submission before exporting to Xero.
+                Approve each submission. Xero export is optional accounting and does not gate payment.
               </p>
             </div>
             {onboardingParticipants.map((p) => (

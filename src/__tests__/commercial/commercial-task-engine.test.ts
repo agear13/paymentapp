@@ -489,7 +489,30 @@ describe('Event → Task generation', () => {
       );
       const task = result.tasks.find((t) => t.taskType === 'export_to_xero');
       expect(task).toBeTruthy();
-      expect(task?.priority).toBe('high');
+      expect(task?.priority).toBe('medium');
+      expect(task?.commercialImpact).not.toMatch(/cannot be released/i);
+    });
+
+    it('does NOT generate export_to_xero when Xero is disconnected', () => {
+      const result = deriveCommercialTasks(
+        makeInput({
+          xeroConnected: false,
+          participants: [
+            {
+              participant: makeParticipant(),
+              agreement: makeAgreement(),
+              invoice: makeInvoice({ state: 'verified' }),
+              taxDetails: makeTaxDetails(),
+              bankDetails: makeBankDetails(),
+              funding: makeFunding({ status: 'funded' }),
+              accounting: makeAccounting({ xeroStatus: 'pending' }),
+              obligation: makeObligation(),
+            },
+          ],
+        })
+      );
+      const task = result.tasks.find((t) => t.taskType === 'export_to_xero');
+      expect(task).toBeFalsy();
     });
 
     it('does NOT generate export_to_xero when already exported', () => {

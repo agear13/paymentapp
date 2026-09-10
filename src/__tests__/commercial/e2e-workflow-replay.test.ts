@@ -402,15 +402,16 @@ describe('James Tourism — E2E Commercial Workflow Replay', () => {
       expect(benOnboarding.readyForXeroExport).toBe(true);
     });
 
-    test('Sarah workflow advances to awaiting_xero_export', () => {
+    test('Sarah workflow advances to awaiting_funding without requiring Xero', () => {
       const status = deriveParticipantWorkflowStatus(sarahInput);
-      expect(status.stage).toBe('awaiting_xero_export');
+      expect(status.stage).toBe('awaiting_funding');
     });
 
-    test('primary CTA routes to Xero export', () => {
+    test('primary CTA routes to funding, not Xero export', () => {
       const status = deriveParticipantWorkflowStatus(sarahInput);
       const href = resolveCommercialCTAHref(status.primaryCTA.destination, PROJECT_ID);
-      expect(href).toContain('accounting');
+      expect(href).not.toContain('accounting');
+      expect(status.primaryCTA.destination).toBe('funding_page');
     });
 
     test('workspace bridge: awaiting_xero_export → ready-to-collect', () => {

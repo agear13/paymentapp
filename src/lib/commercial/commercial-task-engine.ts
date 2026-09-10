@@ -170,6 +170,12 @@ export type CommercialTaskInput = {
   participants: ParticipantTaskContext[];
   /** Is the payment provider (Stripe) connected? */
   paymentProviderConnected?: boolean;
+  /**
+   * Is Xero actually connected for this organization?
+   * When false, do not emit an actionable export_to_xero task.
+   * Omitted/undefined preserves explicit per-participant `xeroStatus: 'pending'`.
+   */
+  xeroConnected?: boolean;
   /** Is customer revenue collection enabled? */
   revenueCollectionEnabled?: boolean;
   /** Overall funding status for the project. */
@@ -224,7 +230,12 @@ export function deriveCommercialTasks(input: CommercialTaskInput): CommercialTas
 
   /* ── 1. Per-participant tasks ── */
   for (const ctx of input.participants) {
-    const participantTasks = buildParticipantTasks(ctx, today, invoiceDueDays);
+    const participantTasks = buildParticipantTasks(
+      ctx,
+      today,
+      invoiceDueDays,
+      input.xeroConnected
+    );
     allTasks.push(...participantTasks.tasks);
     risks.push(...participantTasks.risks);
   }
@@ -298,7 +309,8 @@ type TaskBundle = { tasks: CommercialTask[]; risks: CommercialOperationalRisk[] 
 function buildParticipantTasks(
   ctx: ParticipantTaskContext,
   today: string,
-  invoiceDueDays: number
+  invoiceDueDays: number,
+  xeroConnected?: boolean
 ): TaskBundle {
   const tasks: CommercialTask[] = [];
   const risks: CommercialOperationalRisk[] = [];
@@ -568,14 +580,18 @@ function buildParticipantTasks(
       // Invoice verified and Xero not needed — funding is the next step (handled in funding block)
     }
 
-    if (isInvoiceAtOrAfter(invoiceState, 'verified') && accounting.xeroStatus === 'pending') {
+    if (
+      isInvoiceAtOrAfter(invoiceState, 'verified') &&
+      accounting.xeroStatus === 'pending' &&
+      xeroConnected !== false
+    ) {
       tasks.push(makeTask({
         id: `${participant.id}:export_to_xero`,
         taskType: 'export_to_xero',
         title: `Export ${participant.name}'s invoice to Xero`,
-        description: `Invoice has been verified and is ready for accounting export.`,
-        commercialImpact: 'Payment cannot be released until the invoice is recorded in your accounting system.',
-        priority: 'high',
+        description: `Invoice has been verified and is ready for optional accounting export.`,
+        commercialImpact: 'Xero export records the invoice in accounting. It is not required to release payment.',
+        priority: 'medium',
         status: 'pending',
         dueDate: addDays(today, 1),
         today,

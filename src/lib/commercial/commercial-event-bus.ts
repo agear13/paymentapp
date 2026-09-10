@@ -437,7 +437,7 @@ const EVENT_TIMELINE_TEMPLATES: Record<
         ? `${e.actorName} has submitted their bank details, ABN, and GST status. Verify payout details.`
         : 'Supplier submitted bank details, ABN, and GST status.',
     commercialImpact: () =>
-      'Operator must verify payout details before pushing the supplier bill to Xero.',
+      'Operator must verify payout details.',
   },
   supplier_onboarding_approved: {
     stage: 'agreement_approved',
@@ -449,7 +449,7 @@ const EVENT_TIMELINE_TEMPLATES: Record<
         ? `${e.actorName}'s bank details, ABN, and GST status were verified.`
         : 'Supplier payout details verified.',
     commercialImpact: () =>
-      'Supplier bill is ready to push to Xero.',
+      'Payout details are verified. Settlement follows funding and the existing payment gates.',
   },
   supplier_invoice_generated: {
     stage: 'agreement_approved',
@@ -787,14 +787,14 @@ function buildNotification(
     case 'supplier_details_submitted':
       return {
         title: `${actor} completed supplier onboarding`,
-        description: `${actor} submitted their bank details, ABN, and GST status. Verify payout details before pushing the supplier bill to Xero.`,
+        description: `${actor} submitted their bank details, ABN, and GST status. Verify payout details to continue.`,
         level: 'warning',
       };
 
     case 'supplier_onboarding_approved':
       return {
         title: `${actor}'s payout details verified`,
-        description: `${actor}'s payout details have been verified. The supplier bill is ready to push to Xero.`,
+        description: `${actor}'s payout details have been verified.`,
         level: 'success',
       };
 

@@ -187,7 +187,7 @@ const STAGE_LABELS: Record<CommercialWorkflowStage, string> = {
   generating_invoice:       'Invoice generating',
   supplier_onboarding:      'Supplier onboarding required',
   awaiting_operator_review: 'Awaiting operator review',
-  awaiting_xero_export:     'Ready for Xero',
+  awaiting_xero_export:     'Optional Xero export',
   awaiting_funding:         'Awaiting funding',
   awaiting_settlement:      'Settlement in progress',
   ready_to_release:         'Ready to release',
@@ -199,8 +199,8 @@ const STAGE_DESCRIPTIONS: Record<CommercialWorkflowStage, string> = {
   generating_invoice:       'The agreement has been approved. The draft invoice has been generated automatically.',
   supplier_onboarding:      'The supplier needs to provide their bank details, ABN, and GST status.',
   awaiting_operator_review: 'The supplier has submitted their details. Review and approve to proceed.',
-  awaiting_xero_export:     'All supplier details are confirmed. Export the invoice to Xero.',
-  awaiting_funding:         'Invoice exported. Awaiting revenue collection to fund the obligation.',
+  awaiting_xero_export:     'Payout details are confirmed. Pushing the supplier bill to Xero is optional accounting export and does not gate payment.',
+  awaiting_funding:         'Payout details are verified. Awaiting revenue collection to fund the obligation.',
   awaiting_settlement:      'Funding confirmed. Completing settlement preparation.',
   ready_to_release:         'All settlement checks are complete. The payment is ready to release.',
   complete:                 'Payment released. Commercial commitment fulfilled.',
@@ -216,9 +216,8 @@ function deriveWorkflowStage(input: WorkflowIntegrationInput): CommercialWorkflo
   // Terminal stage — payment has been released to this participant
   if (participant.paymentReleased) return 'complete';
 
-  // Downstream stages (post-Xero-export)
-  // Primary signal: accounting.exportedAt (Xero push confirmed)
-  // Do NOT check onboarding.stage === 'xero_exported' here; the switch below handles it.
+  // Downstream stages after operator approval or a completed Xero export.
+  // Accounting export is optional and does not gate settlement.
   if (accounting?.exportedAt) {
     if (settlement?.readyToSettle) return 'ready_to_release';
     if (settlement) return 'awaiting_settlement';
@@ -238,7 +237,9 @@ function deriveWorkflowStage(input: WorkflowIntegrationInput): CommercialWorkflo
     case 'submitted':
       return 'awaiting_operator_review';
     case 'operator_approved':
-      return 'awaiting_xero_export';
+      if (settlement?.readyToSettle) return 'ready_to_release';
+      if (settlement) return 'awaiting_settlement';
+      return 'awaiting_funding';
     case 'xero_exported':
       if (settlement?.readyToSettle) return 'ready_to_release';
       if (settlement) return 'awaiting_settlement';
@@ -263,7 +264,7 @@ function derivePrimaryCTA(stage: CommercialWorkflowStage, participantName: strin
     case 'awaiting_operator_review':
       return { label: `Review ${participantName}'s details`, actor: 'operator', isUrgent: true, destination: 'operator_review' };
     case 'awaiting_xero_export':
-      return { label: 'Push Supplier Bill to Xero', actor: 'operator', isUrgent: true, destination: 'xero_export' };
+      return { label: 'Push Supplier Bill to Xero', actor: 'operator', isUrgent: false, destination: 'xero_export' };
     case 'awaiting_funding':
       return { label: 'Review funding status', actor: 'operator', isUrgent: false, destination: 'funding_page' };
     case 'awaiting_settlement':
@@ -292,7 +293,7 @@ function deriveNotification(
         participantId: participant.id,
         participantName: participant.name,
         title: `${participant.name} completed supplier onboarding`,
-        message: `${participant.name} has submitted their bank details, ABN, and GST status. Verify payout details before pushing the supplier bill to Xero.`,
+        message: `${participant.name} has submitted their bank details, ABN, and GST status. Verify payout details to continue.`,
         urgency: 'action_required',
         nextAction: `Review ${participant.name}'s supplier details`,
         destination: 'operator_review',
@@ -303,9 +304,9 @@ function deriveNotification(
         id,
         participantId: participant.id,
         participantName: participant.name,
-        title: `${participant.name} is ready for Xero`,
-        message: `Payout details for ${participant.name} have been verified. Push the supplier bill to Xero to continue.`,
-        urgency: 'action_required',
+        title: `${participant.name} is ready for optional Xero export`,
+        message: `Payout details for ${participant.name} have been verified. You can push the supplier bill to Xero for accounting — this does not gate payment.`,
+        urgency: 'informational',
         nextAction: 'Push Supplier Bill to Xero',
         destination: 'xero_export',
         generatedAt: currentDate,
@@ -329,7 +330,7 @@ function deriveNotification(
           participantId: participant.id,
           participantName: participant.name,
           title: `${participant.name} requires manual review`,
-          message: `${participant.name} has declared their ABN is not applicable or is using an alternative payment method. Verification is required before pushing the supplier bill to Xero.`,
+          message: `${participant.name} has declared their ABN is not applicable or is using an alternative payment method. Verification is required before payout details can be approved.`,
           urgency: 'action_required',
           nextAction: 'Review supplier details',
           destination: 'operator_review',
@@ -407,15 +408,14 @@ function deriveJourneySteps(
       label: 'Invoice',
       status: (() => {
         if (!onboarding) return 'pending';
-        if (onboarding.stage === 'xero_exported') return 'complete';
-        if (onboarding.stage === 'operator_approved') return 'active';
+        if (onboarding.stage === 'xero_exported' || onboarding.stage === 'operator_approved') return 'complete';
         if (onboarding.stage === 'submitted') return 'active';
         return 'pending';
       })(),
       detail: (() => {
         if (!onboarding) return null;
         if (onboarding.stage === 'xero_exported') return 'Exported to Xero';
-        if (onboarding.stage === 'operator_approved') return 'Approved — ready for Xero';
+        if (onboarding.stage === 'operator_approved') return 'Payout details verified';
         if (onboarding.stage === 'submitted') return 'Generated';
         return 'Generated — pending review';
       })(),
@@ -554,7 +554,7 @@ function deriveTriggeredBy(
     case 'awaiting_xero_export':
       return `Invoice reviewed and approved by operator.`;
     case 'awaiting_funding':
-      return `Invoice exported to Xero.`;
+      return `Payout details verified.`;
     case 'awaiting_settlement':
       return `Funding confirmed.`;
     case 'ready_to_release':

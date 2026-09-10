@@ -132,6 +132,25 @@ function inferAutomationTrigger(
   return CommercialTriggerKind.Manual;
 }
 
+async function probeXeroConnected(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/xero/status');
+    if (!res.ok) return false;
+    const data = (await res.json()) as {
+      connected?: boolean;
+      stale?: boolean;
+      reauthorizationRequired?: boolean;
+    };
+    return (
+      data.connected === true &&
+      data.stale !== true &&
+      data.reauthorizationRequired !== true
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function useCommercialOperationsWorkspace(
   options: UseCommercialOperationsWorkspaceOptions
 ): CommercialOperationsWorkspaceState {
@@ -192,14 +211,16 @@ export function useCommercialOperationsWorkspace(
 
       const forecasting = deriveCommercialForecasting(forecastingInput);
       const workspaceWorkflow = deriveWorkspaceStatusFromParticipants(participants, projectId);
+      const xeroConnected = await probeXeroConnected();
       const taskResult = deriveCommercialTasks({
         projectId,
-        participants: buildParticipantTaskContexts(participants),
+        participants: buildParticipantTaskContexts(participants, { xeroConnected }),
         paymentProviderConnected: Boolean(
           options.workspaceContext?.stripeConfigured ||
             options.workspaceContext?.anyRailConfigured
         ),
         revenueCollectionEnabled: inputs.fundingSources.length > 0,
+        xeroConnected,
       });
 
       const coordinationGraph = options.graph ?? {
