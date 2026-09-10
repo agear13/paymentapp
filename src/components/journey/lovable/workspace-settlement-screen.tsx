@@ -26,6 +26,7 @@ import {
   type SettlementReleaseRow,
   type SettlementStatusFilter,
 } from '@/lib/settlement/workspace-settlement';
+import { WorkspaceSettlementRailIntelligence } from '@/components/payouts/workspace-settlement-rail-intelligence';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -598,6 +599,13 @@ export function WorkspaceSettlementScreen({ section }: { section: Section }) {
                   </li>
                 ))}
               </ul>
+              <WorkspaceSettlementRailIntelligence
+                currency={selectedRows[0]?.currency ?? 'AUD'}
+                recipient={[
+                  ...new Set(selectedRows.map((row) => row.participantName).filter(Boolean)),
+                ].join(', ')}
+                amount={selectedRows.reduce((sum, row) => sum + row.amountOwed, 0)}
+              />
               <div className="flex flex-wrap gap-2">
                 <Button type="button" disabled={data.creatingRelease} onClick={() => void confirmRelease()}>
                   Confirm release
