@@ -54,6 +54,7 @@ describe('snapshot observation attach', () => {
     expect(snapshot.otherIncidents).toEqual([]);
     expect(snapshot.routeImpacts).toEqual([]);
     expect(snapshot.eligibilityDecisions).toEqual([]);
+    expect(snapshot.feeObservations).toEqual([]);
     expect(
       snapshot.offerings.every((item) => item.availability.provenance === 'indicative')
     ).toBe(true);

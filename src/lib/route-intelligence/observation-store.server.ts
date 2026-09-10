@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@prisma/client';
 import {
   evaluateLatestObservation,
+  sameMeaningfulFeeState,
   sameMeaningfulHealthState,
   sameMeaningfulIncidentState,
   WISE_INCIDENT_SUBJECT_PREFIX,
@@ -8,6 +9,7 @@ import {
 } from '@/lib/route-intelligence/observation';
 import type {
   LatestObservationRead,
+  ProviderFeeObservation,
   ProviderOperationalHealthObservation,
   ProviderPaymentIncidentObservation,
 } from '@/lib/route-intelligence/types';
@@ -69,6 +71,17 @@ function rowToHealthObservation(row: StoredObservationRow): ProviderOperationalH
   };
 }
 
+function rowToFeeObservation(row: StoredObservationRow): ProviderFeeObservation {
+  return {
+    observationType: 'provider_fee_observation',
+    ...sharedFields(row),
+    subjectKind: 'route',
+    providerId: row.providerId as ProviderFeeObservation['providerId'],
+    value: row.value as ProviderFeeObservation['value'],
+    rawEvidence: row.rawPayload as ProviderFeeObservation['rawEvidence'],
+  };
+}
+
 function rowToIncidentObservation(row: StoredObservationRow): ProviderPaymentIncidentObservation {
   return {
     observationType: 'provider_payment_incident',
@@ -81,7 +94,10 @@ function rowToIncidentObservation(row: StoredObservationRow): ProviderPaymentInc
 }
 
 export function toInsertRow(
-  observation: ProviderOperationalHealthObservation | ProviderPaymentIncidentObservation
+  observation:
+    | ProviderOperationalHealthObservation
+    | ProviderPaymentIncidentObservation
+    | ProviderFeeObservation
 ): Omit<StoredObservationRow, 'id' | 'createdAt'> {
   return {
     observationType: observation.observationType,
@@ -157,6 +173,52 @@ export async function persistPaymentIncidentObservation(
 
   const inserted = await repository.insert(toInsertRow(observation));
   return { action: 'inserted', id: inserted.id, observation };
+}
+
+export async function persistProviderFeeObservation(
+  repository: ObservationRepository,
+  observation: ProviderFeeObservation
+): Promise<PersistObservationResult<ProviderFeeObservation>> {
+  const previous = await repository.findLatestBySubject(observation.subjectId);
+  if (
+    previous?.observationType === 'provider_fee_observation' &&
+    sameMeaningfulFeeState(observation, rowToFeeObservation(previous))
+  ) {
+    await repository.updateFetchTimestamps(
+      previous.id,
+      new Date(observation.fetchedAt),
+      new Date(observation.staleAfter)
+    );
+    return {
+      action: 'refreshed',
+      id: previous.id,
+      observation: {
+        ...rowToFeeObservation(previous),
+        fetchedAt: observation.fetchedAt,
+        staleAfter: observation.staleAfter,
+      },
+    };
+  }
+
+  const inserted = await repository.insert(toInsertRow(observation));
+  return { action: 'inserted', id: inserted.id, observation };
+}
+
+export async function listProviderFeeObservations(
+  repository: ObservationRepository
+): Promise<ProviderFeeObservation[]> {
+  const rows = await repository.listByType('provider_fee_observation');
+  return rows.map(rowToFeeObservation);
+}
+
+export async function listProviderFeeHistory(
+  repository: ObservationRepository,
+  subjectId: string
+): Promise<ProviderFeeObservation[]> {
+  return (await repository.listByType('provider_fee_observation'))
+    .filter((row) => row.subjectId === subjectId)
+    .sort((a, b) => a.fetchedAt.getTime() - b.fetchedAt.getTime())
+    .map(rowToFeeObservation);
 }
 
 export async function getLatestWisePaymentsObservation(

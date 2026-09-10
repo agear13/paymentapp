@@ -16,6 +16,7 @@ import type {
  */
 export const STATIC_CATALOG_SOURCE_ID = 'static-provider-catalog';
 
+/** Indicative catalog fee only. Never emits a provider_fee_observation. */
 function mapPricing(offering: LandingProviderOffering): PricingSnapshot {
   return {
     provenance: 'indicative',

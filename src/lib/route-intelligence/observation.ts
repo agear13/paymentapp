@@ -1,10 +1,13 @@
+import { routeSubjectKey } from '@/lib/route-intelligence/route-subject';
 import type {
   AvailabilitySignal,
   LatestObservationRead,
   Offering,
   ObservedAvailabilitySignal,
+  ProviderFeeObservation,
   ProviderOperationalHealthObservation,
   ProviderPaymentIncidentObservation,
+  RouteSubject,
   StatuspageIncidentStatus,
   UnobservedAvailabilitySignal,
 } from '@/lib/route-intelligence/types';
@@ -46,9 +49,27 @@ export function wiseIncidentSubjectId(incidentId: string): string {
   return `${WISE_INCIDENT_SUBJECT_PREFIX}${incidentId}`;
 }
 
+export const FEE_OBSERVATION_SUBJECT_PREFIX = 'route:fee:';
+
+/**
+ * Observation identity includes amount so A$10,000 and A$100,000 quotes
+ * do not share latest-row-per-subject_id.
+ */
+export function feeObservationSubjectId(
+  route: RouteSubject,
+  amount: number | null,
+  sourceCurrency: string | null
+): string {
+  const amountPart = amount === null ? 'none' : String(amount);
+  const currencyPart = sourceCurrency && sourceCurrency.trim() ? sourceCurrency : 'none';
+  return `${FEE_OBSERVATION_SUBJECT_PREFIX}${routeSubjectKey(route)}:amount:${amountPart}:${currencyPart}`;
+}
+
 export function assertExternallySourcedObservation(
   observation: Pick<
-    ProviderOperationalHealthObservation | ProviderPaymentIncidentObservation,
+    | ProviderOperationalHealthObservation
+    | ProviderPaymentIncidentObservation
+    | ProviderFeeObservation,
     'provenance' | 'observedAt' | 'fetchedAt' | 'sourceId' | 'sourceUrl'
   >
 ): void {
@@ -116,6 +137,91 @@ export function sameMeaningfulIncidentState(
     current.value.latestUpdateId === previous.value.latestUpdateId &&
     current.value.resolvedAt === previous.value.resolvedAt
   );
+}
+
+export function sameMeaningfulFeeState(
+  current: Pick<ProviderFeeObservation, 'value'>,
+  previous: Pick<ProviderFeeObservation, 'value'>
+): boolean {
+  return (
+    current.value.feeModel === previous.value.feeModel &&
+    current.value.feeAmount === previous.value.feeAmount &&
+    current.value.feeCurrency === previous.value.feeCurrency &&
+    current.value.feePercent === previous.value.feePercent &&
+    current.value.amount === previous.value.amount &&
+    current.value.sourceCurrency === previous.value.sourceCurrency
+  );
+}
+
+/**
+ * Deterministic fee-to-route match. Same route key required.
+ * An amount-specific observation applies only to that amount.
+ * A percentage observation with amount=null may apply across amounts on that route.
+ */
+export function buildProviderFeeObservation(input: {
+  route: RouteSubject;
+  amount: number | null;
+  sourceCurrency: string | null;
+  feeAmount: number | null;
+  feeCurrency: string | null;
+  feeModel: ProviderFeeObservation['value']['feeModel'];
+  feePercent: number | null;
+  observedAt: string;
+  fetchedAt: string;
+  sourceId: string;
+  sourceUrl: string;
+  rawHash: string;
+}): ProviderFeeObservation {
+  const value: ProviderFeeObservation['value'] = {
+    route: input.route,
+    amount: input.amount,
+    sourceCurrency: input.sourceCurrency,
+    feeAmount: input.feeAmount,
+    feeCurrency: input.feeCurrency,
+    feeModel: input.feeModel,
+    feePercent: input.feePercent,
+  };
+  return {
+    observationType: 'provider_fee_observation',
+    subjectKind: 'route',
+    subjectId: feeObservationSubjectId(input.route, input.amount, input.sourceCurrency),
+    providerId: input.route.providerId,
+    value,
+    observedAt: input.observedAt,
+    fetchedAt: input.fetchedAt,
+    sourceId: input.sourceId,
+    sourceUrl: input.sourceUrl,
+    provenance: 'externally_sourced',
+    confidence: 'high',
+    staleAfter: observationStaleAfter(input.fetchedAt).toISOString(),
+    rawHash: input.rawHash,
+    rawEvidence: {
+      routeKey: routeSubjectKey(input.route),
+      amount: input.amount,
+      sourceCurrency: input.sourceCurrency,
+      feeAmount: input.feeAmount,
+      feeCurrency: input.feeCurrency,
+      feeModel: input.feeModel,
+      feePercent: input.feePercent,
+    },
+  };
+}
+
+export function feeObservationAppliesToRoute(
+  observation: ProviderFeeObservation,
+  route: RouteSubject,
+  amount?: number | null
+): boolean {
+  if (routeSubjectKey(observation.value.route) !== routeSubjectKey(route)) {
+    return false;
+  }
+  if (observation.value.amount !== null) {
+    return amount === observation.value.amount;
+  }
+  if (observation.value.feeModel === 'percentage') {
+    return true;
+  }
+  return amount == null;
 }
 
 export function isActiveIncidentStatus(status: StatuspageIncidentStatus): boolean {

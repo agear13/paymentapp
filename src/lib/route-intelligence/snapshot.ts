@@ -73,5 +73,7 @@ export function getPublicRouteIntelligenceSnapshot(
     otherIncidents,
     routeImpacts,
     eligibilityDecisions,
+    // Shadow only — ranking and eligibility do not read this field.
+    feeObservations: input.feeObservations ?? [],
   };
 }

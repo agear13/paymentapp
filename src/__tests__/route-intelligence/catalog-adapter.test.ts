@@ -110,6 +110,7 @@ describe('public catalog snapshot', () => {
     expect(snapshot.incidents).toEqual([]);
     expect(snapshot.otherIncidents).toEqual([]);
     expect(snapshot.routeImpacts).toEqual([]);
+    expect(snapshot.feeObservations).toEqual([]);
     expect(JSON.stringify(snapshot)).not.toMatch(/retrievedAt":"[^n]/);
     expect(snapshot.offerings.every((item) => item.pricing.observedAt === null)).toBe(true);
   });

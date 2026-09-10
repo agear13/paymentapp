@@ -100,6 +100,7 @@ export type CorridorCapability = {
   evidence: CapabilityEvidence;
 };
 
+/** Catalog indicative fee. Not a provider_fee_observation and not ranked from. */
 export type PricingSnapshot = {
   provenance: 'indicative';
   model: 'percent' | 'percent_plus_fixed' | 'fixed' | 'qualitative';
@@ -124,9 +125,74 @@ export type StatuspageComponentStatus =
 
 export type StatuspagePageIndicator = 'none' | 'minor' | 'major' | 'critical';
 
-export type ObservationType = 'provider_operational_health' | 'provider_payment_incident';
+export type ObservationType =
+  | 'provider_operational_health'
+  | 'provider_payment_incident'
+  | 'provider_fee_observation';
 
-export type ObservationSubjectKind = 'provider' | 'provider_component' | 'provider_incident';
+export type ObservationSubjectKind =
+  | 'provider'
+  | 'provider_component'
+  | 'provider_incident'
+  | 'route';
+
+/**
+ * Canonical payment-route identity.
+ * Amount is not part of this identity — it belongs on economic observations.
+ * networkRail may be `unknown` when no sourced rail exists; do not invent one.
+ * currencyPair.target is null when the destination currency is unknown.
+ * Do not infer a currency from a country (Indonesia ≠ IDR).
+ */
+export type RouteSubject = {
+  providerId: ProviderId;
+  offeringId: string;
+  mechanismId: MechanismId;
+  corridor: Corridor;
+  currencyPair: { source: string | null; target: string | null };
+  networkRail: NetworkRailId;
+};
+
+export type FeeModel = 'fixed' | 'percentage' | 'tiered' | 'unknown';
+
+export type ProviderFeeObservationValue = {
+  route: RouteSubject;
+  /** Quote amount. Null means the observation is not amount-specific. */
+  amount: number | null;
+  sourceCurrency: string | null;
+  feeAmount: number | null;
+  feeCurrency: string | null;
+  feeModel: FeeModel;
+  feePercent: number | null;
+};
+
+/**
+ * Time-stamped fee observation. Not catalog PricingSnapshot and not a rank input.
+ * Must not be populated from indicative catalogue fees.
+ */
+export type ProviderFeeObservation = {
+  observationType: 'provider_fee_observation';
+  subjectKind: 'route';
+  subjectId: string;
+  providerId: ProviderId;
+  value: ProviderFeeObservationValue;
+  observedAt: string;
+  fetchedAt: string;
+  sourceId: string;
+  sourceUrl: string;
+  provenance: 'externally_sourced';
+  confidence: 'high';
+  staleAfter: string;
+  rawHash: string;
+  rawEvidence: {
+    routeKey: string;
+    amount: number | null;
+    sourceCurrency: string | null;
+    feeAmount: number | null;
+    feeCurrency: string | null;
+    feeModel: FeeModel;
+    feePercent: number | null;
+  };
+};
 
 /** Statuspage incident statuses. Do not invent values. */
 export type StatuspageIncidentStatus =
@@ -469,6 +535,11 @@ export type PublicRouteIntelligenceSnapshot = {
   routeImpacts: RouteImpactEvaluation[];
   /** Operational eligibility decisions. Empty unless evaluateRoutes is supplied. */
   eligibilityDecisions: RouteEligibilityDecision[];
+  /**
+   * Shadow-only fee observations. Never consumed by ranking or eligibility.
+   * Empty unless the caller supplies them — public comparison does not.
+   */
+  feeObservations: ProviderFeeObservation[];
 };
 
 export type PublicRouteIntelligenceSnapshotInput = {
@@ -480,4 +551,6 @@ export type PublicRouteIntelligenceSnapshotInput = {
   evaluateRoutes?: RouteImpactSubject[];
   /** Evaluation clock for freshness. Tests only — omit in production. */
   now?: Date;
+  /** Preloaded fee observations. Omitted = none attached. Not fetched here. */
+  feeObservations?: ProviderFeeObservation[];
 };
