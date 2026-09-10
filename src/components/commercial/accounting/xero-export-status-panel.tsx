@@ -31,6 +31,15 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import {
+  opSurfaceAction,
+  opSurfaceCritical,
+  opSurfaceInfo,
+  opSurfaceSuccess,
+  opToneDanger,
+  opToneInfo,
+  opToneWarning,
+} from '@/lib/design/operational-surfaces';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import type { AccountingExportModel, AccountingExportPreview } from '@/lib/commercial/accounting-export';
@@ -155,10 +164,10 @@ function ParticipantExportCard({
   return (
     <div className={cn(
       'rounded-lg border p-4 space-y-3',
-      model.status === 'failed' && 'border-red-200/60 bg-red-50/20 dark:border-red-800/30',
-      model.status === 'exported' && 'border-green-200/60 bg-green-50/20 dark:border-green-800/30',
-      model.status === 're_export_required' && 'border-blue-200/60 bg-blue-50/20 dark:border-blue-800/30',
-      model.status === 'needs_review' && 'border-amber-200/60 bg-amber-50/20 dark:border-amber-800/30',
+      model.status === 'failed' && opSurfaceCritical,
+      model.status === 'exported' && opSurfaceSuccess,
+      model.status === 're_export_required' && opSurfaceInfo,
+      model.status === 'needs_review' && opSurfaceAction,
       !['failed', 'exported', 're_export_required', 'needs_review'].includes(model.status) && 'border-border/50 bg-card',
     )}>
       {/* Header row */}
@@ -240,11 +249,11 @@ function ParticipantExportCard({
 
       {/* Failure reason — never silent */}
       {model.status === 'failed' && model.failureReason && (
-        <div className="rounded-md bg-red-100/50 dark:bg-red-950/20 border border-red-200/50 dark:border-red-800/30 p-3">
-          <p className="text-xs font-semibold text-red-700 dark:text-red-400 mb-1">Export failed</p>
-          <p className="text-xs text-red-600 dark:text-red-300">{model.failureReason}</p>
+        <div className={cn(opSurfaceCritical, 'p-3')}>
+          <p className={cn('text-xs font-semibold mb-1', opToneDanger)}>Export failed</p>
+          <p className={cn('text-xs', opToneDanger)}>{model.failureReason}</p>
           {model.failureAction && (
-            <p className="text-xs text-red-600/80 dark:text-red-300/80 mt-1 font-medium">
+            <p className={cn('text-xs mt-1 font-medium opacity-80', opToneDanger)}>
               Action: {model.failureAction}
             </p>
           )}
@@ -253,11 +262,11 @@ function ParticipantExportCard({
 
       {/* Needs review explanation */}
       {model.status === 'needs_review' && model.failureReason && (
-        <div className="rounded-md bg-amber-50/50 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30 p-3">
-          <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1">Review required before export</p>
-          <p className="text-xs text-amber-600 dark:text-amber-300">{model.failureReason}</p>
+        <div className={cn(opSurfaceAction, 'p-3')}>
+          <p className={cn('text-xs font-semibold mb-1', opToneWarning)}>Review required before export</p>
+          <p className={cn('text-xs', opToneWarning)}>{model.failureReason}</p>
           {model.failureAction && (
-            <p className="text-xs text-amber-600/80 dark:text-amber-300/80 mt-1 font-medium">
+            <p className={cn('text-xs mt-1 font-medium opacity-80', opToneWarning)}>
               {model.failureAction}
             </p>
           )}
@@ -266,9 +275,9 @@ function ParticipantExportCard({
 
       {/* Re-export warning */}
       {model.reExportRequired && model.status !== 'failed' && (
-        <div className="rounded-md bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/30 p-3">
-          <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 mb-1">Invoice updated since last export</p>
-          <p className="text-xs text-blue-600 dark:text-blue-300">
+        <div className={cn(opSurfaceInfo, 'p-3')}>
+          <p className={cn('text-xs font-semibold mb-1', opToneInfo)}>Invoice updated since last export</p>
+          <p className={cn('text-xs', opToneInfo)}>
             The invoice amount or details have changed since this participant was exported to Xero. A re-export is required to keep the accounting record current.
           </p>
         </div>

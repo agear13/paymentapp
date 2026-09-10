@@ -48,6 +48,21 @@ import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activati
 import { useOrganizationCurrency } from '@/hooks/use-organization-currency';
 import { isParticipantEarningsConfigured } from '@/lib/operations/selectors/participant-earnings-selectors';
 import { logEarningsSelectorAudit } from '@/lib/operations/dev/earnings-selector-audit';
+import { AgreementBrandingHeader } from '@/components/agreements/agreement-branding-header';
+import { SuggestAgreementChangeDialog } from '@/components/agreements/suggest-agreement-change-dialog';
+import {
+  currentValueForChangeField,
+  pendingAgreementChangeRequests,
+  type AgreementChangeFieldKey,
+  type AgreementChangeRequest,
+} from '@/lib/agreements/agreement-change-request';
+import {
+  audienceDiscountPctFromParticipant,
+  formatAttributionLabel,
+  formatEarningSourceLabel,
+  resolveAgreementPresentation,
+  type ResolvedAgreementPresentation,
+} from '@/lib/agreements/agreement-presentation';
 
 function roleAmountsFromDeal(deal: RecentDeal) {
   return {
@@ -65,6 +80,8 @@ type InvitePayload = {
   dealParticipants?: DemoParticipant[];
   referralIssuance?: CommerceLink;
   scopedServiceRows?: ScopedServiceCommissionRow[];
+  presentation?: ResolvedAgreementPresentation;
+  pendingChangeRequests?: AgreementChangeRequest[];
 };
 
 async function fetchInviteState(token: string): Promise<InvitePayload | null> {
@@ -90,6 +107,7 @@ type Props = {
   initialApproved: boolean;
   initialReferralIssuance: CommerceLink | null;
   initialScopedServiceRows?: ScopedServiceCommissionRow[];
+  initialPresentation?: ResolvedAgreementPresentation;
   /**
    * preview   — read-only operator view; all mutations disabled.
    * approval  — participant-facing; approve action enabled.
@@ -108,11 +126,19 @@ export function ProjectParticipantAgreementPanel({
   initialApproved,
   initialReferralIssuance,
   initialScopedServiceRows = [],
+  initialPresentation,
   mode = 'approval',
   onApproved,
 }: Props) {
   const { currency: workspaceCurrency } = useOrganizationCurrency();
   const [participant, setParticipant] = React.useState(initialParticipant);
+  const [presentation, setPresentation] = React.useState(
+    () => initialPresentation ?? resolveAgreementPresentation(initialParticipant, null, { projectName: deal.dealName })
+  );
+  const [suggestOpen, setSuggestOpen] = React.useState(false);
+  const [pendingRequests, setPendingRequests] = React.useState(() =>
+    pendingAgreementChangeRequests(initialParticipant)
+  );
   const [approved, setApproved] = React.useState(initialApproved);
   const [note, setNote] = React.useState(initialParticipant.approvalNote ?? '');
   const [commerceLink, setCommerceLink] = React.useState<CommerceLink | null>(
@@ -138,6 +164,8 @@ export function ProjectParticipantAgreementPanel({
     setParticipant(data.participant);
     setApproved(data.participant.approvalStatus === 'Approved');
     setScopedServiceRows(data.scopedServiceRows ?? []);
+    setPendingRequests(data.pendingChangeRequests ?? pendingAgreementChangeRequests(data.participant));
+    if (data.presentation) setPresentation(data.presentation);
     const link = commerceFromPayload(data);
     if (link) setCommerceLink(link);
   }, []);
@@ -314,11 +342,27 @@ export function ProjectParticipantAgreementPanel({
     });
   }, [participant, catalogItems, workspaceCurrency]);
 
+  const currentValues = React.useMemo(() => {
+    return Object.fromEntries(
+      (['legal_name', 'email', 'phone', 'company_name', 'role', 'commission_rate', 'commission_type', 'earning_source', 'referral_terms', 'discount_terms'] as const).map(
+        (key) => [key, currentValueForChangeField(participant, key)]
+      )
+    ) as Record<AgreementChangeFieldKey, string>;
+  }, [participant]);
+  const earningSourceLabel = formatEarningSourceLabel(participant.earningSource);
+  const attributionLabel = formatAttributionLabel(participant.earningSource);
+  const audienceDiscount = audienceDiscountPctFromParticipant(participant);
+
   return (
     <>
     <Card className="w-full max-w-2xl">
       <CardHeader>
-        <CardTitle>Participant agreement</CardTitle>
+        <AgreementBrandingHeader
+          title={presentation.title}
+          branding={presentation.branding}
+          versionNumber={presentation.versionNumber}
+        />
+        <CardTitle className="sr-only">{presentation.title}</CardTitle>
         <CardDescription>
           Review what you earn, which services qualify, and when attribution begins.
         </CardDescription>
@@ -337,8 +381,10 @@ export function ProjectParticipantAgreementPanel({
             <p className="font-medium">{deal.dealName}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">Merchant</p>
-            <p className="font-medium">{deal.partner}</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Organisation</p>
+            <p className="font-medium">
+              {presentation.branding.legalName || presentation.branding.organizationName || deal.partner}
+            </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Your role</p>
@@ -368,6 +414,30 @@ export function ProjectParticipantAgreementPanel({
           <div className="rounded-md border p-3 bg-background">
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Scope</p>
             <p className="text-sm whitespace-pre-wrap">{participant.roleDetails.trim()}</p>
+          </div>
+        ) : null}
+
+        {earningSourceLabel || attributionLabel || audienceDiscount != null ? (
+          <div className="rounded-md border p-3 bg-background space-y-2">
+            <p className="text-sm font-medium">Referral terms</p>
+            {earningSourceLabel ? (
+              <p className="text-sm">
+                <span className="text-muted-foreground">Earning source: </span>
+                {earningSourceLabel}
+              </p>
+            ) : null}
+            {attributionLabel ? (
+              <p className="text-sm">
+                <span className="text-muted-foreground">Attribution: </span>
+                {attributionLabel}
+              </p>
+            ) : null}
+            {audienceDiscount != null ? (
+              <p className="text-sm">
+                <span className="text-muted-foreground">Audience discount: </span>
+                {audienceDiscount}%
+              </p>
+            ) : null}
           </div>
         ) : null}
 
@@ -433,6 +503,22 @@ export function ProjectParticipantAgreementPanel({
           </div>
         ) : null}
 
+        {pendingRequests.length > 0 ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50/70 px-4 py-3 text-sm text-amber-900">
+            {pendingRequests.length === 1
+              ? 'Your suggested change is waiting for the organiser to review. The agreement has not changed yet.'
+              : `${pendingRequests.length} suggested changes are waiting for the organiser to review. The agreement has not changed yet.`}
+          </div>
+        ) : null}
+
+        {mode !== 'preview' ? (
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => setSuggestOpen(true)}>
+              Suggest changes
+            </Button>
+          </div>
+        ) : null}
+
         {!approved && mode === 'approval' ? (
           <form
             className="space-y-4"
@@ -488,6 +574,13 @@ export function ProjectParticipantAgreementPanel({
       participantId={participant.id}
       title="Agreement history"
       defaultOpen={false}
+    />
+    <SuggestAgreementChangeDialog
+      open={suggestOpen}
+      onOpenChange={setSuggestOpen}
+      token={token}
+      currentValues={currentValues}
+      onSubmitted={(request) => setPendingRequests((current) => [...current.filter((row) => row.id !== request.id), request])}
     />
     </>
   );

@@ -73,7 +73,7 @@ describe('PATCH /api/merchant-settings/[id] MFA bypass and tenant isolation', ()
     jest.clearAllMocks();
   });
 
-  it('does not update payment rails without recent step-up', async () => {
+  it('does not update payment rails without recent TOTP step-up', async () => {
     mockRequirePaymentConfigurationAccess.mockResolvedValue({
       ok: false,
       code: 'MFA_ENROLLMENT_REQUIRED',
@@ -91,6 +91,33 @@ describe('PATCH /api/merchant-settings/[id] MFA bypass and tenant isolation', ()
 
     expect(response.status).toBe(403);
     expect(mockFindUnique).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not update payment rails when TOTP step-up is stale', async () => {
+    mockRequirePaymentConfigurationAccess.mockResolvedValue({
+      ok: false,
+      code: 'STEP_UP_REQUIRED',
+      response: NextResponse.json(
+        {
+          code: 'STEP_UP_REQUIRED',
+          error: 'Enter the 6-digit code from your authenticator app to confirm this action.',
+        },
+        { status: 403 }
+      ),
+    });
+
+    const response = await PATCH(
+      new NextRequest(`http://localhost/api/merchant-settings/${SETTINGS_ID}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stripeAccountId: 'acct_stale' }),
+      }),
+      { params: Promise.resolve({ id: SETTINGS_ID }) }
+    );
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).code).toBe('STEP_UP_REQUIRED');
     expect(mockUpdate).not.toHaveBeenCalled();
   });
 

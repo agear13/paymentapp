@@ -22,6 +22,7 @@ import { formatForecastAmount } from '@/lib/commercial/commercial-forecast';
 import { deriveCashReadinessBreakdown } from '@/lib/commercial/commercial-explainability';
 import type { CommercialForecastResult } from '@/lib/commercial/commercial-forecast';
 import { BreakdownEmptyState } from './breakdown-item-row';
+import { opSurfaceAction, opSurfaceCritical, opSurfaceSuccess, opToneDanger, opToneSuccess, opToneWarning } from '@/lib/design/operational-surfaces';
 
 export type CashReadinessBreakdownDrawerProps = {
   open: boolean;
@@ -61,7 +62,7 @@ export function CashReadinessBreakdownDrawer({
             <div
               className={cn(
                 'mb-5 flex items-center gap-3 rounded-lg border px-4 py-3',
-                isReady ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
+                isReady ? opSurfaceSuccess : opSurfaceCritical
               )}
             >
               {isReady ? (
@@ -70,10 +71,10 @@ export function CashReadinessBreakdownDrawer({
                 <X className="h-5 w-5 text-red-500 shrink-0" />
               )}
               <div>
-                <p className={cn('text-sm font-semibold', isReady ? 'text-green-800' : 'text-red-700')}>
+                <p className={cn('text-sm font-semibold', isReady ? opToneSuccess : opToneDanger)}>
                   {isReady ? 'All commitments can be paid' : 'Cannot pay all commitments'}
                 </p>
-                <p className={cn('text-xs', isReady ? 'text-green-700' : 'text-red-600')}>
+                <p className={cn('text-xs', isReady ? opToneSuccess : opToneDanger)}>
                   {isReady ? 'Revenue covers all obligations.' : 'Additional revenue or funding is required.'}
                 </p>
               </div>
@@ -89,8 +90,8 @@ export function CashReadinessBreakdownDrawer({
                     key={fig.label}
                     className={cn(
                       'rounded-lg border px-3 py-2.5 text-center',
-                      isRemaining && isNegative ? 'bg-red-50 border-red-200' :
-                      isRemaining && !isNegative ? 'bg-green-50 border-green-200' :
+                      isRemaining && isNegative ? opSurfaceCritical :
+                      isRemaining && !isNegative ? opSurfaceSuccess :
                       'bg-muted/30 border-border/50'
                     )}
                   >
@@ -99,8 +100,8 @@ export function CashReadinessBreakdownDrawer({
                     </p>
                     <p className={cn(
                       'text-sm font-bold tabular-nums',
-                      isRemaining && isNegative ? 'text-red-600' :
-                      isRemaining && !isNegative ? 'text-green-700' :
+                      isRemaining && isNegative ? 'text-red-600 dark:text-red-400' :
+                      isRemaining && !isNegative ? 'text-green-700 dark:text-green-400' :
                       'text-foreground'
                     )}>
                       {(isRemaining && fig.amount > 0) ? '+' : ''}
@@ -124,12 +125,12 @@ export function CashReadinessBreakdownDrawer({
                   {breakdown.blockers.map((blocker, i) => (
                     <div
                       key={i}
-                      className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5"
+                      className={cn(opSurfaceAction, 'flex items-start gap-3 px-3 py-2.5')}
                     >
-                      <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-amber-800">{blocker.reason}</p>
-                        <p className="text-xs text-amber-700 mt-0.5">{blocker.actionRequired}</p>
+                        <p className={cn('text-sm font-medium', opToneWarning)}>{blocker.reason}</p>
+                        <p className={cn('text-xs mt-0.5', opToneWarning)}>{blocker.actionRequired}</p>
                       </div>
                     </div>
                   ))}
@@ -139,9 +140,9 @@ export function CashReadinessBreakdownDrawer({
 
             {/* No blockers — all clear */}
             {isReady && breakdown.blockers.length === 0 && (
-              <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-center">
-                <p className="text-sm text-green-700 font-medium">No blocking items</p>
-                <p className="text-xs text-green-600 mt-0.5">
+              <div className={cn(opSurfaceSuccess, 'px-4 py-3 text-center')}>
+                <p className={cn('text-sm font-medium', opToneSuccess)}>No blocking items</p>
+                <p className={cn('text-xs mt-0.5', opToneSuccess)}>
                   All commercial commitments are funded and ready for settlement.
                 </p>
               </div>

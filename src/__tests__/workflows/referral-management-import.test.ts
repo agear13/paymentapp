@@ -97,7 +97,12 @@ describe('Referral Management import-from-extraction adapter', () => {
     expect(mapped).toMatchObject({
       name: 'Apex Promotions Pty Ltd',
       email: 'apex@example.com',
-      compensation: { kind: 'revenue_share', percentage: 25, serviceId: SERVICE_A },
+      compensation: {
+        kind: 'revenue_share',
+        percentage: 25,
+        serviceId: SERVICE_A,
+        earningSource: { type: 'internal_service' },
+      },
     });
   });
 
@@ -157,10 +162,19 @@ describe('Referral Management import-from-extraction adapter', () => {
       email: 'apex@example.com',
       phone: undefined,
       role: 'Promoter',
+      roleLabel: 'Promoter',
       compensation: {
         kind: 'revenue_share',
         percentage: 20,
         serviceId: SERVICE_A,
+        earningSource: {
+          type: 'internal_service',
+          externalProvider: null,
+          externalService: null,
+          attributionMethod: null,
+          integration: null,
+          audienceDiscountPct: null,
+        },
       },
     });
   });
@@ -267,6 +281,7 @@ describe('Referral Management import-from-extraction adapter', () => {
     expect(persist).toHaveBeenCalledWith(
       expect.objectContaining({
         email: 'apex@example.com',
+        roleLabel: 'Promoter',
         reuseExisting: true,
         compensation: expect.objectContaining({ serviceId: SERVICE_A }),
       })
@@ -315,15 +330,176 @@ describe('Referral Management import-from-extraction adapter', () => {
     });
   });
 
-  it('does not persist when extracted participant data is incomplete', () => {
+  it('persists an extracted promoter when email is missing so it can be added later', () => {
     const preview = mapExtractionToReferralPreview({
       extraction: extraction([{ ...apex, email: field(null, 'absent') }]),
       catalog,
       sourceLabel: 'Pasted agreement or conversation',
     });
-    expect(canPersistReferralPreview(preview)).toEqual({
-      ok: false,
-      error: 'Email is required before this referral relationship can be created.',
+    expect(canPersistReferralPreview(preview)).toEqual({ ok: true });
+    expect(candidateToPromoterInput(preview.candidates[0])).toEqual(
+      expect.objectContaining({
+        name: 'Apex Promotions',
+        email: '',
+      })
+    );
+  });
+
+  it('extracts an external Weso relationship without inventing a catalogue service', () => {
+    const jane = testParty({
+      id: 'jane',
+      name: field('Jane Smith'),
+      email: field('jane@example.com'),
+      role: field('Affiliate / Content Creator'),
+      participationModel: field('revenue_share'),
+      revenueSharePct: field(2),
+      deliverables: [
+        {
+          description: field('Promote Weso app to their audience using a unique discount code'),
+          category: field(null, 'absent'),
+        },
+      ],
     });
+    const preview = mapExtractionToReferralPreview({
+      extraction: extraction([jane]),
+      catalog,
+      sourceLabel: 'Pasted agreement or conversation',
+    });
+    const [candidate] = preview.candidates;
+    expect(candidate.earningSourceType).toBe('external');
+    expect(candidate.externalProvider).toBe('Weso');
+    expect(candidate.externalService).toBe('Weso app');
+    expect(candidate.attributionMethod).toBe('discount_code');
+    expect(candidate.percentage).toBe(2);
+    expect(candidate.commissionLabel).toBe('2% revenue share');
+    expect(candidate.serviceId).toBeNull();
+    expect(canPersistReferralPreview(preview)).toEqual({ ok: true });
+    expect(candidateToPromoterInput(candidate)).toEqual({
+      name: 'Jane Smith',
+      email: 'jane@example.com',
+      phone: undefined,
+      role: 'Affiliate',
+      roleLabel: 'Affiliate / Content Creator',
+      compensation: {
+        kind: 'revenue_share',
+        percentage: 2,
+        earningSource: {
+          type: 'external',
+          externalProvider: 'Weso',
+          externalService: 'Weso app',
+          attributionMethod: 'discount_code',
+          integration: null,
+          audienceDiscountPct: null,
+        },
+      },
+    });
+  });
+
+  it('does not invent an external service name that was not in the conversation', () => {
+    const jane = testParty({
+      id: 'jane',
+      name: field('Jane Smith'),
+      email: field('jane@example.com'),
+      role: field('Affiliate'),
+      participationModel: field('revenue_share'),
+      revenueSharePct: field(2),
+      notes: field("We'd love you to be an affiliate for Weso. You'll earn 2% of qualifying revenue."),
+    });
+    const preview = mapExtractionToReferralPreview({
+      extraction: extraction([jane]),
+      catalog,
+      sourceLabel: 'Pasted agreement or conversation',
+    });
+    expect(preview.candidates[0].earningSourceType).toBe('external');
+    expect(preview.candidates[0].externalProvider).toBe('Weso');
+    expect(preview.candidates[0].externalService).toBe('');
+    expect(preview.candidates[0].serviceId).toBeNull();
+    expect(canPersistReferralPreview(preview)).toEqual({ ok: true });
+  });
+
+  it('still requires a catalogue service for internal relationships', () => {
+    const preview = mapExtractionToReferralPreview({
+      extraction: extraction([apex]),
+      catalog,
+      sourceLabel: 'Uploaded agreement',
+    });
+    expect(preview.candidates[0].earningSourceType).toBe('internal_service');
+    expect(
+      candidateToPromoterInput({ ...preview.candidates[0], serviceId: null })
+    ).toEqual({
+      error: 'Select an existing catalogue service. A service will not be invented.',
+    });
+  });
+
+  it('requires an external platform before confirming an external relationship', () => {
+    expect(
+      candidateToPromoterInput({
+        partyId: 'jane',
+        selected: true,
+        name: 'Jane Smith',
+        email: 'jane@example.com',
+        phone: '',
+        role: 'Affiliate',
+        extractedRole: 'Affiliate',
+        compensationKind: 'revenue_share',
+        percentage: 2,
+        amount: null,
+        currency: 'AUD',
+        extractedServiceLabel: null,
+        serviceId: null,
+        serviceMatch: 'none',
+        serviceSuggestions: [],
+        commissionLabel: '2% revenue share',
+        earningSourceType: 'external',
+        externalProvider: '',
+        externalService: '',
+        attributionMethod: 'discount_code',
+        integration: '',
+      })
+    ).toEqual({
+      error: 'Enter the external platform this affiliate earns on.',
+    });
+  });
+
+  it('persists an external relationship without catalogue_service_id', async () => {
+    const jane = testParty({
+      id: 'jane',
+      name: field('Jane Smith'),
+      email: field('jane@example.com'),
+      role: field('Affiliate'),
+      participationModel: field('revenue_share'),
+      revenueSharePct: field(2),
+      deliverables: [
+        {
+          description: field('Promote Weso using a unique discount code'),
+          category: field(null, 'absent'),
+        },
+      ],
+    });
+    const preview = mapExtractionToReferralPreview({
+      extraction: extraction([jane]),
+      catalog,
+      sourceLabel: 'Pasted agreement or conversation',
+    });
+    const persist = jest.fn().mockResolvedValue({
+      ok: true,
+      participantId: 'persisted-jane-id',
+    });
+    const result = await persistSelectedReferralCandidates({ preview, persist });
+    expect(result).toMatchObject({ ok: true, participantId: 'persisted-jane-id' });
+    expect(persist).toHaveBeenCalledWith(
+      expect.objectContaining({
+        roleLabel: 'Affiliate',
+        compensation: expect.objectContaining({
+          kind: 'revenue_share',
+          percentage: 2,
+          earningSource: expect.objectContaining({
+            type: 'external',
+            externalProvider: 'Weso',
+          }),
+        }),
+      })
+    );
+    expect(persist.mock.calls[0][0].compensation.serviceId).toBeUndefined();
   });
 });

@@ -638,6 +638,144 @@ describe('P4 — Referral Management workflow', () => {
     expect(second.referralUrl).toBe(first.referralUrl);
   });
 
+  it('adds an external earning-source promoter without a catalogue service', async () => {
+    const created = await addReferralManagementPromoter({
+      organizationId: ORG,
+      workflowId: WF,
+      userId: USER,
+      name: 'Jane Smith',
+      email: 'jane@example.com',
+      role: 'Affiliate',
+      compensation: {
+        kind: 'revenue_share',
+        percentage: 2,
+        earningSource: {
+          type: 'external',
+          externalProvider: 'Weso',
+          externalService: 'Weso App Store',
+          attributionMethod: 'discount_code',
+        },
+      },
+    });
+    expect(created.created).toBe(true);
+    expect(created.participant.earningSource).toMatchObject({
+      type: 'external',
+      externalProvider: 'weso',
+      externalService: 'weso_app_store',
+      attributionMethod: 'discount_code',
+    });
+    expect(created.participant.compensationProfile?.commissionServiceIds).toEqual([]);
+    expect(created.participant.referralCommerce?.createReferralLink).toBe(false);
+    expect(createPilotParticipantForUser).toHaveBeenCalled();
+  });
+
+  it('manually creates a Weso Community Organiser with 2% commission and 10% audience discount', async () => {
+    const created = await addReferralManagementPromoter({
+      organizationId: ORG,
+      workflowId: WF,
+      userId: USER,
+      name: 'Rachel Smith',
+      role: 'Affiliate',
+      roleLabel: 'Community Organiser',
+      compensation: {
+        kind: 'revenue_share',
+        percentage: 2,
+        earningSource: {
+          type: 'external',
+          externalProvider: 'Weso',
+          externalService: 'Weso App Store',
+          attributionMethod: 'discount_code',
+          audienceDiscountPct: 10,
+        },
+      },
+    });
+    expect(created.created).toBe(true);
+    expect(created.participant.roleLabel).toBe('Community Organiser');
+    expect(created.participant.commissionValue).toBe(2);
+    expect(created.participant.audienceDiscountPct).toBe(10);
+    expect(created.participant.earningSource).toMatchObject({
+      type: 'external',
+      externalProvider: 'weso',
+      externalService: 'weso_app_store',
+      attributionMethod: 'discount_code',
+      metadata: expect.objectContaining({
+        providerLabel: 'Weso',
+        serviceLabel: 'Weso App Store',
+        audienceDiscountPct: 10,
+      }),
+    });
+    expect(created.participant.compensationProfile?.commissionServiceIds).toEqual([]);
+    expect(createPilotParticipantForUser.mock.calls[0][1].compensationProfile?.commissionServiceIds).toEqual(
+      []
+    );
+  });
+
+  it('still requires a catalogue service for internal earning sources', async () => {
+    await expect(
+      addReferralManagementPromoter({
+        organizationId: ORG,
+        workflowId: WF,
+        userId: USER,
+        name: 'Apex Promotions',
+        email: 'apex@example.com',
+        role: 'Promoter',
+        compensation: {
+          kind: 'revenue_share',
+          percentage: 20,
+          earningSource: { type: 'internal_service' },
+        },
+      })
+    ).rejects.toMatchObject({ status: 422, name: 'ReferralManagementError' });
+    expect(createPilotParticipantForUser).not.toHaveBeenCalled();
+  });
+
+  it('does not issue a Provvy checkout when activating an external earning source', async () => {
+    const jane = promoter({
+      name: 'Jane Smith',
+      email: 'jane@example.com',
+      approvalStatus: 'Approved',
+      earningSource: {
+        type: 'external',
+        externalProvider: 'weso',
+        externalService: 'weso_app_store',
+        attributionMethod: 'discount_code',
+        metadata: { providerLabel: 'Weso', serviceLabel: 'Weso App Store' },
+      },
+      compensationProfile: {
+        compensationType: 'REVENUE_SHARE',
+        percentage: 2,
+        configured: true,
+        configuredAt: '2026-08-20T00:00:00.000Z',
+        customerAttributionEnabled: true,
+        revenueSources: [],
+      },
+    });
+    prisma.deal_network_pilot_participants.findUnique.mockResolvedValue({
+      id: jane.id,
+      deal_id: jane.dealId,
+      deal: { user_id: USER, deal_id: jane.dealId, deal_payload: {} },
+    });
+    updatePilotParticipantPayload.mockResolvedValue({
+      ...jane,
+      attributionStatus: 'active',
+    });
+
+    const result = await executeCommercialParticipantAction({
+      participant: jane,
+      userId: USER,
+      organizationId: ORG,
+      action: 'activate_referral',
+    });
+    expect(ensureReferralIssuance).not.toHaveBeenCalled();
+    expect(result.referralUrl).toBeUndefined();
+    expect(result.destinationLabel).toBe('Weso · Weso App Store');
+    expect(updatePilotParticipantPayload).toHaveBeenCalledWith(
+      jane.id,
+      USER,
+      expect.objectContaining({ attributionStatus: 'active' })
+    );
+  });
+
   it('does not issue a referral for fixed commission', async () => {
     await expect(
       executeCommercialParticipantAction({

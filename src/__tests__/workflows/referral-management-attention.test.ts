@@ -40,6 +40,7 @@ function promoter(
     eligibleServiceIds: ['svc-1'],
     workspaceUrl: null,
     email: 'agency@example.com',
+    phone: null,
     identityBound: false,
     lastInvitationEmail: null,
     payoutReview: null,
@@ -141,6 +142,32 @@ describe('Referral Management attention grouping', () => {
       'active',
     ]);
     expect(filterCountsForPromoters(rows).attention).toBe(2);
+  });
+
+  it('surfaces pending agreement change requests as the highest-priority attention', () => {
+    const items = buildReferralAttentionItems([
+      promoter({
+        id: 'rachel',
+        name: 'Rachel Smith',
+        agreementStatus: 'requested',
+        payoutSetupStatus: 'required',
+        pendingChangeRequests: [
+          {
+            id: 'chg-1',
+            fieldLabel: 'Name',
+            previousValue: 'Rachel Smyth',
+            suggestedValue: 'Rachel Smith',
+            reason: 'Spelling',
+            classification: 'administrative',
+            createdAt: '2026-09-09T00:00:00.000Z',
+            agreementVersionNumber: 1,
+            status: 'pending',
+          },
+        ],
+      }),
+    ]);
+    expect(items[0]?.kind).toBe('change_request');
+    expect(groupReferralAttention(items)[0]?.summary).toBe('1 agreement change awaiting review');
   });
 
   it('returns no groups when there is nothing to do', () => {

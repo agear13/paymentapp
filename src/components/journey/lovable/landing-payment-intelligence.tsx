@@ -23,9 +23,9 @@ export function LandingPaymentIntelligence() {
   const [paused, setPaused] = useState(false);
 
   useEffect(() => {
-    const first = rankPaymentIntelligence({ origin, destination, scope: 'all' }).items[0];
+    const first = ranked.items[0];
     if (first) setHighlightedId(first.id);
-  }, [origin, destination, setHighlightedId]);
+  }, [origin, destination, ranked, setHighlightedId]);
 
   useEffect(() => {
     if (paused || ranked.items.length < 2) return;

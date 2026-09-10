@@ -111,10 +111,10 @@ describe('Referral Management extraction-to-participant', () => {
     expect(screen.queryByText('Promoter created')).not.toBeInTheDocument();
   });
 
-  it('keeps a review state when extracted email is missing', async () => {
+  it('persists a relationship when extracted email is missing so it can be added later', async () => {
     const props = renderForm({
       onExtract: jest.fn().mockResolvedValue(completePreview({ email: '' })),
-      onSubmit: jest.fn(),
+      onSubmit: jest.fn().mockResolvedValue({ ok: true, participantId: 'created-without-email' }),
     });
 
     fireEvent.click(screen.getByRole('button', { name: 'Add promoter' }));
@@ -125,12 +125,59 @@ describe('Referral Management extraction-to-participant', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Extract from text' }));
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Email is required before this referral relationship can be created.')
-      ).toBeInTheDocument();
+      expect(props.onImported).toHaveBeenCalledWith('created-without-email');
     });
-    expect(props.onSubmit).not.toHaveBeenCalled();
-    expect(props.onImported).not.toHaveBeenCalled();
-    expect(screen.getByText('Review extracted relationship')).toBeInTheDocument();
+    expect(props.onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Apex Promotions',
+        email: '',
+        reuseExisting: true,
+      })
+    );
+    expect(screen.queryByText('Email is required before this referral relationship can be created.')).not.toBeInTheDocument();
+  });
+
+  it('confirms an external earning source without a catalogue service', async () => {
+    const preview = completePreview({
+      name: 'Jane Smith',
+      email: 'jane@example.com',
+      role: 'Affiliate',
+      extractedRole: 'Affiliate / Content Creator',
+      percentage: 2,
+      commissionLabel: '2% revenue share',
+      extractedServiceLabel: 'Promote Weso app using a unique discount code',
+      serviceId: null,
+      serviceMatch: 'none',
+      earningSourceType: 'external',
+      externalProvider: 'Weso',
+      externalService: 'Weso app',
+      attributionMethod: 'discount_code',
+    });
+    const props = renderForm({
+      catalog: [],
+      onExtract: jest.fn().mockResolvedValue(preview),
+      onSubmit: jest.fn().mockResolvedValue({ ok: true, participantId: 'jane-external-id' }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add promoter' }));
+    fireEvent.click(screen.getByRole('button', { name: 'From agreement or conversation' }));
+    fireEvent.change(screen.getByLabelText('Agreement or conversation'), {
+      target: {
+        value: "We'd love you to be an affiliate for Weso. Unique discount code. Earn 2%.",
+      },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Extract from text' }));
+
+    await waitFor(() => {
+      expect(props.onImported).toHaveBeenCalledWith('jane-external-id');
+    });
+    expect(props.onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        compensation: expect.objectContaining({
+          earningSource: expect.objectContaining({ type: 'external', externalProvider: 'Weso' }),
+        }),
+      })
+    );
+    expect(props.onSubmit.mock.calls[0][0].compensation.serviceId).toBeUndefined();
   });
 });

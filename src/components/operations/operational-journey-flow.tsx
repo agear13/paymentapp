@@ -61,7 +61,7 @@ export function OperationalJourneyFlow({
 }: OperationalJourneyFlowProps) {
   if (loading) {
     return (
-      <div className="rounded-xl border border-border/60 bg-white/60 px-4 py-3.5 animate-pulse">
+      <div className="rounded-xl border border-border/60 bg-card/70 px-4 py-3.5 animate-pulse">
         <div className="flex items-center gap-1.5">
           {STAGES.map((s) => (
             <div key={s.id} className="flex-1 h-1.5 rounded-full bg-muted" />
@@ -74,7 +74,7 @@ export function OperationalJourneyFlow({
   const currentIndex = deriveCurrentStageIndex(kpis, releaseConfidence, workspace);
 
   return (
-    <div className="rounded-xl border border-border/60 bg-white/60 px-4 py-4 space-y-3">
+    <div className="rounded-xl border border-border/60 bg-card/70 px-4 py-4 space-y-3">
       <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/80">
         Revenue journey
       </p>
@@ -96,7 +96,7 @@ export function OperationalJourneyFlow({
                     done && !active
                       ? 'bg-[rgb(29,111,66)] border-2 border-[rgb(29,111,66)]'
                       : active
-                        ? 'bg-white border-2 border-[rgb(29,111,66)] ring-2 ring-[rgba(29,111,66,0.2)]'
+                        ? 'bg-background border-2 border-[rgb(29,111,66)] ring-2 ring-[rgba(29,111,66,0.2)]'
                         : 'bg-muted/40 border-2 border-border/50'
                   )}
                 >

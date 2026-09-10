@@ -157,8 +157,10 @@
     --popover-foreground: 237 237 237;
     --border: 38 38 38;             /* #262626 */
     --input: 64 64 64;
-    --muted: 115 115 115;
+    --muted: 38 38 38;              /* elevated dark surface, not mid-grey */
     --muted-foreground: 168 168 168;
+    --secondary: 38 38 38;
+    --secondary-foreground: 250 250 250;
     --accent: 38 38 38;
     --accent-foreground: 250 250 250;
     --sidebar: 23 23 23;
@@ -166,6 +168,9 @@
     --sidebar-border: 38 38 38;
     --sidebar-accent: 38 38 38;
     --sidebar-accent-foreground: 250 250 250;
+    --agreement-card: 23 23 23;
+    --settlement-success: 18 40 28;
+    --settlement-success-text: 134 211 165;
   }
 }
 
@@ -189,8 +194,10 @@ body {
   --popover-foreground: 237 237 237;
   --border: 38 38 38;
   --input: 64 64 64;
-  --muted: 115 115 115;
+  --muted: 38 38 38;
   --muted-foreground: 168 168 168;
+  --secondary: 38 38 38;
+  --secondary-foreground: 250 250 250;
   --accent: 38 38 38;
   --accent-foreground: 250 250 250;
   --sidebar: 23 23 23;
@@ -201,6 +208,9 @@ body {
   --sidebar-accent: 38 38 38;
   --sidebar-accent-foreground: 250 250 250;
   --sidebar-ring: 81 112 255;
+  --agreement-card: 23 23 23;
+  --settlement-success: 18 40 28;
+  --settlement-success-text: 134 211 165;
 }
 
 @layer base {
@@ -263,26 +273,26 @@ body {
     @apply outline-none ring-3 ring-primary/20 border-primary transition-all;
   }
   
-  /* Status badge utilities */
+  /* Status badge utilities — hue at low opacity so fills stay dark in dark mode */
   .status-paid {
-    @apply bg-green-50 text-green-700 border-green-200;
+    @apply bg-green-500/[0.08] text-green-700 border-green-500/20 dark:text-green-400;
   }
   
   .status-open {
-    @apply bg-blue-50 text-primary border-primary/20;
+    @apply bg-primary/10 text-primary border-primary/20;
   }
   
   .status-pending {
-    @apply bg-amber-50 text-amber-700 border-amber-200;
+    @apply bg-amber-500/[0.08] text-amber-800 border-amber-500/20 dark:text-amber-400;
   }
   
   .status-expired,
   .status-canceled {
-    @apply bg-red-50 text-red-700 border-red-200;
+    @apply bg-red-500/[0.08] text-red-700 border-red-500/20 dark:text-red-400;
   }
   
   .status-draft {
-    @apply bg-gray-50 text-gray-700 border-gray-200;
+    @apply bg-muted text-muted-foreground border-border;
   }
   
   /* Currency amount (right-aligned, tabular nums) */
@@ -295,13 +305,13 @@ body {
     @apply text-xs text-muted-foreground flex items-center gap-1;
   }
 
-  /* Agreement Intelligence surfaces */
+  /* Agreement Intelligence surfaces — via-card/bg-card follow theme tokens */
   .surface-intelligence {
-    @apply rounded-xl border border-[rgba(124,92,255,0.15)] bg-gradient-to-br from-[rgba(124,92,255,0.06)] via-white to-[rgba(124,92,255,0.03)] shadow-sm;
+    @apply rounded-xl border border-[rgba(124,92,255,0.15)] bg-gradient-to-br from-[rgba(124,92,255,0.06)] via-card to-[rgba(124,92,255,0.03)] shadow-sm;
   }
 
   .surface-agreement-card {
-    @apply rounded-xl border border-[rgba(124,92,255,0.12)] bg-white shadow-sm;
+    @apply rounded-xl border border-[rgba(124,92,255,0.12)] bg-card shadow-sm;
   }
 
   .surface-settlement {
@@ -309,7 +319,24 @@ body {
   }
 
   .surface-elevated {
-    @apply rounded-2xl border border-[rgba(124,92,255,0.12)] bg-white shadow-lg shadow-[rgba(124,92,255,0.08)];
+    @apply rounded-2xl border border-[rgba(124,92,255,0.12)] bg-card shadow-lg shadow-[rgba(124,92,255,0.08)];
+  }
+
+  /* Semantic tinted panels — same hue-at-low-opacity pattern as operational surfaces */
+  .surface-warning {
+    @apply rounded-lg border border-amber-500/25 bg-amber-500/[0.06];
+  }
+
+  .surface-success {
+    @apply rounded-lg border border-green-500/20 bg-green-500/[0.06];
+  }
+
+  .surface-danger {
+    @apply rounded-lg border border-red-500/20 bg-red-500/[0.06];
+  }
+
+  .surface-info {
+    @apply rounded-lg border border-blue-500/20 bg-blue-500/[0.06];
   }
 
   .text-intelligence-gradient {

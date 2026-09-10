@@ -51,6 +51,17 @@ describe('invitation destination copy', () => {
     expect(copy.statusLine).toMatch(/Will be sent to/i);
   });
 
+  it('asks Danielle to add an email before sending', () => {
+    const copy = participantInvitationCopy({
+      email: '',
+      lastInvitationEmail: null,
+      agreementStatus: 'not_requested',
+    });
+    expect(copy.headline).toBe('Add an email to send the agreement');
+    expect(copy.destinationEmail).toBeNull();
+    expect(copy.statusLine).toBe('Email not provided');
+  });
+
   it('shows the sent invitation destination', () => {
     const copy = participantInvitationCopy({
       email: 'betty@example.com',

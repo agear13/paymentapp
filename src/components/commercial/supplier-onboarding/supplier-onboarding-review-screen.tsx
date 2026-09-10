@@ -21,6 +21,16 @@ import { buildAgreementSummaryData } from '@/lib/commercial/participant-commerci
 import { AccountingReconciliationCard } from '@/components/commercial/accounting-reconciliation-card';
 import { reconcileSupplierInvoiceToObligations } from '@/lib/commercial/accounting-reconciliation';
 import { deriveSupplierReviewSettlementActions } from '@/lib/commercial/supplier-review-settlement-actions';
+import {
+  opSurfaceAction,
+  opSurfaceCritical,
+  opSurfaceInfo,
+  opSurfaceSuccess,
+  opToneDanger,
+  opToneSuccess,
+  opToneWarning,
+} from '@/lib/design/operational-surfaces';
+import { cn } from '@/lib/utils';
 
 /**
  * Operator supplier-onboarding review.
@@ -247,23 +257,23 @@ export function SupplierOnboardingReviewScreen({
             Back to participants
           </Link>
         </div>
-        <div className="rounded-lg border bg-amber-50 border-amber-200 p-6 space-y-3">
-          <p className="text-sm font-medium text-amber-800">Supplier hasn't submitted yet</p>
-          <p className="text-sm text-amber-700">
+        <div className={cn(opSurfaceAction, 'p-6 space-y-3')}>
+          <p className={cn('text-sm font-medium', opToneWarning)}>Supplier hasn't submitted yet</p>
+          <p className={cn('text-sm', opToneWarning)}>
             {participant.name} has not completed their payment information. Once they submit,
             you'll be able to review and approve their details here.
           </p>
           {actionError && (
-            <p className="text-xs text-red-700">{actionError}</p>
+            <p className={cn('text-xs', opToneDanger)}>{actionError}</p>
           )}
           {successMessage && (
-            <p className="text-xs text-green-800">{successMessage}</p>
+            <p className={cn('text-xs', opToneSuccess)}>{successMessage}</p>
           )}
           <button
             type="button"
             onClick={handleResend}
             disabled={isActing}
-            className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-800 hover:underline disabled:opacity-50"
+            className={cn('inline-flex items-center gap-1.5 text-sm font-medium hover:underline disabled:opacity-50', opToneWarning)}
           >
             <Send className="h-3.5 w-3.5" />
             {isActing ? 'Sending…' : 'Resend payment setup link'}
@@ -316,19 +326,19 @@ export function SupplierOnboardingReviewScreen({
       </div>
 
       {isRejected && rejectionReason && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4 flex gap-3">
-          <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+        <div className={cn(opSurfaceCritical, 'mb-4 p-4 flex gap-3')}>
+          <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
           <div className="flex-1">
-            <p className="text-sm font-medium text-red-800">Changes requested</p>
-            <p className="text-sm text-red-700 mt-0.5">{rejectionReason}</p>
-            <p className="text-xs text-red-600 mt-1.5">
+            <p className={cn('text-sm font-medium', opToneDanger)}>Changes requested</p>
+            <p className={cn('text-sm mt-0.5', opToneDanger)}>{rejectionReason}</p>
+            <p className={cn('text-xs mt-1.5', opToneDanger)}>
               A new payment setup link has been sent to {participant.name} so they can resubmit after making corrections.
             </p>
             <button
               type="button"
               onClick={handleResend}
               disabled={isActing}
-              className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-red-700 hover:text-red-900 hover:underline disabled:opacity-50"
+              className={cn('mt-2 inline-flex items-center gap-1.5 text-xs font-medium hover:underline disabled:opacity-50', opToneDanger)}
             >
               <Send className="h-3 w-3" />
               Resend payment setup link
@@ -338,13 +348,13 @@ export function SupplierOnboardingReviewScreen({
       )}
 
       {actionError && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className={cn(opSurfaceCritical, 'mb-4 px-4 py-3 text-sm', opToneDanger)}>
           {actionError}
         </div>
       )}
 
       {successMessage && (
-        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 flex items-center gap-2">
+        <div className={cn(opSurfaceSuccess, 'mb-4 px-4 py-3 text-sm flex items-center gap-2', opToneSuccess)}>
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           {successMessage}
         </div>
@@ -366,9 +376,9 @@ export function SupplierOnboardingReviewScreen({
       )}
 
       {(lifecycle === 'SUBMITTED' || lifecycle === 'APPROVED') && (
-        <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 p-4 space-y-3">
+        <div className={cn(opSurfaceInfo, 'mt-4 p-4 space-y-3')}>
           <div>
-            <p className="text-sm font-medium text-blue-800">
+            <p className={cn('text-sm font-medium', 'text-blue-800 dark:text-blue-300')}>
               {lifecycle === 'APPROVED'
                 ? 'Supplier details verified'
                 : 'Verify supplier details'}
@@ -398,7 +408,7 @@ export function SupplierOnboardingReviewScreen({
                 data-testid="push-supplier-bill-to-xero-button"
                 onClick={() => void handleXeroExport()}
                 disabled={isActing}
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-primary/30 bg-white text-primary px-4 py-2 text-sm font-medium hover:bg-primary/5 disabled:opacity-50 transition-colors"
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-primary/30 bg-card text-primary px-4 py-2 text-sm font-medium hover:bg-primary/5 disabled:opacity-50 transition-colors"
               >
                 {isActing ? 'Pushing supplier bill…' : reviewActions.pushToXeroLabel}
               </button>

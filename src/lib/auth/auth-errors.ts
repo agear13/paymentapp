@@ -13,6 +13,9 @@ export const ACCOUNT_EXISTS_CODE = 'ACCOUNT_EXISTS';
 export const GENERIC_RESET_RESPONSE =
   'If an account exists for that email, a password reset link has been sent.';
 
+export const GENERIC_VERIFICATION_RESEND_RESPONSE =
+  'If that email needs verification, we sent a new link. Check your inbox and spam folder.';
+
 export const GENERIC_RATE_LIMIT =
   'Too many attempts. Please wait before trying again.';
 
@@ -39,4 +42,26 @@ export function isExistingAccountSignupError(error: {
   const message = error.message?.trim().toLowerCase();
   if (!message) return false;
   return message.includes('already registered') || message.includes('already been registered');
+}
+
+/**
+ * GoTrue resend errors that must not tell the client whether the address exists
+ * or is already verified.
+ */
+export function isBenignVerificationResendError(error: {
+  message?: string | null;
+  code?: string | null;
+} | null | undefined): boolean {
+  if (!error) return false;
+  const message = error.message?.trim().toLowerCase() ?? '';
+  const code = error.code?.trim().toLowerCase() ?? '';
+  return (
+    code === 'email_exists' ||
+    code === 'user_already_exists' ||
+    message.includes('already confirmed') ||
+    message.includes('already been confirmed') ||
+    message.includes('already registered') ||
+    message.includes('email not found') ||
+    message.includes('user not found')
+  );
 }

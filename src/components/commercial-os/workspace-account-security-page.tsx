@@ -7,9 +7,14 @@ import { LastLoginSection } from '@/components/dashboard/settings/last-login-sec
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SensitiveActionTotpDialog } from '@/components/auth/sensitive-action-totp-dialog';
 import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import { CSRF_PREPARING_LABEL, useClientCsrfReady } from '@/hooks/use-client-csrf-ready';
 import { MIN_PASSWORD_LENGTH, validatePassword } from '@/lib/auth/password-policy';
+import {
+  readStepUpDenial,
+  redirectIfEnrollmentRequired,
+} from '@/lib/auth/step-up-totp.client';
 
 type MfaStatus = {
   enrolled: boolean;
@@ -33,6 +38,8 @@ export function WorkspaceAccountSecurityPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [stepUpOpen, setStepUpOpen] = useState(false);
+  const [pendingRetry, setPendingRetry] = useState<(() => Promise<void>) | null>(null);
 
   const refreshStatus = async () => {
     const response = await csrfAwareFetch('/api/security/mfa/status');
@@ -134,8 +141,15 @@ export function WorkspaceAccountSecurityPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ factorId }),
       });
-      const data = await response.json();
       if (!response.ok) {
+        const denial = await readStepUpDenial(response);
+        if (denial) {
+          if (redirectIfEnrollmentRequired(denial.code)) return;
+          setPendingRetry(() => () => handleDisable());
+          setStepUpOpen(true);
+          return;
+        }
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error || 'Could not disable two-factor authentication.');
       }
       setRecoveryCodes(null);
@@ -158,10 +172,18 @@ export function WorkspaceAccountSecurityPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: newEmail }),
       });
-      const data = await response.json();
       if (!response.ok) {
+        const denial = await readStepUpDenial(response);
+        if (denial) {
+          if (redirectIfEnrollmentRequired(denial.code)) return;
+          setPendingRetry(() => () => handleChangeEmail(event));
+          setStepUpOpen(true);
+          return;
+        }
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error || 'Could not change email.');
       }
+      const data = (await response.json()) as { message?: string };
       setNewEmail('');
       setAlert(null, data.message ?? 'Check the new inbox to confirm this email change.');
     } catch (err: unknown) {
@@ -190,10 +212,18 @@ export function WorkspaceAccountSecurityPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password: newPassword }),
       });
-      const data = await response.json();
       if (!response.ok) {
+        const denial = await readStepUpDenial(response);
+        if (denial) {
+          if (redirectIfEnrollmentRequired(denial.code)) return;
+          setPendingRetry(() => () => handleChangePassword(event));
+          setStepUpOpen(true);
+          return;
+        }
+        const data = (await response.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error || 'Could not change password.');
       }
+      const data = (await response.json()) as { message?: string };
       setNewPassword('');
       setConfirmPassword('');
       setAlert(null, data.message ?? 'Password updated.');
@@ -369,6 +399,16 @@ export function WorkspaceAccountSecurityPage() {
           </div>
         ) : null}
       </div>
+      <SensitiveActionTotpDialog
+        open={stepUpOpen}
+        onOpenChange={(open) => {
+          setStepUpOpen(open);
+          if (!open) setPendingRetry(null);
+        }}
+        onVerified={async () => {
+          await pendingRetry?.();
+        }}
+      />
     </div>
   );
 }

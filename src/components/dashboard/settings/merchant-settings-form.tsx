@@ -49,6 +49,11 @@ import {
   type PersistedMerchantSettingsSnapshot,
 } from '@/lib/settings/merchant-settings-section-save';
 import { StripeConnectSetupStatusBadge } from '@/components/journey/lovable/payments-settlement-ui';
+import { SensitiveActionTotpDialog } from '@/components/auth/sensitive-action-totp-dialog';
+import {
+  readStepUpDenial,
+  redirectIfEnrollmentRequired,
+} from '@/lib/auth/step-up-totp.client';
 
 import { WORKSPACE_CURRENCIES, DEFAULT_WORKSPACE_CURRENCY } from '@/lib/currency/workspace-currencies';
 import { notifyWorkspaceActivationRefresh } from '@/hooks/use-workspace-activation';
@@ -106,6 +111,8 @@ export function MerchantSettingsForm({
   const { organizationId, organization, isLoading: isOrgLoading } = useOrganization();
   const [isLoading, setIsLoading] = React.useState(true);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [stepUpOpen, setStepUpOpen] = React.useState(false);
+  const pendingSaveRef = React.useRef<MerchantSettingsFormValues | null>(null);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [settingsId, setSettingsId] = React.useState<string | null>(null);
   const [persistedSnapshot, setPersistedSnapshot] =
@@ -344,6 +351,13 @@ export function MerchantSettingsForm({
         });
 
         if (!response.ok) {
+          const denial = await readStepUpDenial(response);
+          if (denial) {
+            if (redirectIfEnrollmentRequired(denial.code)) return;
+            pendingSaveRef.current = data;
+            setStepUpOpen(true);
+            return;
+          }
           const message = await parseMerchantSettingsSaveError(response);
           throw new Error(message);
         }
@@ -379,6 +393,13 @@ export function MerchantSettingsForm({
         });
 
         if (!response.ok) {
+          const denial = await readStepUpDenial(response);
+          if (denial) {
+            if (redirectIfEnrollmentRequired(denial.code)) return;
+            pendingSaveRef.current = data;
+            setStepUpOpen(true);
+            return;
+          }
           const message = await parseMerchantSettingsSaveError(response);
           throw new Error(message);
         }
@@ -543,7 +564,7 @@ export function MerchantSettingsForm({
                 <Input placeholder="My Business" {...field} />
               </FormControl>
               <FormDescription>
-                This name will appear on payment pages and receipts.
+                This name will appear on payment pages, receipts, and affiliate agreements.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -633,7 +654,7 @@ export function MerchantSettingsForm({
                 </div>
               </FormControl>
               <FormDescription>
-                Upload your organization logo (PNG, JPG, or WEBP, max 2MB). This will appear on invoices and payment pages.
+                Upload your organization logo (PNG, JPG, or WEBP, max 2MB). This appears on invoices, payment pages, and affiliate agreements sent by this organisation.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -1062,6 +1083,17 @@ export function MerchantSettingsForm({
         </div>
         ) : null}
       </form>
+      <SensitiveActionTotpDialog
+        open={stepUpOpen}
+        onOpenChange={(open) => {
+          setStepUpOpen(open);
+          if (!open) pendingSaveRef.current = null;
+        }}
+        onVerified={async () => {
+          const pending = pendingSaveRef.current;
+          if (pending) await onSubmit(pending);
+        }}
+      />
     </Form>
   );
 }

@@ -33,6 +33,9 @@ import {
   resolveOrganizationIdForPilotDeal,
 } from '@/lib/referrals/ensure-referral-issuance';
 import { defaultReferralCommerce, normalizeReferralCommerce } from '@/lib/referrals/referral-commerce-config';
+import { isExternalEarningSourceParticipant } from '@/lib/workflows/referral-management/earning-source';
+import { ensureAgreementVersion } from '@/lib/agreements/agreement-presentation';
+import { loadOrganizationAgreementBranding } from '@/lib/agreements/organization-agreement-branding.server';
 import { buildReferralQrApiPath } from '@/lib/referrals/referral-share-url';
 import {
   compensationKindOf,
@@ -81,11 +84,18 @@ async function deliverAgreementInvitation(input: {
   const dealPayload = row?.deal?.deal_payload as { dealName?: string } | null;
   const projectName = dealPayload?.dealName?.trim() || row?.deal?.name?.trim() || 'Referral Management';
   const org = await getOrganizationForAuthenticatedUser(input.userId);
+  const organizationId = org?.id ?? (row
+    ? await resolveOrganizationIdForPilotDeal(row.deal.user_id, row.deal_id)
+    : null);
+  const branding = await loadOrganizationAgreementBranding(organizationId, undefined);
+  const currentVersion = input.participant.agreementVersions?.find((version) => version.status === 'current');
   const content = buildParticipantAgreementInviteEmail({
     participantName: input.participant.name,
-    operatorName: org?.name ?? 'Your organiser',
+    operatorName: branding?.legalName || org?.name || 'Your organiser',
     projectName,
     workspaceUrl: input.workspaceUrl,
+    logoUrl: currentVersion?.branding.logoUrl ?? branding?.logoUrl,
+    agreementTitle: currentVersion?.title,
   });
   const sent = await sendEmail({
     to,
@@ -126,10 +136,23 @@ async function requestApproval(input: {
     next = applyParticipantAgreementGenerated(next, path);
   }
 
+  const organizationId = await resolveOrganizationIdForPilotDeal(
+    input.userId,
+    next.dealId ?? input.participant.dealId ?? ''
+  );
+  const branding = await loadOrganizationAgreementBranding(organizationId, input.origin);
+  const snapshot = branding
+    ? ensureAgreementVersion(next, branding)
+    : { participant: next, created: false as const };
+  next = snapshot.participant;
+
   let created = false;
   if (!next.agreementSharedAt) {
     next = applyParticipantAgreementShared(next);
     created = true;
+  }
+
+  if (created || snapshot.created) {
     const persisted = await updatePilotParticipantPayload(input.participant.id, input.userId, {
       agreementUrl: next.agreementUrl,
       agreementSharedAt: next.agreementSharedAt,
@@ -138,6 +161,7 @@ async function requestApproval(input: {
       agreementLifecycle: next.agreementLifecycle,
       participantLifecycle: next.participantLifecycle,
       participantPortalToken: portal.token,
+      agreementVersions: next.agreementVersions,
     });
     next = persisted ?? next;
   }
@@ -377,6 +401,37 @@ async function activateReferral(input: {
       'INVALID_STATE',
       422
     );
+  }
+
+  if (isExternalEarningSourceParticipant(input.participant)) {
+    if (input.participant.attributionStatus === 'active') {
+      return {
+        created: false,
+        participant: input.participant,
+        destinationLabel: eligibility.destinationLabel,
+      };
+    }
+    const row = await prisma.deal_network_pilot_participants.findUnique({
+      where: { id: input.participant.id },
+      include: { deal: true },
+    });
+    if (!row?.deal || row.deal.user_id !== input.userId) {
+      throw new CommercialCoordinationError('Participant not found', 'NOT_FOUND', 404);
+    }
+    const persisted = await updatePilotParticipantPayload(row.id, input.userId, {
+      attributionStatus: 'active',
+    });
+    await orchestrateOperationalMutation({
+      userId: input.userId,
+      mutation: 'attribution_update',
+      projectId: row.deal_id,
+      focusParticipant: persisted ?? { ...input.participant, attributionStatus: 'active' },
+    });
+    return {
+      created: false,
+      participant: persisted ?? { ...input.participant, attributionStatus: 'active' },
+      destinationLabel: eligibility.destinationLabel,
+    };
   }
 
   if (input.participant.customerCommerceUrl?.trim() && input.participant.referralCode?.trim()) {

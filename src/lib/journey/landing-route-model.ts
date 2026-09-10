@@ -73,6 +73,8 @@ export type LandingSearchQuery = {
   currency: string;
   transactionType: LandingTransactionTypeId;
   priority: LandingPriorityId;
+  /** Optional receive currency for coverage evaluation. Public search does not set this. */
+  destinationCurrency?: string | null;
 };
 
 export type LandingComparedRoute = {

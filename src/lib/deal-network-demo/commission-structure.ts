@@ -49,6 +49,7 @@ export interface ComputeDealCommissionResult {
 export interface CommissionValidationResult extends ComputeDealCommissionResult {
   valid: boolean;
   error?: string;
+  missingProjectValue?: boolean;
 }
 
 export interface CommissionContext {
@@ -176,6 +177,19 @@ export function resolveCommissionWithValidation(
 
   const dealValue = ctx.dealValue;
   if (!Number.isFinite(dealValue) || dealValue <= 0) {
+    if (input.commissionKind === 'pct_deal_value') {
+      const pct = input.commissionValue;
+      if (!Number.isFinite(pct) || pct < 0) {
+        return { total: 0, previewLine: 'Enter a valid percentage.', valid: false, error: 'Invalid percentage.' };
+      }
+      return {
+        total: 0,
+        previewLine: `${pct}% of project value`,
+        valid: true,
+        missingProjectValue: true,
+        error: 'Project value is required to calculate earnings.',
+      };
+    }
     return { total: 0, previewLine: 'Deal value is required.', valid: false, error: 'Deal value is required.' };
   }
 

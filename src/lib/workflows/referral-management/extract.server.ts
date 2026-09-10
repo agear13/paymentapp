@@ -79,6 +79,7 @@ async function previewFromText(input: {
       extraction,
       catalog,
       sourceLabel: input.sourceLabel,
+      sourceText: input.sourceText,
     });
   } catch (error) {
     if (error instanceof ExtractionResponseError) {

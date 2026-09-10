@@ -275,7 +275,7 @@ export function ProvvyCopilot({
 }: ProvvyCopilotProps) {
   if (loading) {
     return (
-      <div className="rounded-xl border border-border/60 bg-white/70 px-5 py-5 space-y-3 animate-pulse">
+      <div className="rounded-xl border border-border/60 bg-card/70 px-5 py-5 space-y-3 animate-pulse">
         <div className="h-3 w-32 bg-muted/60 rounded" />
         <div className="h-5 w-3/4 bg-muted rounded" />
         <div className="space-y-1.5">
@@ -340,10 +340,10 @@ export function ProvvyCopilot({
   }[narrative.tone];
 
   const bgClass = {
-    action: 'bg-white/70',
-    positive: 'bg-[rgba(29,111,66,0.03)]',
-    waiting: 'bg-amber-50/30',
-    empty: 'bg-white/50',
+    action: 'bg-card/70',
+    positive: 'bg-green-500/[0.06]',
+    waiting: 'bg-amber-500/[0.06]',
+    empty: 'bg-card/50',
   }[narrative.tone];
 
   return (

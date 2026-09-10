@@ -6,17 +6,17 @@ export const TIMELINE_LAYER_META: Record<
 > = {
   commercial: {
     label: 'Commercial',
-    badgeClass: 'bg-blue-50 text-blue-700 border-blue-200/80',
+    badgeClass: 'bg-blue-500/[0.08] text-blue-800 border-blue-500/20 dark:text-blue-400',
     dotClass: 'bg-blue-500/70',
   },
   accounting: {
     label: 'Accounting',
-    badgeClass: 'bg-violet-50 text-violet-700 border-violet-200/80',
+    badgeClass: 'bg-violet-500/[0.08] text-violet-800 border-violet-500/20 dark:text-violet-400',
     dotClass: 'bg-violet-500/70',
   },
   settlement: {
     label: 'Settlement',
-    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200/80',
+    badgeClass: 'bg-emerald-500/[0.08] text-emerald-800 border-emerald-500/20 dark:text-emerald-400',
     dotClass: 'bg-emerald-500/70',
   },
   operational: {

@@ -71,4 +71,29 @@ describe('Referral Management empty-selection eligibility', () => {
       destinationLabel: null,
     });
   });
+
+  it('does not require a catalogue service for an external earning source', () => {
+    const participant = {
+      compensationProfile: {
+        compensationType: 'REVENUE_SHARE',
+        percentage: 2,
+        configured: true,
+        revenueSources: [],
+      },
+      commissionKind: 'pct_deal_value',
+      commissionValue: 2,
+      earningSource: {
+        type: 'external' as const,
+        externalProvider: 'weso',
+        externalService: 'weso_app_store',
+        attributionMethod: 'discount_code' as const,
+        metadata: { providerLabel: 'Weso', serviceLabel: 'Weso App Store' },
+      },
+    } as DemoParticipant;
+
+    expect(referralEligibilityOf(participant, catalog)).toEqual({
+      status: 'ready',
+      destinationLabel: 'Weso · Weso App Store',
+    });
+  });
 });

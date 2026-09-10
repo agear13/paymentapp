@@ -24,10 +24,14 @@ export const MFA_STEP_UP_MESSAGES: Record<MfaStepUpCode, string> = {
   MFA_ENROLLMENT_REQUIRED:
     'Two-factor authentication must be enabled before this action.',
   MFA_CHALLENGE_REQUIRED:
-    'Two-factor authentication is required. Enter the code from your authenticator app.',
+    'Two-factor authentication is required. Enter the 6-digit code from your authenticator app.',
   STEP_UP_REQUIRED:
-    'Please confirm this action with your authenticator app.',
+    'Enter the 6-digit code from your authenticator app to confirm this action.',
 };
+
+export const STEP_UP_CONFIRM_TITLE = 'Confirm this action';
+export const STEP_UP_CONFIRM_BODY =
+  'Enter the 6-digit code from your authenticator app.';
 
 export function isRecoveryAmrMethod(method: string | null | undefined): boolean {
   if (!method) return false;

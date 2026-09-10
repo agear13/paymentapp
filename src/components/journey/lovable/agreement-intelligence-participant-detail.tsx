@@ -70,8 +70,12 @@ export function AgreementIntelligenceParticipantDetail({
   React.useEffect(() => {
     if (!autoOpenInvite) return;
     if (participant.agreementStatus === 'approved') return;
+    if (!participant.email?.trim()) {
+      setEditOpen(true);
+      return;
+    }
     setInviteOpen(true);
-  }, [autoOpenInvite, participant.id, participant.agreementStatus]);
+  }, [autoOpenInvite, participant.id, participant.agreementStatus, participant.email]);
   const invitationSent =
     participant.agreementStatus === 'requested' || participant.agreementStatus === 'viewed';
   const invitation = participantInvitationCopy({
@@ -118,7 +122,7 @@ export function AgreementIntelligenceParticipantDetail({
           </p>
           {participant.id && participant.partyKind === 'compensated_participant' ? (
             <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => setEditOpen(true)}>
-              Edit details
+              Edit participant
             </Button>
           ) : null}
         </div>
@@ -130,11 +134,31 @@ export function AgreementIntelligenceParticipantDetail({
           <div>
             <dt className="text-[12px] font-medium uppercase tracking-wide text-ink-soft">Email</dt>
             <dd className="mt-1 text-[14px] font-medium" data-testid="participant-identity-email">
-              {participant.email?.trim() || 'No email on file'}
+              {participant.email?.trim() || 'Not provided'}
             </dd>
+            {!participant.email?.trim() && !participant.identityBound ? (
+              <Button
+                type="button"
+                variant="link"
+                className="h-auto px-0 py-1 text-[13px]"
+                onClick={() => setEditOpen(true)}
+              >
+                Add email
+              </Button>
+            ) : null}
             {participant.identityBound ? (
               <p className="mt-1 text-[12px] text-ink-soft">Verified participant identity</p>
             ) : null}
+          </div>
+          <div>
+            <dt className="text-[12px] font-medium uppercase tracking-wide text-ink-soft">Phone</dt>
+            <dd className="mt-1 text-[14px] font-medium">{participant.phone?.trim() || 'Not provided'}</dd>
+          </div>
+          <div>
+            <dt className="text-[12px] font-medium uppercase tracking-wide text-ink-soft">Role</dt>
+            <dd className="mt-1 text-[14px] font-medium">
+              {participant.operationalRole || participant.commercialRole || 'Not provided'}
+            </dd>
           </div>
         </dl>
         {participant.compensationLabel ? (
@@ -181,9 +205,15 @@ export function AgreementIntelligenceParticipantDetail({
               </div>
               {canAct && !agreementApproved ? (
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" disabled={busy} onClick={() => setInviteOpen(true)}>
-                    {invitation.stale || invitationSent ? 'Resend invitation' : 'Send invitation'}
-                  </Button>
+                  {participant.email?.trim() ? (
+                    <Button type="button" disabled={busy} onClick={() => setInviteOpen(true)}>
+                      {invitation.stale || invitationSent ? 'Resend invitation' : 'Send agreement'}
+                    </Button>
+                  ) : (
+                    <Button type="button" disabled={busy} onClick={() => setEditOpen(true)}>
+                      Add email
+                    </Button>
+                  )}
                   <Button type="button" variant="outline" disabled={busy} onClick={copyApprovalLink}>
                     <Copy className="mr-2 h-3.5 w-3.5" />
                     Copy approval link
@@ -401,7 +431,14 @@ export function AgreementIntelligenceParticipantDetail({
           participantId={participant.id}
           name={participant.name}
           email={participant.email}
+          phone={participant.phone}
+          roleLabel={participant.operationalRole}
           identityBound={participant.identityBound}
+          issuedAgreement={
+            participant.agreementStatus === 'requested' ||
+            participant.agreementStatus === 'viewed' ||
+            participant.agreementStatus === 'approved'
+          }
           onSaved={() => onIdentityUpdated?.()}
         />
       ) : null}

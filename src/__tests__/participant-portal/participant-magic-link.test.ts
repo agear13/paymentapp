@@ -41,6 +41,20 @@ describe('participant magic-link destination', () => {
     expect(email.html).not.toContain('code=');
   });
 
+  it('includes the organisation logo when an agreement invite is branded', () => {
+    const email = buildParticipantAgreementInviteEmail({
+      participantName: 'Rachel',
+      operatorName: 'Weso',
+      projectName: 'Weso affiliates',
+      workspaceUrl: `${ORIGIN}/participant/${TOKEN}`,
+      logoUrl: 'https://cdn.example.com/weso.png',
+      agreementTitle: 'Weso Affiliate Agreement',
+    });
+    expect(email.subject).toContain('Weso Affiliate Agreement');
+    expect(email.html).toContain('https://cdn.example.com/weso.png');
+    expect(email.html).toContain('Weso Affiliate Agreement');
+  });
+
   it('forwards a code that landed on the participant URL to the callback handler', () => {
     expect(participantUrlNeedsAuthCallback(`?code=abc`, '')).toBe(true);
     expect(

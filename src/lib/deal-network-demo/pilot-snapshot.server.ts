@@ -354,6 +354,8 @@ export async function updatePilotParticipantPayload(
 
   return participantRowToDemo({
     ...row,
+    name: next.name.trim() || row.name,
+    email: next.email?.trim() ? next.email.trim() : row.email,
     approval_status: next.approvalStatus === 'Approved' ? 'Approved' : row.approval_status,
     approved_at:
       next.approvalStatus === 'Approved'

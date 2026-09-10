@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
+import { ParticipantIdentityEditDialog } from '@/components/journey/lovable/participant-identity-edit-dialog';
+import { EditProjectDetailsDialog } from '@/components/projects/edit-project-details-dialog';
 import { InviteProjectParticipantModal } from '@/components/projects/invite-project-participant-modal';
 import { ParticipantCompensationDialog } from '@/components/projects/participant-compensation-dialog';
 import { ParticipantAgreementShareDialog } from '@/components/projects/participant-agreement-share-dialog';
@@ -67,6 +69,8 @@ export function CommercialWorkspacePeoplePanel() {
     traceSurface: 'commercial-workspace-people',
   });
   const [inviteOpen, setInviteOpen] = React.useState(false);
+  const [editProjectOpen, setEditProjectOpen] = React.useState(false);
+  const [editParticipant, setEditParticipant] = React.useState<DemoParticipant | null>(null);
   const [earningsParticipant, setEarningsParticipant] = React.useState<DemoParticipant | null>(
     null
   );
@@ -331,6 +335,7 @@ export function CommercialWorkspacePeoplePanel() {
               onShareAgreement={openAgreementShare}
               onConfigureEarnings={setEarningsParticipant}
               onSendPaymentRequest={handleSendPaymentRequest}
+              onEditParticipant={setEditParticipant}
               projectId={projectId}
               organizationId={organizationId}
               workspaceCurrency={workspaceCurrency}
@@ -352,6 +357,7 @@ export function CommercialWorkspacePeoplePanel() {
           project={deal}
           organizationId={organizationId}
           onSubmit={handleInvite}
+          onAddProjectValue={() => setEditProjectOpen(true)}
         />
       ) : null}
 
@@ -391,6 +397,37 @@ export function CommercialWorkspacePeoplePanel() {
         }}
         onSendEmail={handleSendPaymentRequestEmail}
         sendingEmail={paymentRequestEmailSending}
+      />
+
+      {editParticipant ? (
+        <ParticipantIdentityEditDialog
+          open={Boolean(editParticipant)}
+          onOpenChange={(open) => {
+            if (!open) setEditParticipant(null);
+          }}
+          participantId={editParticipant.id}
+          name={editParticipant.name}
+          email={editParticipant.email}
+          phone={editParticipant.phone}
+          roleLabel={editParticipant.roleLabel || editParticipant.role}
+          identityBound={Boolean(
+            editParticipant.authenticatedUserId || editParticipant.approvalStatus === 'Approved'
+          )}
+          issuedAgreement={Boolean(
+            editParticipant.agreementSharedAt || editParticipant.approvalStatus === 'Approved'
+          )}
+          onSaved={async () => {
+            setEditParticipant(null);
+            await refresh();
+          }}
+        />
+      ) : null}
+
+      <EditProjectDetailsDialog
+        open={editProjectOpen}
+        onOpenChange={setEditProjectOpen}
+        deal={deal}
+        onSaved={() => void refresh()}
       />
     </div>
   );

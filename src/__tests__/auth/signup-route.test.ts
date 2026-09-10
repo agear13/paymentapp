@@ -4,6 +4,7 @@ import {
   ACCOUNT_EXISTS_MESSAGE,
   GENERIC_AUTH_FAILURE,
   GENERIC_SIGNUP_FAILURE,
+  isBenignVerificationResendError,
   isExistingAccountSignupError,
 } from '@/lib/auth/auth-errors';
 
@@ -96,6 +97,14 @@ describe('isExistingAccountSignupError', () => {
   });
 });
 
+describe('isBenignVerificationResendError', () => {
+  it('hides already-verified and unknown-address GoTrue errors', () => {
+    expect(isBenignVerificationResendError({ message: 'Email already confirmed' })).toBe(true);
+    expect(isBenignVerificationResendError({ message: 'User not found' })).toBe(true);
+    expect(isBenignVerificationResendError({ message: 'Email rate limit exceeded' })).toBe(false);
+  });
+});
+
 describe('POST /api/auth/signup', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -128,6 +137,7 @@ describe('POST /api/auth/signup', () => {
     expect(response.status).toBe(200);
     expect(body.ok).toBe(true);
     expect(body.requiresVerification).toBe(true);
+    expect(body.message).toMatch(/check your email/i);
     expect(body.error).toBeUndefined();
     expect(mockIncrementAuthFailureCounter).not.toHaveBeenCalled();
     expect(signUp).toHaveBeenCalledWith(

@@ -27,10 +27,15 @@ import type { ParticipantCoordinationAction } from '@/lib/workflows/agreement-in
 import { ensureReferralManagementDeal } from '@/lib/workflows/referral-management/ensure-program-deal.server';
 import {
   REFERRAL_MANAGEMENT_SLUG,
+  compensationEarningSourceType,
   compensationServiceIds,
   type ReferralCompensationInput,
   type ReferralPromoterRole,
 } from '@/lib/workflows/referral-management/constants';
+import {
+  normalizeReferralEarningSource,
+  validateExternalEarningSource,
+} from '@/lib/workflows/referral-management/earning-source';
 import { getReferralManagementContext } from '@/lib/workflows/referral-management/hub.server';
 import { proveSourceOrganizationFromWorkflow } from '@/lib/workflows/prove-source-organization.server';
 import {
@@ -52,7 +57,14 @@ export class ReferralManagementError extends Error {
   }
 }
 
-function mapRole(role: ReferralPromoterRole): OnboardingParticipantRole {
+function mapRole(role: ReferralPromoterRole, roleLabel?: string | null): OnboardingParticipantRole {
+  const label = roleLabel?.toLowerCase() ?? '';
+  if (
+    role === 'Affiliate' ||
+    /affiliate|community organiser|community organizer/.test(label)
+  ) {
+    return 'Affiliate';
+  }
   if (role === 'Other') return 'Stakeholder';
   return role;
 }
@@ -126,9 +138,10 @@ export async function addReferralManagementPromoter(input: {
   workflowId: string;
   userId: string;
   name: string;
-  email: string;
+  email?: string | null;
   phone?: string | null;
   role: ReferralPromoterRole;
+  roleLabel?: string | null;
   compensation: ReferralCompensationInput;
   reuseExisting?: boolean;
 }) {
@@ -138,30 +151,45 @@ export async function addReferralManagementPromoter(input: {
     throw new ReferralManagementError('Workflow not found', 'NOT_FOUND', 404);
   }
 
-  const serviceIds = compensationServiceIds(input.compensation);
-  if (serviceIds.length === 0) {
+  const earningSourceType = compensationEarningSourceType(input.compensation);
+  const isExternal = earningSourceType === 'external';
+  const serviceIds = isExternal ? [] : compensationServiceIds(input.compensation);
+  if (!isExternal && serviceIds.length === 0) {
     throw new ReferralManagementError(
       'Select at least one active service this promoter can refer.',
       'INVALID_STATE',
       422
     );
   }
+  if (isExternal) {
+    const externalError = validateExternalEarningSource(input.compensation.earningSource);
+    if (externalError) {
+      throw new ReferralManagementError(externalError, 'INVALID_STATE', 422);
+    }
+  }
 
-  const services = await prisma.organization_services.findMany({
-    where: {
-      id: { in: serviceIds },
-      organization_id: input.organizationId,
-      active: true,
-    },
-    select: { id: true, name: true },
-  });
-  if (services.length !== serviceIds.length) {
+  const services = isExternal
+    ? []
+    : await prisma.organization_services.findMany({
+        where: {
+          id: { in: serviceIds },
+          organization_id: input.organizationId,
+          active: true,
+        },
+        select: { id: true, name: true },
+      });
+  if (!isExternal && services.length !== serviceIds.length) {
     throw new ReferralManagementError(
       'Service selection required before a promoter can be added.',
       'INVALID_STATE',
       422
     );
   }
+
+  const earningSource = normalizeReferralEarningSource(
+    input.compensation.earningSource ?? { type: earningSourceType },
+    serviceIds
+  );
 
   const duplicate = scoped.snapshot.participants.find((item) =>
     isCompensatedPromoterEmailMatch(item, input.email, Boolean(compensationKindOf(item)))
@@ -186,8 +214,8 @@ export async function addReferralManagementPromoter(input: {
 
   const base = buildOnboardingParticipant({
     name: input.name.trim(),
-    email: input.email.trim(),
-    role: mapRole(input.role),
+    email: input.email?.trim() || '',
+    role: mapRole(input.role, input.roleLabel),
     deal,
   });
   const isFixed = input.compensation.kind === 'fixed';
@@ -202,7 +230,7 @@ export async function addReferralManagementPromoter(input: {
       ? undefined
       : normalizeReferralCommerce({
           ...defaultReferralCommerce(),
-          createReferralLink: true,
+          createReferralLink: !isExternal,
           commissionMode: 'project_revenue_share',
           commerceCommissionPct: input.compensation.percentage,
           enabledServiceIds: serviceIds,
@@ -215,15 +243,22 @@ export async function addReferralManagementPromoter(input: {
     dealId: deal.id,
     inviteToken: uuidv4(),
     companyName: input.name.trim(),
+    phone: input.phone?.trim() || undefined,
+    roleLabel: input.roleLabel?.trim() || input.role,
     participantNotes: input.phone?.trim() ? `Phone: ${input.phone.trim()}` : base.participantNotes,
     participationModel,
     commissionKind: isFixed ? 'fixed_amount' : 'pct_deal_value',
     commissionValue,
+    earningSource,
+    audienceDiscountPct:
+      typeof earningSource.metadata?.audienceDiscountPct === 'number'
+        ? earningSource.metadata.audienceDiscountPct
+        : undefined,
     compensationProfile: compensationProfile
       ? {
           ...compensationProfile,
-          commissionServiceIds: serviceIds,
-          commissionSourceMode: 'selected',
+          commissionServiceIds: isExternal ? [] : serviceIds,
+          commissionSourceMode: isExternal ? undefined : 'selected',
           customerAttributionEnabled: !isFixed,
         }
       : {
@@ -232,8 +267,8 @@ export async function addReferralManagementPromoter(input: {
           fixedAmount: isFixed ? input.compensation.amount : undefined,
           configured: true,
           configuredAt: new Date().toISOString(),
-          commissionServiceIds: serviceIds,
-          commissionSourceMode: 'selected',
+          commissionServiceIds: isExternal ? [] : serviceIds,
+          commissionSourceMode: isExternal ? undefined : 'selected',
           customerAttributionEnabled: !isFixed,
           revenueSources: [],
         },
@@ -241,7 +276,7 @@ export async function addReferralManagementPromoter(input: {
       ? undefined
       : normalizeReferralCommerce({
           ...defaultReferralCommerce(),
-          createReferralLink: true,
+          createReferralLink: !isExternal,
           commissionMode: 'project_revenue_share',
           commerceCommissionPct: input.compensation.percentage,
           enabledServiceIds: serviceIds,

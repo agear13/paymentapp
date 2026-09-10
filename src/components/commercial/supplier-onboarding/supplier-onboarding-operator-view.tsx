@@ -49,6 +49,18 @@ import type {
 import type { CommercialReviewSummary, ReviewCheck, ReviewCheckStatus } from '@/lib/commercial/supplier-onboarding-domain';
 import type { PaymentAttachment } from '@/lib/commercial/payment-setup-types';
 import { getSupplierGstTaxTreatment } from '@/lib/commercial/supplier-invoice-projection';
+import {
+  opChipInfo,
+  opChipSuccess,
+  opChipWarning,
+  opSurfaceAction,
+  opSurfaceCritical,
+  opSurfaceSuccess,
+  opToneDanger,
+  opToneSuccess,
+  opToneWarning,
+} from '@/lib/design/operational-surfaces';
+import { cn } from '@/lib/utils';
 
 /* ─── Utilities ─────────────────────────────────────────────────────────── */
 function fmt(amount: number, currency = 'AUD'): string {
@@ -92,11 +104,12 @@ function ReviewCheckRow({ check }: { check: ReviewCheck }) {
     <div className="flex items-start gap-2.5 py-1.5">
       <div className="mt-0.5">{reviewCheckIcon(check.status)}</div>
       <div className="flex-1 min-w-0">
-        <p className={`text-sm ${
-          check.status === 'fail' ? 'text-red-700 font-medium' :
-          check.status === 'warn' ? 'text-amber-700' :
+        <p className={cn(
+          'text-sm',
+          check.status === 'fail' ? `${opToneDanger} font-medium` :
+          check.status === 'warn' ? opToneWarning :
           'text-foreground'
-        }`}>{check.label}</p>
+        )}>{check.label}</p>
         {check.detail && (
           <p className="text-xs text-muted-foreground mt-0.5">{check.detail}</p>
         )}
@@ -110,10 +123,10 @@ function CommercialReviewSummaryPanel({ summary }: { summary: CommercialReviewSu
   const [expanded, setExpanded] = React.useState(true);
 
   const headerColor = summary.hasBlockers
-    ? 'border-red-200 bg-red-50'
+    ? opSurfaceCritical
     : summary.hasWarnings
-    ? 'border-amber-100 bg-amber-50/40'
-    : 'border-green-200 bg-green-50/40';
+    ? opSurfaceAction
+    : opSurfaceSuccess;
 
   const headerLabel = summary.hasBlockers
     ? 'Review has blockers — cannot approve'
@@ -128,7 +141,7 @@ function CommercialReviewSummaryPanel({ summary }: { summary: CommercialReviewSu
     : <CheckCircle2 className="h-4 w-4 text-green-600" />;
 
   return (
-    <div className={`rounded-lg border overflow-hidden ${headerColor}`}>
+    <div className={cn('overflow-hidden', headerColor)}>
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
@@ -337,15 +350,16 @@ export function SupplierOnboardingOperatorView({
           </div>
           <div>
             <span
-              className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium',
                 status.stage === 'xero_exported'
-                  ? 'bg-green-50 text-green-700 border-green-200'
+                  ? opChipSuccess
                   : status.stage === 'operator_approved'
-                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                  ? opChipInfo
                   : status.stage === 'submitted'
-                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  ? opChipWarning
                   : 'bg-muted text-muted-foreground border-border'
-              }`}
+              )}
             >
               {status.stageLabel}
             </span>
@@ -376,9 +390,9 @@ export function SupplierOnboardingOperatorView({
           <div>
             <p className="text-xs text-muted-foreground">ABN</p>
             {abnValidation.isNotApplicable ? (
-              <p className="text-sm text-amber-700">Not applicable — review required</p>
+              <p className={cn('text-sm', opToneWarning)}>Not applicable — review required</p>
             ) : abnValidation.isValid ? (
-              <p className="text-sm text-green-700 font-medium">{abnValidation.formattedABN}</p>
+              <p className={cn('text-sm font-medium', opToneSuccess)}>{abnValidation.formattedABN}</p>
             ) : (
               <p className="text-sm text-muted-foreground">Not provided</p>
             )}
@@ -461,15 +475,16 @@ export function SupplierOnboardingOperatorView({
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium">{item.label}</p>
                     <span
-                      className={`text-xs ${
+                      className={cn(
+                        'text-xs',
                         item.status === 'complete'
-                          ? 'text-green-700'
+                          ? opToneSuccess
                           : item.status === 'requires_review'
-                          ? 'text-amber-700'
+                          ? opToneWarning
                           : item.status === 'in_progress'
-                          ? 'text-amber-600'
+                          ? 'text-amber-600 dark:text-amber-400'
                           : 'text-muted-foreground'
-                      }`}
+                      )}
                     >
                       {statusLabel(item.status)}
                     </span>
@@ -485,10 +500,10 @@ export function SupplierOnboardingOperatorView({
 
         {/* Manual review notice */}
         {requiresManualReview && (
-          <div className="px-4 py-3 border-b bg-amber-50">
+          <div className="px-4 py-3 border-b border-amber-500/25 bg-amber-500/[0.06]">
             <div className="flex items-start gap-2">
-              <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-              <p className="text-sm text-amber-700">
+              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <p className={cn('text-sm', opToneWarning)}>
                 Manual review required before accounting export. Verify ABN exemption and/or payment method.
               </p>
             </div>
@@ -498,13 +513,13 @@ export function SupplierOnboardingOperatorView({
         {/* Primary CTAs */}
         <div className="p-4">
           {status.stage === 'xero_exported' ? (
-            <div className="flex items-center gap-2 text-green-700">
+            <div className={cn('flex items-center gap-2', opToneSuccess)}>
               <CheckCircle2 className="h-4 w-4" />
               <span className="text-sm font-medium">Invoice exported to Xero</span>
             </div>
           ) : status.stage === 'operator_approved' ? (
             <div className="space-y-2">
-              <div className="flex items-center gap-2 text-blue-700 mb-2">
+              <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400 mb-2">
                 <CheckCircle2 className="h-4 w-4" />
               <span className="text-sm font-medium">Supplier details verified</span>
               </div>
@@ -528,7 +543,11 @@ export function SupplierOnboardingOperatorView({
                   type="button"
                   onClick={() => setFeedbackMode('request_changes')}
                   disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-2 rounded-md border border-amber-200 text-amber-800 bg-amber-50 py-2.5 text-sm font-medium hover:bg-amber-100 disabled:opacity-50 transition-colors"
+                  className={cn(
+                    'w-full flex items-center justify-center gap-2 rounded-md border py-2.5 text-sm font-medium disabled:opacity-50 transition-colors',
+                    'border-amber-500/25 bg-amber-500/[0.06] hover:bg-amber-500/10',
+                    opToneWarning
+                  )}
                 >
                   Request changes
                 </button>
@@ -538,14 +557,18 @@ export function SupplierOnboardingOperatorView({
                   type="button"
                   onClick={() => setFeedbackMode('reject')}
                   disabled={isLoading}
-                  className="w-full flex items-center justify-center gap-2 rounded-md border border-red-200 text-red-700 bg-red-50 py-2.5 text-sm font-medium hover:bg-red-100 disabled:opacity-50 transition-colors"
+                  className={cn(
+                    'w-full flex items-center justify-center gap-2 rounded-md border py-2.5 text-sm font-medium disabled:opacity-50 transition-colors',
+                    'border-red-500/20 bg-red-500/[0.06] hover:bg-red-500/10',
+                    opToneDanger
+                  )}
                 >
                   <XCircle className="h-4 w-4" />
                   Reject
                 </button>
               )}
               {reviewSummary?.hasBlockers && (
-                <p className="text-xs text-red-600 text-center">
+                <p className="text-xs text-red-600 dark:text-red-400 text-center">
                   Resolve checklist blockers before verifying payout details.
                 </p>
               )}
@@ -631,7 +654,7 @@ export function SupplierOnboardingDashboardWidget({
       )}
 
       {allComplete && (
-        <div className="p-4 flex items-center gap-2 text-green-700">
+        <div className={cn('p-4 flex items-center gap-2', opToneSuccess)}>
           <CheckCircle2 className="h-4 w-4" />
           <p className="text-sm font-medium">All suppliers are ready for payment.</p>
         </div>

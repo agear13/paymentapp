@@ -20,6 +20,9 @@ import { TurnstileWidget } from '@/components/auth/turnstile-widget';
 import { MIN_PASSWORD_LENGTH } from '@/lib/auth/password-policy';
 import { DISPOSABLE_EMAIL_MESSAGE, isDisposableEmail } from '@/lib/auth/disposable-email';
 import { resolvePostLoginDestination } from '@/lib/journey/commercial-os-routes';
+import { SignupCheckEmail } from '@/components/auth/signup-check-email';
+import { VERIFICATION_RESEND_COOLDOWN_SECONDS } from '@/lib/auth/email-verification';
+import { opSurfaceCritical, opSurfaceInfo, opToneDanger, opToneInfo } from '@/lib/design/operational-surfaces';
 
 type AuthMode = 'signin' | 'signup';
 
@@ -52,6 +55,7 @@ export function LoginPageClient() {
   const [turnstileRequired, setTurnstileRequired] = useState(false);
   const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [awaitingVerification, setAwaitingVerification] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
@@ -118,8 +122,9 @@ export function LoginPageClient() {
           setTurnstileRequired(true);
         }
         if (data.code === 'EMAIL_NOT_VERIFIED') {
-          setNotice('Please verify your email address before signing in.');
-          setMode('signin');
+          setAwaitingVerification(true);
+          setError(null);
+          setNotice(null);
           return;
         }
         void emitAuthAuditEvent({
@@ -205,8 +210,9 @@ export function LoginPageClient() {
       }
 
       if (data.requiresVerification) {
-        setNotice(data.message ?? 'Check your email to confirm your account, then sign in.');
-        setMode('signin');
+        setAwaitingVerification(true);
+        setError(null);
+        setNotice(null);
         return;
       }
 
@@ -273,6 +279,19 @@ export function LoginPageClient() {
           </div>
 
           <div className="surface-elevated p-8 sm:p-10 space-y-8">
+            {awaitingVerification ? (
+              <SignupCheckEmail
+                email={email}
+                initialCooldownSeconds={VERIFICATION_RESEND_COOLDOWN_SECONDS}
+                onUseDifferentEmail={() => {
+                  setAwaitingVerification(false);
+                  setNotice(null);
+                  setError(null);
+                  setMode('signup');
+                }}
+              />
+            ) : (
+              <>
             <div className="space-y-2">
               <h2 className="text-3xl font-semibold tracking-tight">
                 {mode === 'signin' ? 'Sign in' : 'Create account'}
@@ -351,7 +370,7 @@ export function LoginPageClient() {
               ) : null}
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start gap-3">
+                <div className={`${opSurfaceCritical} px-4 py-3 text-sm ${opToneDanger} flex items-start gap-3`}>
                   <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                     <path
                       fillRule="evenodd"
@@ -415,13 +434,15 @@ export function LoginPageClient() {
             </div>
 
             {process.env.NODE_ENV === 'development' && (
-              <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg text-xs text-center">
+              <div className={`${opSurfaceInfo} px-4 py-3 text-xs text-center ${opToneInfo}`}>
                 <strong className="font-semibold">Development Mode:</strong> Create an account or sign in with your
                 credentials
               </div>
             )}
 
             <AuthMobileLegalLinks />
+              </>
+            )}
           </div>
         </div>
       </div>

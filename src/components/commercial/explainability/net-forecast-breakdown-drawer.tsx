@@ -27,6 +27,7 @@ import {
   BreakdownItemRow,
   BreakdownEmptyState,
 } from './breakdown-item-row';
+import { opSurfaceCritical, opSurfaceSuccess, opToneDanger, opToneSuccess } from '@/lib/design/operational-surfaces';
 
 export type NetForecastBreakdownDrawerProps = {
   open: boolean;
@@ -75,23 +76,23 @@ export function NetForecastBreakdownDrawer({
         {/* Calculation summary */}
         <div className="mb-6 space-y-2">
           {/* Revenue row */}
-          <div className="flex items-center justify-between rounded-lg border bg-green-50 px-4 py-3">
+          <div className={cn(opSurfaceSuccess, 'flex items-center justify-between px-4 py-3')}>
             <div className="flex items-center gap-2">
-              <ArrowUp className="h-4 w-4 text-green-600" />
-              <span className="text-sm font-medium text-green-800">Revenue</span>
+              <ArrowUp className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <span className={cn('text-sm font-medium', opToneSuccess)}>Revenue</span>
             </div>
-            <span className="text-sm font-bold tabular-nums text-green-700">
+            <span className={cn('text-sm font-bold tabular-nums', opToneSuccess)}>
               {formatForecastAmount(breakdown.revenue.total, breakdown.currency)}
             </span>
           </div>
 
           {/* Obligations row */}
-          <div className="flex items-center justify-between rounded-lg border bg-red-50 px-4 py-3">
+          <div className={cn(opSurfaceCritical, 'flex items-center justify-between px-4 py-3')}>
             <div className="flex items-center gap-2">
-              <ArrowDown className="h-4 w-4 text-red-500" />
-              <span className="text-sm font-medium text-red-800">Committed Costs</span>
+              <ArrowDown className="h-4 w-4 text-red-500 dark:text-red-400" />
+              <span className={cn('text-sm font-medium', opToneDanger)}>Committed Costs</span>
             </div>
-            <span className="text-sm font-bold tabular-nums text-red-600">
+            <span className={cn('text-sm font-bold tabular-nums', opToneDanger)}>
               − {formatForecastAmount(breakdown.obligations.total, breakdown.currency)}
             </span>
           </div>

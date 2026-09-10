@@ -170,7 +170,7 @@ export function BusinessPulse({
 }: BusinessPulseProps) {
   if (loading) {
     return (
-      <div className="rounded-xl border border-border/60 bg-white/70 px-5 py-4 animate-pulse">
+      <div className="rounded-xl border border-border/60 bg-card/70 px-5 py-4 animate-pulse">
         <div className="flex items-center gap-2 mb-3">
           <div className="h-3 w-3 rounded-full bg-muted" />
           <div className="h-3 w-24 bg-muted rounded" />
@@ -206,7 +206,7 @@ export function BusinessPulse({
   return (
     <div
       className={cn(
-        'rounded-xl border bg-white/70 px-5 py-4 space-y-2.5',
+        'rounded-xl border bg-card/70 px-5 py-4 space-y-2.5',
         borderColor
       )}
     >

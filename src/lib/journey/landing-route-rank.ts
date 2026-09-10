@@ -2,8 +2,11 @@ import { isDomestic, type LandingPriorityId, type LandingRouteId, type LandingSe
 
 /**
  * Illustrative scores for typical route characteristics — not live quotes,
- * availability, or a specific business's rates. Replace or enrich later with
- * corridor, pricing, rail and connected-context intelligence.
+ * availability, or a specific business's rates.
+ *
+ * Canonical ranking engine for public comparison. Future corridor / pricing /
+ * rail evidence arrives via getPublicRouteIntelligenceSnapshot(); do not add a
+ * second ranker. Scoring tables stay until a later phase changes them deliberately.
  */
 const PRIORITY_SCORES: Record<LandingPriorityId, Record<LandingRouteId, number>> = {
   lowest_cost: {
@@ -95,7 +98,7 @@ function scoreRoute(id: LandingRouteId, query: LandingSearchQuery): number {
   return Math.max(0, Math.min(100, base + adjustment));
 }
 
-/** Deterministic ranking used by the public comparison. Extension point for later live intelligence. */
+/** Deterministic ranking used by the public comparison. The only route-ranking engine. */
 export function rankLandingRoutes(
   query: LandingSearchQuery
 ): { id: LandingRouteId; score: number }[] {

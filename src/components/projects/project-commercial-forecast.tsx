@@ -54,6 +54,19 @@ import type { ProjectFundingSourceDto } from '@/lib/projects/funding-sources/typ
 import type { BriefingObligationRowInput } from '@/lib/agreements/agreement-briefing.model';
 import type { ProjectTreasurySummary } from '@/lib/projects/funding-sources/types';
 import { cn } from '@/lib/utils';
+import {
+  opChipDanger,
+  opChipNeutral,
+  opChipSuccess,
+  opChipWarning,
+  opSurfaceAction,
+  opSurfaceCritical,
+  opSurfaceInfo,
+  opSurfaceSuccess,
+  opToneDanger,
+  opToneSuccess,
+  opToneWarning,
+} from '@/lib/design/operational-surfaces';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
@@ -268,8 +281,8 @@ function CashReadinessCard({
       className={cn(
         'rounded-xl border p-6 space-y-3',
         canEveryoneBePaid
-          ? 'border-green-200 bg-green-50/40'
-          : 'border-red-200 bg-red-50/40'
+          ? opSurfaceSuccess
+          : opSurfaceCritical
       )}
     >
       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -285,8 +298,8 @@ function CashReadinessCard({
               className={cn(
                 'rounded-full p-1.5',
                 canEveryoneBePaid
-                  ? 'bg-green-100 text-green-700'
-                  : 'bg-red-100 text-red-700'
+                  ? `bg-green-500/[0.10] ${opToneSuccess}`
+                  : `bg-red-500/[0.10] ${opToneDanger}`
               )}
             >
               {canEveryoneBePaid ? (
@@ -303,7 +316,7 @@ function CashReadinessCard({
           {canEveryoneBePaid && cashReadiness.expectedBalanceAfterSettlement != null && (
             <div className="space-y-0.5">
               <p className="text-xs text-muted-foreground">Expected balance after settlement</p>
-              <p className="text-lg font-semibold text-green-700">
+              <p className={cn('text-lg font-semibold', opToneSuccess)}>
                 {formatForecastBalance(cashReadiness.expectedBalanceAfterSettlement, currency)}
               </p>
             </div>
@@ -312,7 +325,7 @@ function CashReadinessCard({
           {!canEveryoneBePaid && cashReadiness.forecastShortfall != null && (
             <div className="space-y-0.5">
               <p className="text-xs text-muted-foreground">Forecast shortfall</p>
-              <p className="text-lg font-semibold text-red-600">
+              <p className={cn('text-lg font-semibold', opToneDanger)}>
                 -{formatForecastAmount(cashReadiness.forecastShortfall, currency)}
               </p>
             </div>
@@ -387,12 +400,12 @@ function RevenueSourceCard({
 
   const statusColour =
     item.status === 'confirmed'
-      ? 'bg-green-50 text-green-700 border-green-200'
+      ? opChipSuccess
       : item.status === 'overdue'
-        ? 'bg-red-50 text-red-700 border-red-200'
+        ? opChipDanger
         : item.status === 'forecast'
-          ? 'bg-slate-50 text-slate-600 border-slate-200'
-          : 'bg-amber-50 text-amber-700 border-amber-200';
+          ? opChipNeutral
+          : opChipWarning;
 
   return (
     <div className="rounded-lg border border-border/60 bg-card px-4 py-3 space-y-2">
@@ -509,7 +522,7 @@ function MoneyGoingOutSection({
               subtitle="Amounts that must be paid regardless of revenue"
               commitments={fixedCommitments}
               currency={currency}
-              accentClass="bg-slate-50 border-slate-200"
+              accentClass="bg-muted/30 border-border"
             />
           )}
 
@@ -520,7 +533,7 @@ function MoneyGoingOutSection({
               subtitle="Payments calculated as a percentage of revenue"
               commitments={revenueShareCommitments}
               currency={currency}
-              accentClass="bg-blue-50/40 border-blue-200/60"
+              accentClass={opSurfaceInfo}
             />
           )}
 
@@ -531,7 +544,7 @@ function MoneyGoingOutSection({
               subtitle="Only triggered if specific conditions are met"
               commitments={conditionalCommitments}
               currency={currency}
-              accentClass="bg-amber-50/40 border-amber-200/60"
+              accentClass={opSurfaceAction}
             />
           )}
         </div>
@@ -618,13 +631,13 @@ function CommercialRiskCard({ risk }: { risk: CommercialRisk }) {
 
   const severityClass =
     risk.severity === 'high'
-      ? 'border-red-200 bg-red-50/30'
+      ? opSurfaceCritical
       : risk.severity === 'medium'
-        ? 'border-amber-200 bg-amber-50/20'
+        ? opSurfaceAction
         : 'border-border/60 bg-card';
 
   const iconClass =
-    risk.severity === 'high' ? 'text-red-600' : risk.severity === 'medium' ? 'text-amber-600' : 'text-muted-foreground';
+    risk.severity === 'high' ? opToneDanger : risk.severity === 'medium' ? opToneWarning : 'text-muted-foreground';
 
   return (
     <div className={cn('rounded-lg border px-4 py-3 space-y-2', severityClass)}>
@@ -784,9 +797,9 @@ function AdvancedForecastDetails({
                 variant="outline"
                 className={cn(
                   'text-xs',
-                  forecast.overallConfidence.level === 'HIGH' && 'bg-green-50 text-green-700 border-green-200',
-                  forecast.overallConfidence.level === 'MEDIUM' && 'bg-amber-50 text-amber-700 border-amber-200',
-                  forecast.overallConfidence.level === 'LOW' && 'bg-red-50 text-red-700 border-red-200'
+                  forecast.overallConfidence.level === 'HIGH' && opChipSuccess,
+                  forecast.overallConfidence.level === 'MEDIUM' && opChipWarning,
+                  forecast.overallConfidence.level === 'LOW' && opChipDanger
                 )}
               >
                 {forecast.overallConfidence.level} — {forecast.overallConfidence.score}%

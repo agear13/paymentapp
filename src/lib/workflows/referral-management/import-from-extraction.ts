@@ -14,6 +14,17 @@ import type {
   WorkflowCoordinationReferralStatus,
 } from '@/lib/workflows/agreement-intelligence/types';
 import type { ReferralCompensationInput, ReferralPromoterRole } from '@/lib/workflows/referral-management/constants';
+import {
+  earningSourceTypeOf,
+  formatEarningSourceDestination,
+  inferAudienceDiscountPctFromText,
+  inferReferralEarningSource,
+  isReferralEarningSourceType,
+  parseAttributionMethod,
+  validateExternalEarningSource,
+  type ReferralAttributionMethod,
+  type ReferralEarningSourceType,
+} from '@/lib/workflows/referral-management/earning-source';
 
 export type ReferralCatalogItem = { id: string; name: string };
 
@@ -36,6 +47,13 @@ export type ReferralImportCandidate = {
   serviceMatch: ReferralServiceMatch;
   serviceSuggestions: ReferralCatalogItem[];
   commissionLabel: string;
+  earningSourceType?: ReferralEarningSourceType;
+  externalProvider?: string;
+  externalService?: string;
+  attributionMethod?: ReferralAttributionMethod | null;
+  integration?: string;
+  /** Evidenced audience discount only — never invented. */
+  audienceDiscountPct?: number | null;
 };
 
 export type ReferralImportExcludedParty = {
@@ -139,11 +157,25 @@ export function buildReferralExtractionSuccessSummary(input: {
     ? input.catalog.find((item) => item.id === input.candidate.serviceId)?.name?.trim()
     : null;
   const extractedLabel = input.candidate.extractedServiceLabel?.trim() || null;
-  const eligibleServices = catalogName
-    ? [catalogName]
-    : extractedLabel
-      ? [extractedLabel]
-      : [];
+  const externalDestination = formatEarningSourceDestination({
+    type: earningSourceTypeOf({ type: input.candidate.earningSourceType }),
+    externalProvider: input.candidate.externalProvider,
+    externalService: input.candidate.externalService,
+    metadata: {
+      providerLabel: input.candidate.externalProvider || undefined,
+      serviceLabel: input.candidate.externalService || undefined,
+    },
+  });
+  const eligibleServices =
+    candidateEarningSourceType(input.candidate) === 'external'
+      ? externalDestination
+        ? [externalDestination]
+        : []
+      : catalogName
+        ? [catalogName]
+        : extractedLabel
+          ? [extractedLabel]
+          : [];
   const participantName = input.candidate.name.trim() || 'Participant';
   const coordination = input.coordination ?? {
     nextActionKind: 'request_approval',
@@ -218,7 +250,9 @@ export function isReferralRelationshipParty(party: ExtractedParty): boolean {
 
 export function mapExtractedRole(role: string | null | undefined): ReferralPromoterRole {
   const value = (role ?? '').toLowerCase();
-  if (value.includes('affiliate')) return 'Affiliate';
+  if (value.includes('affiliate') || value.includes('community organiser') || value.includes('community organizer')) {
+    return 'Affiliate';
+  }
   if (value.includes('partner')) return 'Partner';
   if (value.includes('promoter') || value.includes('referr')) return 'Promoter';
   return 'Other';
@@ -230,6 +264,44 @@ function extractedServiceLabel(party: ExtractedParty, projectName: string | null
   const legacy = party.deliverablesLegacy?.value?.find((item) => item.trim())?.trim();
   if (legacy) return legacy;
   return projectName?.trim() || null;
+}
+
+function partyEvidenceText(party: ExtractedParty, extraction: ExtractionResult): string {
+  const parts: string[] = [
+    extraction.projectName.value,
+    extraction.projectDescription.value,
+    extraction.counterparty.value,
+    party.role.value,
+    party.notes.value,
+    ...(party.deliverables ?? []).map((item) => item.description.value),
+    ...(party.deliverablesLegacy?.value ?? []),
+    ...(party.compensationTerms ?? []).flatMap((term) => [
+      term.label.value,
+      term.trigger.value,
+      term.revenueBasis.value,
+    ]),
+    ...(party.operationalObligations ?? []).map((item) => item.description.value),
+    ...(extraction.settlementRules ?? []).flatMap((rule) => [rule.trigger.value, rule.basis.value]),
+  ];
+  return parts.filter((value): value is string => Boolean(value?.trim())).join('\n');
+}
+
+function extractedEarningSourceFromParty(party: ExtractedParty) {
+  const raw = party.referralEarningSource;
+  if (!raw) return null;
+  const typeValue = raw.type.value;
+  return {
+    type: isReferralEarningSourceType(typeValue) ? typeValue : null,
+    externalPlatform: raw.externalPlatform.value?.trim() || null,
+    externalService: raw.externalService.value?.trim() || null,
+    attributionMethod: parseAttributionMethod(raw.attributionMethod.value),
+  };
+}
+
+export function candidateEarningSourceType(
+  candidate: Pick<ReferralImportCandidate, 'earningSourceType'>
+): ReferralEarningSourceType {
+  return earningSourceTypeOf({ type: candidate.earningSourceType });
 }
 
 function compensationFromParty(
@@ -279,6 +351,7 @@ export function mapExtractionToReferralPreview(input: {
   extraction: ExtractionResult;
   catalog: ReferralCatalogItem[];
   sourceLabel: string;
+  sourceText?: string | null;
 }): ReferralImportPreview {
   const projectName = input.extraction.projectName.value?.trim() || null;
   const currency = (input.extraction.currency.value || 'AUD').toUpperCase().slice(0, 3);
@@ -299,7 +372,18 @@ export function mapExtractionToReferralPreview(input: {
     }
 
     const serviceLabel = extractedServiceLabel(party, projectName);
-    const matched = matchOrganizationService(input.catalog, serviceLabel);
+    const evidenceText = [input.sourceText, partyEvidenceText(party, input.extraction)]
+      .filter((value): value is string => Boolean(value?.trim()))
+      .join('\n');
+    const inferred = inferReferralEarningSource({
+      evidenceText,
+      extracted: extractedEarningSourceFromParty(party),
+    });
+    const audienceDiscountPct = inferAudienceDiscountPctFromText(evidenceText);
+    const isExternal = inferred.type === 'external';
+    const matched = isExternal
+      ? { serviceId: null, serviceMatch: 'none' as const, serviceSuggestions: [] }
+      : matchOrganizationService(input.catalog, serviceLabel);
     const compensation = compensationFromParty(party, currency || 'AUD');
 
     candidates.push({
@@ -316,6 +400,12 @@ export function mapExtractionToReferralPreview(input: {
       serviceMatch: matched.serviceMatch,
       serviceSuggestions: matched.serviceSuggestions,
       commissionLabel: compensation.commissionLabel,
+      earningSourceType: inferred.type,
+      externalProvider: inferred.externalProviderLabel ?? inferred.externalProvider ?? '',
+      externalService: inferred.externalService ?? '',
+      attributionMethod: inferred.attributionMethod,
+      integration: '',
+      audienceDiscountPct,
     });
   }
 
@@ -336,13 +426,27 @@ export function candidateToPromoterInput(candidate: ReferralImportCandidate): {
   email: string;
   phone?: string;
   role: ReferralPromoterRole;
+  roleLabel?: string;
   compensation: ReferralCompensationInput;
 } | { error: string } {
   const name = candidate.name.trim();
   const email = candidate.email.trim();
   if (!name) return { error: 'Promoter name is required.' };
-  if (!email) return { error: 'Email is required before this referral relationship can be created.' };
-  if (!candidate.serviceId) {
+
+  const earningSourceType = candidateEarningSourceType(candidate);
+  const earningSource = {
+    type: earningSourceType,
+    externalProvider: candidate.externalProvider?.trim() || null,
+    externalService: candidate.externalService?.trim() || null,
+    attributionMethod: candidate.attributionMethod ?? null,
+    integration: candidate.integration?.trim() || null,
+    audienceDiscountPct: candidate.audienceDiscountPct ?? null,
+  };
+
+  if (earningSourceType === 'external') {
+    const externalError = validateExternalEarningSource(earningSource);
+    if (externalError) return { error: externalError };
+  } else if (!candidate.serviceId) {
     return { error: 'Select an existing catalogue service. A service will not be invented.' };
   }
 
@@ -356,7 +460,13 @@ export function candidateToPromoterInput(candidate: ReferralImportCandidate): {
       email,
       phone: candidate.phone.trim() || undefined,
       role: candidate.role,
-      compensation: { kind: 'revenue_share', percentage, serviceId: candidate.serviceId },
+      roleLabel: candidate.extractedRole.trim() || undefined,
+      compensation: {
+        kind: 'revenue_share',
+        percentage,
+        ...(earningSourceType === 'internal_service' ? { serviceId: candidate.serviceId! } : {}),
+        earningSource,
+      },
     };
   }
 
@@ -369,11 +479,13 @@ export function candidateToPromoterInput(candidate: ReferralImportCandidate): {
     email,
     phone: candidate.phone.trim() || undefined,
     role: candidate.role,
+    roleLabel: candidate.extractedRole.trim() || undefined,
     compensation: {
       kind: 'fixed',
       amount,
       currency: candidate.currency || 'AUD',
-      serviceId: candidate.serviceId,
+      ...(earningSourceType === 'internal_service' ? { serviceId: candidate.serviceId! } : {}),
+      earningSource,
     },
   };
 }
@@ -415,11 +527,12 @@ export function canPersistReferralPreview(
 
 export async function persistSelectedReferralCandidates(input: {
   preview: ReferralImportPreview;
-  persist: (body: {
+    persist: (body: {
     name: string;
-    email: string;
+    email?: string;
     phone?: string;
     role: ReferralPromoterRole;
+    roleLabel?: string;
     compensation: ReferralCompensationInput;
     reuseExisting: true;
   }) => Promise<{

@@ -9,6 +9,19 @@ import {
   ReferralManagementError,
 } from '@/lib/workflows/referral-management/promoter.server';
 
+const earningSourceSchema = z.object({
+  type: z.enum(['internal_service', 'external']).optional(),
+  externalProvider: z.string().trim().max(80).nullable().optional(),
+  externalService: z.string().trim().max(120).nullable().optional(),
+  attributionMethod: z
+    .enum(['discount_code', 'referral_link', 'promo_code', 'other'])
+    .nullable()
+    .optional(),
+  externalIdentifier: z.string().trim().max(120).nullable().optional(),
+  integration: z.string().trim().max(120).nullable().optional(),
+  audienceDiscountPct: z.number().gt(0).lte(100).nullable().optional(),
+});
+
 const compensationSchema = z
   .discriminatedUnion('kind', [
     z.object({
@@ -16,6 +29,7 @@ const compensationSchema = z
       percentage: z.number().gt(0).lte(100),
       serviceId: z.string().uuid().optional(),
       serviceIds: z.array(z.string().uuid()).min(1).optional(),
+      earningSource: earningSourceSchema.optional(),
     }),
     z.object({
       kind: z.literal('fixed'),
@@ -23,17 +37,35 @@ const compensationSchema = z
       currency: z.string().length(3),
       serviceId: z.string().uuid().optional(),
       serviceIds: z.array(z.string().uuid()).min(1).optional(),
+      earningSource: earningSourceSchema.optional(),
     }),
   ])
-  .refine((value) => Boolean(value.serviceId) || (value.serviceIds?.length ?? 0) > 0, {
-    message: 'Select at least one service',
+  .superRefine((value, ctx) => {
+    if (value.earningSource?.type === 'external') {
+      if (!value.earningSource.externalProvider?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Enter the external platform this affiliate earns on.',
+          path: ['earningSource', 'externalProvider'],
+        });
+      }
+      return;
+    }
+    if (!value.serviceId && (value.serviceIds?.length ?? 0) === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Select at least one service',
+        path: ['serviceId'],
+      });
+    }
   });
 
 const bodySchema = z.object({
   name: z.string().trim().min(1).max(120),
-  email: z.string().trim().email(),
+  email: z.union([z.string().trim().email(), z.literal('')]).optional(),
   phone: z.string().trim().max(40).optional(),
   role: z.enum(['Promoter', 'Affiliate', 'Partner', 'Other']),
+  roleLabel: z.string().trim().max(80).optional(),
   compensation: compensationSchema,
   reuseExisting: z.boolean().optional(),
 });

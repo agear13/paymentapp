@@ -131,7 +131,7 @@ export function BusinessInsightPanel({ actions, snapshots }: BusinessInsightPane
         Business Assistant
       </p>
 
-      <div className="rounded-xl border border-[rgba(124,92,255,0.2)] bg-gradient-to-br from-[rgba(124,92,255,0.06)] via-white to-[rgba(124,92,255,0.02)] p-5 space-y-4">
+      <div className="rounded-xl border border-[rgba(124,92,255,0.2)] bg-gradient-to-br from-[rgba(124,92,255,0.06)] via-card to-[rgba(124,92,255,0.02)] p-5 space-y-4">
 
         {/* Recommendation headline */}
         <div className="space-y-0.5">

@@ -11,6 +11,8 @@ export type ParticipantAgreementInviteEmailParams = {
   operatorName: string;
   projectName: string;
   workspaceUrl: string;
+  logoUrl?: string | null;
+  agreementTitle?: string | null;
 };
 
 export function buildParticipantAgreementInviteEmail(
@@ -20,12 +22,18 @@ export function buildParticipantAgreementInviteEmail(
   const operatorName = params.operatorName.trim() || 'Your organiser';
   const projectName = params.projectName.trim() || 'Referral Management';
   const workspaceUrl = params.workspaceUrl.trim();
+  const agreementTitle = params.agreementTitle?.trim() || projectName;
 
-  const subject = `Please review and approve your agreement for ${projectName}`;
+  const subject = `Please review and approve your agreement for ${agreementTitle}`;
   const htmlName = escapeHtml(participantName);
   const htmlOperator = escapeHtml(operatorName);
   const htmlProject = escapeHtml(projectName);
+  const htmlTitle = escapeHtml(agreementTitle);
   const htmlUrl = escapeHtml(workspaceUrl);
+  const logo =
+    params.logoUrl && /^https?:\/\//i.test(params.logoUrl)
+      ? `<p style="margin:0 0 16px 0"><img src="${escapeHtml(params.logoUrl)}" alt="${htmlOperator} logo" style="max-height:56px;max-width:220px;width:auto;height:auto;display:block;object-fit:contain"/></p>`
+      : '';
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -36,7 +44,8 @@ export function buildParticipantAgreementInviteEmail(
 </head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;margin:0;padding:24px;">
   <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:32px;">
-    <p style="font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin:0 0 12px;">Referral Management</p>
+    ${logo}
+    <p style="font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin:0 0 12px;">${htmlTitle}</p>
     <h1 style="font-size:20px;color:#0f172a;margin:0 0 12px;">Hi ${htmlName}, please review your agreement</h1>
     <p style="font-size:15px;color:#475569;line-height:1.6;">
       ${htmlOperator} invited you to participate in <strong>${htmlProject}</strong>.

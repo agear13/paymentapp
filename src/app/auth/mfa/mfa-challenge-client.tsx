@@ -13,6 +13,7 @@ import {
   resolvePostLoginDestination,
 } from '@/lib/journey/commercial-os-routes';
 import { MFA_ENROLL_PATH, MFA_STEP_UP_MESSAGES, type MfaStepUpCode } from '@/lib/auth/mfa-assurance';
+import { opSurfaceAction, opSurfaceCritical, opToneDanger, opToneWarning } from '@/lib/design/operational-surfaces';
 
 type Factor = { id: string; status: string; friendlyName: string | null };
 
@@ -141,7 +142,7 @@ export function MfaChallengeClient() {
         </div>
 
         {statusMessage ? (
-          <div className="space-y-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <div className={`${opSurfaceAction} space-y-3 px-3 py-2 text-sm ${opToneWarning}`}>
             <p>{statusMessage}</p>
             <Button type="button" className="w-full" onClick={() => router.replace(MFA_ENROLL_PATH)}>
               Set up authenticator
@@ -152,14 +153,16 @@ export function MfaChallengeClient() {
         {!showRecovery ? (
           <form onSubmit={handleVerify} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="totp-code">Authenticator code</Label>
+              <Label htmlFor="totp-code">6-digit verification code</Label>
               <Input
                 id="totp-code"
                 inputMode="numeric"
                 autoComplete="one-time-code"
+                maxLength={6}
+                pattern="[0-9]{6}"
                 value={code}
-                onChange={(event) => setCode(event.target.value)}
-                placeholder="123456"
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="000000"
                 disabled={loading || isPreparing}
                 required
               />
@@ -202,7 +205,7 @@ export function MfaChallengeClient() {
         )}
 
         {error ? (
-          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className={`${opSurfaceCritical} px-3 py-2 text-sm ${opToneDanger}`}>
             {error}
           </div>
         ) : null}

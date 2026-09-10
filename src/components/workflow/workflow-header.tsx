@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { useCommercialBrain } from '@/components/workflow/commercial-brain-context';
 import type { WorkflowStage } from '@/components/workflow/workflow-context';
+import { opChipInfo, opChipWarning, opSurfacePanel } from '@/lib/design/operational-surfaces';
 
 /* ─── Progress bar ─── */
 
@@ -37,9 +38,9 @@ function WorkflowProgressBar({ pct }: { pct: number }) {
 
 const stagePillColor: Partial<Record<WorkflowStage, string>> = {
   'setup':                'bg-border/60 text-muted-foreground',
-  'configuring':          'bg-amber-100/80 text-amber-800',
-  'collecting-approvals': 'bg-blue-100/80 text-blue-800',
-  'preparing-payments':   'bg-amber-100/80 text-amber-800',
+  'configuring':          opChipWarning,
+  'collecting-approvals': opChipInfo,
+  'preparing-payments':   opChipWarning,
   'ready-to-collect':     'bg-[rgba(124,92,255,0.12)] text-[rgb(124,92,255)]',
   'collecting-revenue':   'bg-[rgba(124,92,255,0.12)] text-[rgb(124,92,255)]',
   'ready-to-release':     'bg-[rgba(29,111,66,0.12)] text-[rgb(29,111,66)]',
@@ -50,7 +51,7 @@ const stagePillColor: Partial<Record<WorkflowStage, string>> = {
 
 function WorkflowHeaderSkeleton() {
   return (
-    <div className="rounded-xl border border-border/50 bg-white/60 px-5 py-4 space-y-3 animate-pulse">
+    <div className={`${opSurfacePanel} border-border/50 bg-card/60 px-5 py-4 space-y-3 animate-pulse`}>
       <div className="flex items-center justify-between gap-3">
         <div className="h-3 w-24 bg-muted/60 rounded" />
         <div className="h-3 w-10 bg-muted/40 rounded" />
@@ -127,7 +128,7 @@ export function WorkflowHeader() {
   }
 
   return (
-    <div className="rounded-xl border border-border/60 bg-white/70 px-5 py-4 space-y-3">
+    <div className={`${opSurfacePanel} px-5 py-4 space-y-3`}>
       {/* Mission label + stage pill */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -140,7 +141,7 @@ export function WorkflowHeader() {
         </div>
         <span
           className={cn(
-            'shrink-0 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium mt-0.5',
+            'shrink-0 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium mt-0.5',
             stagePillColor[workflowCtx.currentStage] ?? 'bg-border/60 text-muted-foreground'
           )}
         >

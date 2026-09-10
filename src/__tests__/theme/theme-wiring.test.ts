@@ -21,6 +21,19 @@ describe('shared Provvy theme wiring', () => {
     expect(css).toContain('color-scheme: dark');
   });
 
+  it('overrides muted/secondary/settlement surfaces in dark mode so panels are not silver-on-white-text', () => {
+    const css = read('app/globals.css');
+    const darkBlock = css.slice(css.indexOf('.dark {'));
+    expect(darkBlock).toContain('--muted: 38 38 38');
+    expect(darkBlock).toContain('--secondary: 38 38 38');
+    expect(darkBlock).toContain('--secondary-foreground: 250 250 250');
+    expect(darkBlock).toContain('--settlement-success: 18 40 28');
+    expect(darkBlock).toContain('--agreement-card: 23 23 23');
+    expect(css).toContain('bg-amber-500/[0.06]');
+    expect(css).toMatch(/\.status-pending \{[\s\S]*?bg-amber-500\/\[0\.08\]/);
+    expect(css).not.toMatch(/\.status-pending \{[\s\S]*?@apply bg-amber-50 /);
+  });
+
   it('uses the shared theme hook on marketing and authenticated surfaces', () => {
     const landing = read('components/journey/lovable/journey-landing-page.tsx');
     const workspace = read('components/journey/lovable/workspace-layout.tsx');

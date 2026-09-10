@@ -52,6 +52,7 @@ type InviteProjectParticipantModalProps = {
   organizationId: string | null;
   onSubmit: (participant: DemoParticipant) => Promise<DemoParticipant | void>;
   onAgreementShared?: (participant: DemoParticipant) => void;
+  onAddProjectValue?: () => void;
 };
 
 type ModalStep = 1 | 2 | 'agreement';
@@ -95,6 +96,7 @@ export function InviteProjectParticipantModal({
   organizationId,
   onSubmit,
   onAgreementShared,
+  onAddProjectValue,
 }: InviteProjectParticipantModalProps) {
   const projectLabel = getProjectDisplayName({ dealName: project.dealName });
 
@@ -421,6 +423,31 @@ export function InviteProjectParticipantModal({
                         value={entitlementValue}
                         onChange={(e) => setEntitlementValue(e.target.value)}
                       />
+                      {preview.missingProjectValue ? (
+                        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm">
+                          <p>
+                            Commission: {entitlementValue || '0'}% of project value
+                          </p>
+                          <p className="mt-1">Project value: Not yet specified</p>
+                          <p className="mt-1 text-amber-800 dark:text-amber-200">
+                            Project value is required to calculate earnings.
+                          </p>
+                          {onAddProjectValue ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="mt-2"
+                              onClick={() => {
+                                onOpenChange(false);
+                                onAddProjectValue();
+                              }}
+                            >
+                              Add project value
+                            </Button>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                   {participationModel === 'customer_attribution' ? (

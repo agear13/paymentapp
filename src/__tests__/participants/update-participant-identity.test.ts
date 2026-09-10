@@ -124,4 +124,58 @@ describe('updateParticipantIdentity', () => {
     expect(result.participant.name).toBe('Apples Legal Name');
     expect(result.participant.email).toBe('old@example.com');
   });
+
+  it('adds an email after creation without recreating the participant', async () => {
+    getPilotSnapshotForUser.mockResolvedValue({
+      deals: [],
+      participants: [participant({ email: '', lastInvitationEmail: null, inviteSentAt: undefined, agreementSharedAt: undefined })],
+    });
+    updatePilotParticipantPayload.mockImplementation(
+      async (_id: string, _userId: string, patch: Partial<DemoParticipant>) => ({
+        ...participant({ email: '', lastInvitationEmail: null }),
+        ...patch,
+      })
+    );
+
+    const result = await updateParticipantIdentity({
+      participantId: 'p-1',
+      operatorUserId: 'op-1',
+      email: 'rachel@example.com',
+    });
+
+    expect(result.emailChanged).toBe(true);
+    expect(result.invitationResendRequired).toBe(false);
+    expect(result.participant.email).toBe('rachel@example.com');
+    expect(updatePilotParticipantPayload).toHaveBeenCalledWith(
+      'p-1',
+      'op-1',
+      expect.objectContaining({
+        email: 'rachel@example.com',
+      })
+    );
+  });
+
+  it('corrects phone and role label without touching commission', async () => {
+    const result = await updateParticipantIdentity({
+      participantId: 'p-1',
+      operatorUserId: 'op-1',
+      phone: '0400 000 000',
+      roleLabel: 'Community Organiser',
+    });
+
+    expect(result.emailChanged).toBe(false);
+    expect(updatePilotParticipantPayload).toHaveBeenCalledWith(
+      'p-1',
+      'op-1',
+      expect.objectContaining({
+        name: 'Apples',
+        email: 'old@example.com',
+        phone: '0400 000 000',
+        roleLabel: 'Community Organiser',
+      })
+    );
+    expect(updatePilotParticipantPayload.mock.calls[0][2]).not.toHaveProperty('commissionValue');
+    expect(updatePilotParticipantPayload.mock.calls[0][2]).not.toHaveProperty('agreementVersions');
+    expect(result.participant.commissionValue).toBe(15);
+  });
 });

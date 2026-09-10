@@ -59,13 +59,23 @@ describe('referral promoter lifecycle stage', () => {
         nextActionKind: 'request_approval',
         nextActionLabel: 'Send approval request',
         agreementStatus: 'not_requested',
+        email: 'rachel@example.com',
       })
-    ).toBe('Send invitation');
+    ).toBe('Send agreement');
+    expect(
+      referralPromoterNextActionCopy({
+        nextActionKind: 'request_approval',
+        nextActionLabel: 'Send approval request',
+        agreementStatus: 'not_requested',
+        email: null,
+      })
+    ).toBe('Add email');
     expect(
       referralPromoterNextActionCopy({
         nextActionKind: 'request_approval',
         nextActionLabel: 'Awaiting participant approval',
         agreementStatus: 'requested',
+        email: 'rachel@example.com',
       })
     ).toBe('Awaiting approval');
   });

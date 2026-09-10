@@ -53,13 +53,20 @@ export function referralPromoterLifecycleLabel(stage: ReferralPromoterLifecycleS
 }
 
 export function referralPromoterNextActionCopy(
-  promoter: Pick<WorkflowOperationalParticipant, 'nextActionKind' | 'nextActionLabel' | 'agreementStatus'>
+  promoter: Pick<
+    WorkflowOperationalParticipant,
+    'nextActionKind' | 'nextActionLabel' | 'agreementStatus' | 'email'
+  >
 ): string | null {
+  if (promoter.nextActionKind === 'review_change_request') {
+    return promoter.nextActionLabel || 'Review suggested change';
+  }
   if (promoter.nextActionKind === 'request_approval') {
+    if (!promoter.email?.trim()) return 'Add email';
     if (promoter.agreementStatus === 'requested' || promoter.agreementStatus === 'viewed') {
       return 'Awaiting approval';
     }
-    return 'Send invitation';
+    return 'Send agreement';
   }
   return promoter.nextActionLabel;
 }

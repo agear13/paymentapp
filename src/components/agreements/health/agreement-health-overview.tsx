@@ -6,6 +6,7 @@ import type { AgreementHealthPortfolioSummary } from '@/lib/agreements/health/ag
 import { IntelligenceBadge } from '@/components/provvypay/intelligence-badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { opSurfaceAction, opSurfaceSuccess, opToneSuccess, opToneWarning, opToneDanger } from '@/lib/design/operational-surfaces';
 import { PRODUCT_TERMINOLOGY, projectCountLabel, projectsNeedAttentionLabel } from '@/lib/product/product-terminology';
 import { projectOverviewPath } from '@/lib/projects/project-routes';
 
@@ -16,11 +17,11 @@ type AgreementHealthOverviewProps = {
 };
 
 const categoryColors: Record<keyof AgreementHealthPortfolioSummary['byCategory'], string> = {
-  excellent: 'text-[rgb(29,111,66)]',
-  healthy: 'text-emerald-700',
-  attention_required: 'text-amber-700',
-  at_risk: 'text-orange-700',
-  critical: 'text-red-700',
+  excellent: 'text-[rgb(var(--settlement-success-text))]',
+  healthy: opToneSuccess,
+  attention_required: opToneWarning,
+  at_risk: 'text-orange-700 dark:text-orange-400',
+  critical: opToneDanger,
 };
 
 export function AgreementHealthOverview({
@@ -77,7 +78,7 @@ export function AgreementHealthOverview({
             {(Object.keys(portfolio.byCategory) as (keyof typeof portfolio.byCategory)[]).map((key) => (
               <div
                 key={key}
-                className="rounded-lg border border-[rgba(124,92,255,0.1)] bg-white/70 px-3 py-2"
+                className="rounded-lg border border-[rgba(124,92,255,0.1)] bg-card/70 px-3 py-2"
               >
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                   {portfolio.categoryLabels[key]}
@@ -91,8 +92,8 @@ export function AgreementHealthOverview({
         ) : null}
 
         {attentionCount > 0 ? (
-          <div className="rounded-lg border border-amber-500/25 bg-amber-50/50 px-4 py-3">
-            <p className="text-sm font-medium text-amber-900">
+          <div className={cn(opSurfaceAction, 'px-4 py-3')}>
+            <p className={cn('text-sm font-medium', opToneWarning)}>
               {projectsNeedAttentionLabel(attentionCount)}
             </p>
             <ul className="mt-2 space-y-1">
@@ -103,7 +104,7 @@ export function AgreementHealthOverview({
                   <li key={s.projectId}>
                     <Link
                       href={`${projectOverviewPath(s.projectId)}#briefing-health`}
-                      className="text-sm text-amber-900/90 hover:underline"
+                      className={cn('text-sm hover:underline', opToneWarning, 'opacity-90')}
                     >
                       {s.agreementName} · {s.score} ({s.categoryLabel})
                     </Link>
@@ -133,9 +134,9 @@ function StatTile({
       className={cn(
         'rounded-xl border px-4 py-3',
         highlight && 'border-[rgba(124,92,255,0.2)] bg-[rgba(124,92,255,0.05)]',
-        tone === 'positive' && 'border-[rgba(29,111,66,0.15)] bg-[rgba(223,247,232,0.35)]',
-        tone === 'attention' && 'border-amber-500/20 bg-amber-50/40',
-        !tone && !highlight && 'border-border/60 bg-white/60'
+        tone === 'positive' && opSurfaceSuccess,
+        tone === 'attention' && opSurfaceAction,
+        !tone && !highlight && 'border-border/60 bg-card/60'
       )}
     >
       <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>

@@ -27,6 +27,9 @@ import {
   getParticipantSessionUser,
   participantAuthDeniedResponse,
 } from '@/lib/participant-portal/participant-session.server';
+import { resolveAgreementPresentation } from '@/lib/agreements/agreement-presentation';
+import { loadOrganizationAgreementBranding } from '@/lib/agreements/organization-agreement-branding.server';
+import { pendingAgreementChangeRequests } from '@/lib/agreements/agreement-change-request';
 
 export const dynamic = 'force-dynamic';
 
@@ -188,6 +191,13 @@ export async function GET(
       });
     }
 
+    const branding = organizationId
+      ? await loadOrganizationAgreementBranding(organizationId)
+      : null;
+    const presentation = resolveAgreementPresentation(participant, branding, {
+      projectName: deal.dealName,
+    });
+
     return NextResponse.json({
       deal,
       participant: sanitizeParticipantForAgreementView(participant),
@@ -196,6 +206,8 @@ export async function GET(
       workspaceSource: isProject ? 'project' : 'pilot',
       scopedServiceRows,
       eligibleServices,
+      presentation,
+      pendingChangeRequests: pendingAgreementChangeRequests(participant),
     });
   } catch (e) {
     console.error('[deal-network-pilot/invites GET]', e);

@@ -78,6 +78,31 @@ const PaymentTermSchema = z.object({
   dueCondition: F(z.string().nullable()),
 });
 
+const ReferralEarningSourceSchema = z.object({
+  type: F(z.enum(['internal_service', 'external']).nullable()).optional(),
+  externalPlatform: F(z.string().nullable()).optional(),
+  externalService: F(z.string().nullable()).optional(),
+  attributionMethod: F(z.string().nullable()).optional(),
+});
+
+function parseReferralEarningSourceNonBlocking(raw: unknown): {
+  value: ExtractedParty['referralEarningSource'];
+  dropped: boolean;
+} {
+  if (raw == null) return { value: undefined, dropped: false };
+  const parsed = ReferralEarningSourceSchema.safeParse(raw);
+  if (!parsed.success) return { value: undefined, dropped: true };
+  return {
+    value: {
+      type: parsed.data.type ?? ABSENT_STRING,
+      externalPlatform: parsed.data.externalPlatform ?? ABSENT_STRING,
+      externalService: parsed.data.externalService ?? ABSENT_STRING,
+      attributionMethod: parsed.data.attributionMethod ?? ABSENT_STRING,
+    },
+    dropped: false,
+  };
+}
+
 const ProjectFieldsSchema = z.object({
   projectName: F(z.string().nullable()),
   projectDescription: F(z.string().nullable()),
@@ -184,6 +209,11 @@ function parseParty(raw: unknown): {
     droppedOptional.push(`commercialDependencies(${commercialDependencies.droppedCount})`);
   }
 
+  const referralEarningSource = parseReferralEarningSourceNonBlocking(obj.referralEarningSource);
+  if (referralEarningSource.dropped) {
+    droppedOptional.push('referralEarningSource');
+  }
+
   return {
     party: {
       id: core.data.id,
@@ -213,6 +243,7 @@ function parseParty(raw: unknown): {
       ...(commercialDependencies.items.length > 0
         ? { commercialDependencies: commercialDependencies.items }
         : {}),
+      ...(referralEarningSource.value ? { referralEarningSource: referralEarningSource.value } : {}),
     },
     droppedOptional,
   };

@@ -39,6 +39,12 @@ import { ParticipantCoordinationSummary } from '@/components/journey/lovable/agr
 import { ReferralEligibleServicesPicker, PromoterEligibleServicesEditor } from '@/components/journey/lovable/referral-management-eligible-services';
 import { ReferralManagementServicesPanel } from '@/components/journey/lovable/referral-management-services-panel';
 import { ReferralAttentionSummary } from '@/components/journey/lovable/referral-management-attention';
+import { EditProjectDetailsDialog } from '@/components/projects/edit-project-details-dialog';
+import {
+  formatProjectValueLabel,
+  projectValueIsSpecified,
+} from '@/lib/projects/update-project-details';
+import { AgreementChangeRequestReview } from '@/components/agreements/agreement-change-request-review';
 import type { ReferralManagementContext } from '@/lib/workflows/referral-management/hub.server';
 import {
   filterCountsForPromoters,
@@ -50,6 +56,22 @@ import {
   referralPromoterLifecycleStage,
   referralPromoterNextActionCopy,
 } from '@/lib/workflows/referral-management/lifecycle';
+import {
+  ATTRIBUTION_METHOD_LABELS,
+  KNOWN_EXTERNAL_PLATFORMS,
+  type ReferralAttributionMethod,
+  type ReferralEarningSourceType,
+} from '@/lib/workflows/referral-management/earning-source';
+import {
+  buildManualAddPromoterInput,
+  suggestedExternalServiceForPlatform,
+} from '@/lib/workflows/referral-management/manual-promoter-input';
+
+function earningSourceButtonClass(active: boolean): string {
+  return active
+    ? 'rounded-md border border-border bg-secondary px-3 py-1.5 text-[13px] font-semibold'
+    : 'rounded-md border border-transparent px-3 py-1.5 text-[13px] text-ink-soft';
+}
 
 function MetricCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -101,6 +123,13 @@ export function AddPromoterForm({
   const [serviceIds, setServiceIds] = React.useState<string[]>(() =>
     catalog[0] ? [catalog[0].id] : []
   );
+  const [earningSourceType, setEarningSourceType] =
+    React.useState<ReferralEarningSourceType>('internal_service');
+  const [externalProvider, setExternalProvider] = React.useState('');
+  const [externalService, setExternalService] = React.useState('');
+  const [attributionMethod, setAttributionMethod] = React.useState<ReferralAttributionMethod | ''>('');
+  const [audienceDiscountPct, setAudienceDiscountPct] = React.useState('');
+  const [roleLabel, setRoleLabel] = React.useState('');
 
   React.useEffect(() => {
     if (serviceIds.length === 0 && catalog[0]) {
@@ -119,6 +148,13 @@ export function AddPromoterForm({
     setEmail('');
     setDuplicate(null);
     setLookingUp(false);
+    setEarningSourceType('internal_service');
+    setExternalProvider('');
+    setExternalService('');
+    setAttributionMethod('');
+    setAudienceDiscountPct('');
+    setRoleLabel('');
+    setKind('revenue_share');
   };
 
   const lookupEmail = async (value: string) => {
@@ -326,21 +362,7 @@ export function AddPromoterForm({
     );
   }
 
-  if (catalog.length === 0) {
-    return (
-      <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-[13px] text-amber-900 dark:text-amber-200">
-        <p>Add an active service before creating a promoter. A checkout destination will not be fabricated.</p>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={onManageServices}>
-            Manage services
-          </Button>
-          <Button type="button" variant="outline" onClick={reset}>
-            Back
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  const isExternal = earningSourceType === 'external';
 
   return (
     <form
@@ -349,45 +371,33 @@ export function AddPromoterForm({
         event.preventDefault();
         const form = event.currentTarget;
         const data = new FormData(form);
-        if (serviceIds.length === 0) {
-          toast.error('Select at least one eligible service.');
+        if (duplicate) return;
+        const mapped = buildManualAddPromoterInput({
+          name: String(data.get('name') ?? ''),
+          email: email.trim() || undefined,
+          phone: String(data.get('phone') ?? '') || undefined,
+          role: (String(data.get('role') ?? 'Promoter') || 'Promoter') as
+            | 'Promoter'
+            | 'Affiliate'
+            | 'Partner'
+            | 'Other',
+          roleLabel: roleLabel.trim() || undefined,
+          compensationKind: kind,
+          percentage: Number(data.get('percentage')),
+          amount: Number(data.get('amount')),
+          currency: 'AUD',
+          serviceIds,
+          earningSourceType,
+          externalProvider,
+          externalService,
+          attributionMethod: attributionMethod || null,
+          audienceDiscountPct: audienceDiscountPct.trim() === '' ? null : Number(audienceDiscountPct),
+        });
+        if ('error' in mapped) {
+          toast.error(mapped.error);
           return;
         }
-        if (duplicate) return;
-        const result = await onSubmit(
-          kind === 'revenue_share'
-            ? {
-                name: String(data.get('name') ?? ''),
-                email,
-                phone: String(data.get('phone') ?? '') || undefined,
-                role: (String(data.get('role') ?? 'Promoter') || 'Promoter') as
-                  | 'Promoter'
-                  | 'Affiliate'
-                  | 'Partner'
-                  | 'Other',
-                compensation: {
-                  kind: 'revenue_share',
-                  percentage: Number(data.get('percentage')),
-                  serviceIds,
-                },
-              }
-            : {
-                name: String(data.get('name') ?? ''),
-                email,
-                phone: String(data.get('phone') ?? '') || undefined,
-                role: (String(data.get('role') ?? 'Promoter') || 'Promoter') as
-                  | 'Promoter'
-                  | 'Affiliate'
-                  | 'Partner'
-                  | 'Other',
-                compensation: {
-                  kind: 'fixed',
-                  amount: Number(data.get('amount')),
-                  currency: 'AUD',
-                  serviceIds,
-                },
-              }
-        );
+        const result = await onSubmit(mapped);
         if (result.existing) {
           setDuplicate(result.existing);
           return;
@@ -401,12 +411,11 @@ export function AddPromoterForm({
       }}
     >
       <p className="text-[13px] font-semibold">Add promoter</p>
-      <Input name="name" required placeholder="Name / business name" />
+      <Input name="name" required placeholder="Name / business name" aria-label="Promoter name" />
       <Input
         name="email"
         type="email"
-        required
-        placeholder="Email"
+        placeholder="Email (optional — add later to send the agreement)"
         value={email}
         onChange={(event) => {
           setEmail(event.target.value);
@@ -419,18 +428,131 @@ export function AddPromoterForm({
         name="role"
         className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
         defaultValue="Promoter"
+        aria-label="Role"
       >
         <option>Promoter</option>
         <option>Affiliate</option>
         <option>Partner</option>
         <option>Other</option>
       </select>
-      <ReferralEligibleServicesPicker
-        catalog={catalog}
-        selectedIds={serviceIds}
-        onChange={setServiceIds}
-        disabled={busy}
+      <Input
+        value={roleLabel}
+        onChange={(event) => setRoleLabel(event.target.value)}
+        placeholder="Role label (optional) — e.g. Community Organiser"
+        aria-label="Role label"
       />
+
+      <div className="space-y-2">
+        <p className="text-[13px] font-semibold">What does this affiliate earn on?</p>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Earning source">
+          <button
+            type="button"
+            className={earningSourceButtonClass(!isExternal)}
+            aria-pressed={!isExternal}
+            onClick={() => setEarningSourceType('internal_service')}
+          >
+            Provvy service
+          </button>
+          <button
+            type="button"
+            className={earningSourceButtonClass(isExternal)}
+            aria-pressed={isExternal}
+            onClick={() => setEarningSourceType('external')}
+          >
+            External platform / service
+          </button>
+        </div>
+      </div>
+
+      {isExternal ? (
+        <div className="space-y-3 rounded-lg bg-secondary/20 p-3">
+          <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
+            Earning source · External platform
+          </p>
+          <label className="block space-y-1">
+            <span className="text-[12px] text-ink-soft">Platform</span>
+            <Input
+              value={externalProvider}
+              onChange={(event) => {
+                const value = event.target.value;
+                setExternalProvider(value);
+                const suggested = suggestedExternalServiceForPlatform(value);
+                if (suggested && !externalService.trim()) setExternalService(suggested);
+              }}
+              placeholder="e.g. Weso"
+              list="manual-external-platforms"
+              aria-label="External platform"
+            />
+            <datalist id="manual-external-platforms">
+              {KNOWN_EXTERNAL_PLATFORMS.map((platform) => (
+                <option key={platform.id} value={platform.displayName} />
+              ))}
+            </datalist>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-[12px] text-ink-soft">Earning source / service</span>
+            <Input
+              value={externalService}
+              onChange={(event) => setExternalService(event.target.value)}
+              placeholder="e.g. Weso App Store"
+              aria-label="External earning source"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-[12px] text-ink-soft">Attribution method</span>
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm text-foreground"
+              value={attributionMethod}
+              aria-label="Attribution method"
+              onChange={(event) =>
+                setAttributionMethod((event.target.value || '') as ReferralAttributionMethod | '')
+              }
+            >
+              <option value="">Not specified — complete if known</option>
+              {Object.entries(ATTRIBUTION_METHOD_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block space-y-1">
+            <span className="text-[12px] text-ink-soft">Audience discount</span>
+            <Input
+              type="number"
+              min={0.01}
+              max={100}
+              step="0.01"
+              value={audienceDiscountPct}
+              onChange={(event) => setAudienceDiscountPct(event.target.value)}
+              placeholder="e.g. 10"
+              aria-label="Audience discount"
+            />
+            <p className="text-[12px] text-ink-soft">
+              Only set when an audience/customer discount was agreed. Leave blank if none.
+            </p>
+          </label>
+          <p className="text-[12px] text-ink-soft">
+            A Provvy catalogue service or checkout destination is not required. External events are
+            recorded for later attribution — a Weso API is not called from here.
+          </p>
+        </div>
+      ) : catalog.length === 0 ? (
+        <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-[13px] text-amber-900 dark:text-amber-200">
+          <p>Add an active service before creating a promoter. A checkout destination will not be fabricated.</p>
+          <Button type="button" onClick={onManageServices}>
+            Manage services
+          </Button>
+        </div>
+      ) : (
+        <ReferralEligibleServicesPicker
+          catalog={catalog}
+          selectedIds={serviceIds}
+          onChange={setServiceIds}
+          disabled={busy}
+        />
+      )}
+
       <div className="flex gap-2 text-[13px]">
         <button type="button" onClick={() => setKind('revenue_share')} className={kind === 'revenue_share' ? 'font-semibold' : 'text-ink-soft'}>
           Revenue share
@@ -440,9 +562,26 @@ export function AddPromoterForm({
         </button>
       </div>
       {kind === 'revenue_share' ? (
-        <Input name="percentage" type="number" min={0.01} max={100} step="0.01" required defaultValue={20} />
+        <Input
+          name="percentage"
+          type="number"
+          min={0.01}
+          max={100}
+          step="0.01"
+          required
+          defaultValue={20}
+          aria-label="Commission percentage"
+        />
       ) : (
-        <Input name="amount" type="number" min={0.01} step="0.01" required placeholder="Fixed amount" />
+        <Input
+          name="amount"
+          type="number"
+          min={0.01}
+          step="0.01"
+          required
+          placeholder="Fixed amount"
+          aria-label="Fixed commission amount"
+        />
       )}
       {lookingUp ? (
         <p className="text-[13px] text-ink-soft">Checking for an existing relationship…</p>
@@ -486,6 +625,7 @@ export function ReferralManagementHubScreen() {
   const [highlightedParticipantId, setHighlightedParticipantId] = React.useState<string | null>(null);
   const [justAdded, setJustAdded] = React.useState<{ id: string; name: string } | null>(null);
   const [autoOpenInvite, setAutoOpenInvite] = React.useState(false);
+  const [editProjectOpen, setEditProjectOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -661,6 +801,7 @@ export function ReferralManagementHubScreen() {
   const filterChips: Array<{ id: ReferralPromoterFilter; label: string }> = [
     { id: 'all', label: `All ${promoterCounts.all}` },
     { id: 'attention', label: `Needs attention ${promoterCounts.attention}` },
+    { id: 'change_request', label: `Agreement changes ${promoterCounts.change_request}` },
     { id: 'commission_review', label: `Ready for review ${promoterCounts.commission_review}` },
     { id: 'approval_required', label: `Awaiting approval ${promoterCounts.approval_required}` },
     { id: 'payout_details', label: `Payout details ${promoterCounts.payout_details}` },
@@ -683,20 +824,51 @@ export function ReferralManagementHubScreen() {
         <div>
           <div className="mb-2 inline-flex items-center gap-2 text-primary">
             <Share2 className="h-5 w-5" />
-            <span className="text-[12px] font-semibold uppercase tracking-wide">Workflow</span>
+            <span className="text-[12px] font-semibold uppercase tracking-wide">
+              Referral Management
+            </span>
           </div>
-          <h1 className="text-2xl font-semibold">{template?.name ?? 'Referral Management'}</h1>
+          <h1 className="text-2xl font-semibold">{context.program.name}</h1>
           <p className="mt-1 text-[14px] text-ink-soft">
-            {template?.summary ?? 'Manage promoters, affiliates and referral revenue from one place.'}
+            {context.program.description ||
+              template?.summary ||
+              'Manage promoters, affiliates and referral revenue from one place.'}
+          </p>
+          <p className="mt-2 text-[13px] text-ink-soft">
+            Project value:{' '}
+            <span className="font-medium text-foreground">
+              {formatProjectValueLabel(context.program.value, context.program.currency)}
+            </span>
+            {context.program.partner && context.program.partner !== context.program.name
+              ? ` · ${context.program.partner}`
+              : ''}
+            {!projectValueIsSpecified(context.program.value) ? (
+              <>
+                {' · '}
+                <button
+                  type="button"
+                  className="font-medium text-primary hover:underline"
+                  onClick={() => setEditProjectOpen(true)}
+                >
+                  Add project value
+                </button>
+              </>
+            ) : null}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="outline" onClick={() => setEditProjectOpen(true)}>
+            Edit project
+          </Button>
           {hubView !== 'services' ? (
             <Button type="button" variant="outline" onClick={() => selectView('services')}>
               <Package className="mr-2 h-4 w-4" />
               Manage services
             </Button>
           ) : null}
+          <Button type="button" variant="outline" asChild>
+            <Link href={COMMERCIAL_OS_ROUTES.payments}>Agreement branding</Link>
+          </Button>
           {!context.paused ? (
             <AddPromoterForm
               catalog={context.catalog}
@@ -804,6 +976,17 @@ export function ReferralManagementHubScreen() {
 
           {selected ? (
             <div className="space-y-4">
+              {installed?.id && selected.pendingChangeRequests?.length ? (
+                <AgreementChangeRequestReview
+                  workflowId={installed.id}
+                  participantId={selected.id!}
+                  participantName={selected.name}
+                  agreementTitle={`${selected.name} affiliate agreement`}
+                  requests={selected.pendingChangeRequests}
+                  busy={busy}
+                  onReviewed={() => void refresh()}
+                />
+              ) : null}
               <AgreementIntelligenceParticipantDetail
                 participant={selected}
                 activity={context.activity}
@@ -964,6 +1147,10 @@ export function ReferralManagementHubScreen() {
                           </div>
                           <p className="mt-2 font-medium">{promoter.name}</p>
                           <p className="text-[13px] text-ink-soft">
+                            {promoter.operationalRole ? `${promoter.operationalRole} · ` : ''}
+                            {promoter.email?.trim() || 'Email not provided'}
+                          </p>
+                          <p className="text-[13px] text-ink-soft">
                             {promoter.compensationLabel ?? 'Compensation not configured'}
                             {promoter.referral?.destinationLabel
                               ? ` · ${promoter.referral.destinationLabel}`
@@ -1006,6 +1193,19 @@ export function ReferralManagementHubScreen() {
           )}
         </>
       )}
+      <EditProjectDetailsDialog
+        open={editProjectOpen}
+        onOpenChange={setEditProjectOpen}
+        deal={{
+          id: context.program.id,
+          dealName: context.program.name,
+          projectDescription: context.program.description,
+          partner: context.program.partner,
+          value: context.program.value,
+          projectValueCurrency: context.program.currency,
+        }}
+        onSaved={() => void refresh()}
+      />
     </div>
   );
 }

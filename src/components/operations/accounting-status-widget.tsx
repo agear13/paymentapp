@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { opChipDanger, opChipInfo, opChipSuccess, opChipWarning } from '@/lib/design/operational-surfaces';
 import type {
   WorkspaceAccountingSyncStatus,
   AccountingExportModel,
@@ -93,7 +94,7 @@ export function AccountingStatusWidget({
             </Badge>
           )}
           {needsReviewCount > 0 && (
-            <Badge variant="outline" className="text-xs h-5 bg-amber-50 text-amber-700 border-amber-200">
+            <Badge variant="outline" className={cn('text-xs h-5', opChipWarning)}>
               {needsReviewCount} review
             </Badge>
           )}
@@ -179,9 +180,9 @@ function SummaryCell({
 
 function OverallStatusBadge({ status }: { status: WorkspaceAccountingSyncStatus['overallStatus'] }) {
   const configs = {
-    all_exported: { label: 'Complete', className: 'bg-green-50 text-green-700 border-green-200' },
-    in_progress: { label: 'In progress', className: 'bg-blue-50 text-blue-700 border-blue-200' },
-    blocked: { label: 'Blocked', className: 'bg-red-50 text-red-700 border-red-200' },
+    all_exported: { label: 'Complete', className: opChipSuccess },
+    in_progress: { label: 'In progress', className: opChipInfo },
+    blocked: { label: 'Blocked', className: opChipDanger },
     not_started: { label: 'Not started', className: 'bg-muted text-muted-foreground' },
   };
   const { label, className } = configs[status];
@@ -225,8 +226,8 @@ function ParticipantExportRow({
     <div
       className={cn(
         'rounded-lg border border-border/40 px-3 py-2 space-y-1.5',
-        model.status === 'failed' && 'border-red-200 bg-red-50/20',
-        model.status === 'needs_review' && 'border-amber-200 bg-amber-50/20',
+        model.status === 'failed' && 'border-red-500/20 bg-red-500/[0.06]',
+        model.status === 'needs_review' && 'border-amber-500/25 bg-amber-500/[0.06]',
         model.status === 'exported' && 'opacity-70'
       )}
     >

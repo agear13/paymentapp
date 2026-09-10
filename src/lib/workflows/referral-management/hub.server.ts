@@ -35,6 +35,7 @@ import {
   referralManagementDealId,
 } from '@/lib/workflows/referral-management/constants';
 import { ensureReferralManagementDeal } from '@/lib/workflows/referral-management/ensure-program-deal.server';
+import { pendingAgreementChangeRequests } from '@/lib/agreements/agreement-change-request';
 import { buildReferralAttentionItems } from '@/lib/workflows/referral-management/attention';
 
 function money(amount: number, currency = 'AUD'): string {
@@ -62,7 +63,7 @@ function mapPromoter(
     id: participant.id,
     name: participant.name,
     commercialRole: participant.companyName || participant.role,
-    operationalRole: participant.role,
+    operationalRole: participant.roleLabel || participant.role,
     partyKind: 'compensated_participant',
     statusLabel:
       view.referralStatus === 'active'
@@ -75,11 +76,25 @@ function mapPromoter(
     needsAttention:
       view.nextActionKind !== 'none' ||
       view.payoutSetupStatus === 'submitted' ||
-      view.payoutSetupStatus === 'flagged',
+      view.payoutSetupStatus === 'flagged' ||
+      pendingAgreementChangeRequests(participant).length > 0,
+    pendingChangeRequests: pendingAgreementChangeRequests(participant).map((request) => ({
+      id: request.id,
+      fieldLabel: request.fieldLabel,
+      previousValue: request.previousValue,
+      suggestedValue: request.suggestedValue,
+      reason: request.reason,
+      classification: request.classification,
+      createdAt: request.createdAt,
+      agreementVersionNumber: request.agreementVersionNumber,
+      status: request.status,
+      reviewNote: request.reviewNote ?? null,
+    })),
     attentionReason: view.nextActionLabel,
     manageUrl: workflowParticipantHref(participant.id, REFERRAL_MANAGEMENT_SLUG),
     ...view,
     compensationKind: kind,
+    phone: participant.phone?.trim() || null,
   };
 }
 
@@ -95,7 +110,8 @@ export async function getReferralManagementContext(input: {
     return null;
   }
 
-  await ensureReferralManagementDeal(input);
+  const programDeal = await ensureReferralManagementDeal(input);
+  if (!programDeal) return null;
 
   const snapshot = await getPilotSnapshotForUser(input.userId);
   const catalogItems = await prisma.organization_services.findMany({
@@ -287,6 +303,14 @@ export async function getReferralManagementContext(input: {
       price: Number(item.price) || 0,
       currency: item.currency,
     })),
+    program: {
+      id: programDeal.id,
+      name: programDeal.dealName,
+      description: programDeal.projectDescription ?? '',
+      partner: programDeal.partner ?? '',
+      value: programDeal.value ?? 0,
+      currency: programDeal.projectValueCurrency === 'USD' ? 'USD' : 'AUD',
+    },
     settlement: deriveReferralWorkflowSettlementSummary(settlementRows, commissionEarned),
     participantSettlements: Object.fromEntries(
       promoters.map((promoter) => [

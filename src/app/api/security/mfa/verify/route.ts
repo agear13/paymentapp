@@ -55,15 +55,21 @@ export async function POST(request: NextRequest) {
   });
 
   if (error) {
+    const expired = /expired|already used|not found/i.test(error.message);
     recordAuthAuditEvent({
       eventType: AuditEventType.AUTH_MFA_CHALLENGE_FAILED,
       userId: auth.user.id,
       email: auth.user.email ?? undefined,
       request,
       success: false,
-      reason: error.message,
+      reason: expired ? 'challenge_expired' : 'invalid_code',
       metadata: { purpose: parsed.data.purpose ?? 'challenge' },
     });
+    if (expired) {
+      return authJsonError('This confirmation expired. Enter a new code.', 401, {
+        code: 'MFA_CHALLENGE_EXPIRED',
+      });
+    }
     return authJsonError('Invalid authenticator code.', 401);
   }
 

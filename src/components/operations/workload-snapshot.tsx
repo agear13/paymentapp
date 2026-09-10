@@ -107,7 +107,7 @@ export function WorkloadSnapshot({
 
 function WorkloadTileCard({ label, value, tone = 'default', sublabel }: WorkloadTile) {
   return (
-    <div className="rounded-xl border border-border/55 bg-white/65 px-3 py-3 space-y-1">
+    <div className="rounded-xl border border-border/55 bg-card/70 px-3 py-3 space-y-1">
       <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/70 leading-tight">
         {label}
       </p>

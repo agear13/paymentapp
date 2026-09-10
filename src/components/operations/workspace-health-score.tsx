@@ -56,7 +56,7 @@ export function WorkspaceHealthScore({
 }: WorkspaceHealthScoreProps) {
   if (loading) {
     return (
-      <div className="rounded-xl border border-border/60 bg-white/70 px-4 py-4 space-y-3 animate-pulse">
+      <div className="rounded-xl border border-border/60 bg-card/70 px-4 py-4 space-y-3 animate-pulse">
         <div className="h-3 w-28 bg-muted rounded" />
         <div className="h-8 w-16 bg-muted rounded" />
       </div>
@@ -105,7 +105,7 @@ export function WorkspaceHealthScore({
     score >= 80 ? 'bg-[rgb(29,111,66)]' : score >= 50 ? 'bg-amber-500' : 'bg-red-500';
 
   return (
-    <div className="rounded-xl border border-border/60 bg-white/70 px-4 py-4 space-y-3">
+    <div className="rounded-xl border border-border/60 bg-card/70 px-4 py-4 space-y-3">
       {/* Score + bar */}
       <div className="flex items-center justify-between gap-3">
         <div>

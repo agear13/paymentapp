@@ -19,6 +19,12 @@ export type PaymentIntelligenceTopic =
   | 'fx'
   | 'provider';
 
+/**
+ * Mixed UI mark identity (providers, networks, and a regulator).
+ * Not the canonical rail model — do not merge with collection PaymentRailId
+ * or payout PayoutRailId.
+ * Canonical split lives in @/lib/route-intelligence (ProviderId vs NetworkRailId).
+ */
 export type PaymentRailId =
   | 'wise'
   | 'airwallex'

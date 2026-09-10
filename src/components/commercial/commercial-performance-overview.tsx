@@ -53,6 +53,18 @@ import type {
   PortfolioPerformanceResult,
   PortfolioProjectSummary,
 } from '@/lib/commercial/commercial-performance';
+import { cn } from '@/lib/utils';
+import {
+  opChipDanger,
+  opChipSuccess,
+  opChipWarning,
+  opSurfaceAction,
+  opSurfaceCritical,
+  opSurfaceSuccess,
+  opToneDanger,
+  opToneSuccess,
+  opToneWarning,
+} from '@/lib/design/operational-surfaces';
 
 /* ─── Utilities ─────────────────────────────────────────────────────────── */
 
@@ -70,9 +82,9 @@ function fmt(amount: number, currency = 'AUD'): string {
 
 function statusBadge(status: CommercialPerformanceStatus) {
   const map: Record<CommercialPerformanceStatus, { label: string; className: string }> = {
-    healthy: { label: 'Healthy', className: 'bg-green-50 text-green-700 border-green-200' },
-    watch: { label: 'Watch', className: 'bg-amber-50 text-amber-700 border-amber-200' },
-    attention: { label: 'Attention', className: 'bg-red-50 text-red-700 border-red-200' },
+    healthy: { label: 'Healthy', className: opChipSuccess },
+    watch: { label: 'Watch', className: opChipWarning },
+    attention: { label: 'Attention', className: opChipDanger },
   };
   const { label, className } = map[status];
   return (
@@ -109,9 +121,9 @@ function MetricRow({
 }) {
   const valueClass =
     emphasis === 'positive'
-      ? 'text-green-700'
+      ? opToneSuccess
       : emphasis === 'negative'
-      ? 'text-red-700'
+      ? opToneDanger
       : 'text-foreground';
   return (
     <div className="flex items-center justify-between py-2.5 border-b last:border-0">
@@ -159,7 +171,7 @@ function CashPositionSection({ cash }: { cash: CashPosition }) {
             <span className="text-sm font-medium">Forecast Position</span>
             <span
               className={`text-sm font-bold ${
-                cash.forecastPosition >= 0 ? 'text-green-700' : 'text-red-700'
+                cash.forecastPosition >= 0 ? opToneSuccess : opToneDanger
               }`}
             >
               {cash.forecastPosition >= 0 ? '+' : ''}
@@ -192,7 +204,7 @@ function EventProfitabilitySection({ prof }: { prof: EventProfitability }) {
           <div className="text-right">
             <span
               className={`text-base font-bold ${
-                prof.forecastMargin >= 0 ? 'text-green-700' : 'text-red-700'
+                prof.forecastMargin >= 0 ? opToneSuccess : opToneDanger
               }`}
             >
               {prof.forecastMargin >= 0 ? '+' : ''}
@@ -265,9 +277,9 @@ function CommercialHealthSection({ health }: { health: CommercialHealthSummary }
 
 function RevenueConfidenceSection({ confidence }: { confidence: RevenueConfidenceResult }) {
   const levelColors: Record<string, string> = {
-    HIGH: 'text-green-700',
-    MEDIUM: 'text-amber-700',
-    LOW: 'text-red-700',
+    HIGH: opToneSuccess,
+    MEDIUM: opToneWarning,
+    LOW: opToneDanger,
   };
 
   return (
@@ -277,13 +289,13 @@ function RevenueConfidenceSection({ confidence }: { confidence: RevenueConfidenc
         <div className="p-4 border-b grid grid-cols-3 gap-4">
           <div>
             <p className="text-xs text-muted-foreground">Confirmed</p>
-            <p className="text-sm font-semibold text-green-700 mt-1">
+            <p className={cn('text-sm font-semibold mt-1', opToneSuccess)}>
               {fmt(confidence.confirmedRevenue, confidence.currency)}
             </p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Expected</p>
-            <p className="text-sm font-semibold text-amber-700 mt-1">
+            <p className={cn('text-sm font-semibold mt-1', opToneWarning)}>
               {fmt(confidence.expectedRevenue, confidence.currency)}
             </p>
           </div>
@@ -360,9 +372,9 @@ function CommercialVarianceSection({ variance }: { variance: CommercialVarianceR
                   <span
                     className={`text-sm font-semibold ${
                       item.isBehindForecast
-                        ? 'text-red-700'
+                        ? opToneDanger
                         : item.difference > 0
-                        ? 'text-green-700'
+                        ? opToneSuccess
                         : 'text-muted-foreground'
                     }`}
                   >
@@ -477,7 +489,7 @@ function PortfolioProjectRow({ project }: { project: PortfolioProjectSummary }) 
           <p className="text-sm font-semibold truncate">{project.projectName}</p>
           <p
             className={`text-sm font-bold shrink-0 ${
-              project.forecastMargin >= 0 ? 'text-green-700' : 'text-red-700'
+              project.forecastMargin >= 0 ? opToneSuccess : opToneDanger
             }`}
           >
             {project.forecastMargin >= 0 ? '+' : ''}
@@ -511,17 +523,17 @@ function PortfolioPerformanceSection({
       />
 
       <div className="grid grid-cols-3 gap-3 mb-4">
-        <div className="rounded-lg border bg-red-50 border-red-100 p-3 text-center">
-          <p className="text-xs text-red-600 font-medium">Attention</p>
-          <p className="text-xl font-bold text-red-700 mt-1">{portfolio.attentionCount}</p>
+        <div className={cn(opSurfaceCritical, 'p-3 text-center')}>
+          <p className={cn('text-xs font-medium', opToneDanger)}>Attention</p>
+          <p className={cn('text-xl font-bold mt-1', opToneDanger)}>{portfolio.attentionCount}</p>
         </div>
-        <div className="rounded-lg border bg-amber-50 border-amber-100 p-3 text-center">
-          <p className="text-xs text-amber-600 font-medium">Watch</p>
-          <p className="text-xl font-bold text-amber-700 mt-1">{portfolio.watchCount}</p>
+        <div className={cn(opSurfaceAction, 'p-3 text-center')}>
+          <p className={cn('text-xs font-medium', opToneWarning)}>Watch</p>
+          <p className={cn('text-xl font-bold mt-1', opToneWarning)}>{portfolio.watchCount}</p>
         </div>
-        <div className="rounded-lg border bg-green-50 border-green-100 p-3 text-center">
-          <p className="text-xs text-green-600 font-medium">Healthy</p>
-          <p className="text-xl font-bold text-green-700 mt-1">{portfolio.healthyCount}</p>
+        <div className={cn(opSurfaceSuccess, 'p-3 text-center')}>
+          <p className={cn('text-xs font-medium', opToneSuccess)}>Healthy</p>
+          <p className={cn('text-xl font-bold mt-1', opToneSuccess)}>{portfolio.healthyCount}</p>
         </div>
       </div>
 
@@ -540,7 +552,7 @@ function PortfolioPerformanceSection({
         <span className="text-xs text-muted-foreground">Combined forecast margin</span>
         <span
           className={`text-sm font-bold ${
-            portfolio.totalForecastMargin >= 0 ? 'text-green-700' : 'text-red-700'
+            portfolio.totalForecastMargin >= 0 ? opToneSuccess : opToneDanger
           }`}
         >
           {portfolio.totalForecastMargin >= 0 ? '+' : ''}

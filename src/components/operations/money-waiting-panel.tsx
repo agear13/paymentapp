@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { formatCompactCurrency } from '@/lib/formatters/format-currency';
+import { opToneWarning } from '@/lib/design/operational-surfaces';
 import type { CommercialFinancialSnapshot } from '@/lib/commercial/commercial-financial-snapshot';
 import type { BusinessFinancialSnapshot } from '@/lib/commercial/business-financial-snapshot';
 import { PRODUCT_TERMINOLOGY } from '@/lib/product/product-terminology';
@@ -107,24 +108,24 @@ function MoneyCard({
   const hasValue = amount !== null && amount > 0;
 
   const amountColor = {
-    urgent: 'text-amber-700',
+    urgent: opToneWarning,
     pending: 'text-foreground',
-    positive: 'text-[rgb(29,111,66)]',
+    positive: 'text-[rgb(var(--settlement-success-text))]',
     neutral: 'text-muted-foreground',
   }[tone];
 
   const borderColor = {
-    urgent: hasValue ? 'border-amber-200/70' : 'border-border/50',
+    urgent: hasValue ? 'border-amber-500/25' : 'border-border/50',
     pending: hasValue ? 'border-border/70' : 'border-border/50',
     positive: hasValue ? 'border-[rgba(29,111,66,0.2)]' : 'border-border/50',
     neutral: 'border-border/50',
   }[tone];
 
   const bgColor = {
-    urgent: hasValue ? 'bg-amber-50/50' : 'bg-white/50',
-    pending: 'bg-white/60',
-    positive: hasValue ? 'bg-[rgba(29,111,66,0.03)]' : 'bg-white/50',
-    neutral: 'bg-white/40',
+    urgent: hasValue ? 'bg-amber-500/[0.06]' : 'bg-card/50',
+    pending: 'bg-card/70',
+    positive: hasValue ? 'bg-green-500/[0.06]' : 'bg-card/50',
+    neutral: 'bg-card/40',
   }[tone];
 
   return (

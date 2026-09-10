@@ -41,6 +41,8 @@ type EditProjectParticipantDialogProps = {
     role: DemoParticipantRole;
     roleDetails?: string;
     agreementNotes?: string;
+    phone?: string;
+    roleLabel?: string;
   }) => Promise<void>;
 };
 
@@ -57,6 +59,8 @@ export function EditProjectParticipantDialog({
     role: 'Contributor' as DemoParticipantRole,
     roleDetails: '',
     agreementNotes: '',
+    phone: '',
+    roleLabel: '',
   });
 
   React.useEffect(() => {
@@ -67,6 +71,8 @@ export function EditProjectParticipantDialog({
       role: participant.role,
       roleDetails: participant.roleDetails ?? '',
       agreementNotes: participant.agreementNotes ?? '',
+      phone: participant.phone ?? '',
+      roleLabel: participant.roleLabel ?? '',
     });
   }, [participant]);
 
@@ -80,6 +86,8 @@ export function EditProjectParticipantDialog({
         role: draft.role,
         roleDetails: draft.roleDetails.trim() || undefined,
         agreementNotes: draft.agreementNotes.trim() || undefined,
+        phone: draft.phone.trim() || undefined,
+        roleLabel: draft.roleLabel.trim() || undefined,
       });
       onOpenChange(false);
     } finally {
@@ -109,6 +117,25 @@ export function EditProjectParticipantDialog({
               type="email"
               value={draft.email}
               onChange={(e) => setDraft({ ...draft, email: e.target.value })}
+              placeholder="Not provided"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="participant-phone">Phone</Label>
+            <Input
+              id="participant-phone"
+              value={draft.phone}
+              onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
+              placeholder="Optional"
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor="participant-role-label">Role label</Label>
+            <Input
+              id="participant-role-label"
+              value={draft.roleLabel}
+              onChange={(e) => setDraft({ ...draft, roleLabel: e.target.value })}
+              placeholder="e.g. Community Organiser"
             />
           </div>
           <div className="space-y-1">

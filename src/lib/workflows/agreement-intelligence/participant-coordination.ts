@@ -5,6 +5,11 @@ import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { participantWorkspacePathFromParticipant } from '@/lib/projects/participant-entitlement';
 import { buildReferralQrApiPath } from '@/lib/referrals/referral-share-url';
 import { isParticipantIdentityBound } from '@/lib/participants/participant-identity';
+import {
+  formatEarningSourceDestination,
+  isExternalEarningSourceParticipant,
+} from '@/lib/workflows/referral-management/earning-source';
+import { pendingAgreementChangeRequests } from '@/lib/agreements/agreement-change-request';
 import type {
   WorkflowCoordinationAgreementStatus,
   WorkflowCoordinationCompensationKind,
@@ -43,6 +48,7 @@ export type ParticipantCoordinationView = {
   eligibleServiceIds: string[];
   workspaceUrl: string | null;
   email: string | null;
+  phone: string | null;
   identityBound: boolean;
   lastInvitationEmail: string | null;
   payoutReview: {
@@ -175,6 +181,14 @@ export function referralEligibilityOf(
     return { status: 'not_applicable', destinationLabel: null };
   }
 
+  if (isExternalEarningSourceParticipant(participant)) {
+    const destinationLabel = formatEarningSourceDestination(participant.earningSource);
+    if (participant.attributionStatus === 'active') {
+      return { status: 'active', destinationLabel };
+    }
+    return { status: 'ready', destinationLabel };
+  }
+
   const selectedIds =
     participant.compensationProfile?.commissionServiceIds ??
     participant.referralCommerce?.enabledServiceIds ??
@@ -229,7 +243,17 @@ export function nextCoordinationAction(input: {
   payoutSetupStatus: WorkflowCoordinationPayoutStatus;
   referralStatus: WorkflowCoordinationReferralStatus;
   operatorApprovalRequired: boolean;
+  pendingChangeRequestCount?: number;
 }): { kind: WorkflowCoordinationNextActionKind; label: string | null } {
+  if ((input.pendingChangeRequestCount ?? 0) > 0) {
+    return {
+      kind: 'review_change_request',
+      label:
+        input.pendingChangeRequestCount === 1
+          ? '1 agreement change awaiting review'
+          : `${input.pendingChangeRequestCount} agreement changes awaiting review`,
+    };
+  }
   if (input.operatorApprovalRequired && input.agreementStatus !== 'approved') {
     if (input.agreementStatus === 'requested' || input.agreementStatus === 'viewed') {
       return { kind: 'request_approval', label: 'Awaiting participant approval' };
@@ -278,11 +302,13 @@ export function buildParticipantCoordinationView(
       ? 'not_applicable'
       : taxInformationStatusOf(participant, payoutSetupStatus);
   const referral = referralEligibilityOf(participant, input.catalogItems);
+  const pendingChanges = pendingAgreementChangeRequests(participant);
   const next = nextCoordinationAction({
     agreementStatus,
     payoutSetupStatus,
     referralStatus: referral.status,
     operatorApprovalRequired: input.operatorApprovalRequired,
+    pendingChangeRequestCount: pendingChanges.length,
   });
   const missingPayoutFields =
     payoutSetupStatus === 'flagged' || payoutSetupStatus === 'submitted'
@@ -317,6 +343,7 @@ export function buildParticipantCoordinationView(
       [],
     workspaceUrl: participantWorkspacePathFromParticipant(participant),
     email: participant.email?.trim() || null,
+    phone: participant.phone?.trim() || null,
     identityBound: isParticipantIdentityBound(participant),
     lastInvitationEmail: participant.lastInvitationEmail?.trim() || null,
     payoutReview:
@@ -352,6 +379,7 @@ export function emptyContractualCoordination(): {
   eligibleServiceIds: [];
   workspaceUrl: null;
   email: null;
+  phone: null;
   identityBound: false;
   lastInvitationEmail: null;
   payoutReview: null;
@@ -370,6 +398,7 @@ export function emptyContractualCoordination(): {
     eligibleServiceIds: [],
     workspaceUrl: null,
     email: null,
+    phone: null,
     identityBound: false,
     lastInvitationEmail: null,
     payoutReview: null,

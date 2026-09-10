@@ -29,7 +29,7 @@ export function TodaysWorkflow({ actions }: TodaysWorkflowProps) {
   return (
     <section aria-label="Today's workflow" className="space-y-2.5">
       <h2 className="text-sm font-semibold text-foreground">Today's workflow</h2>
-      <div className="rounded-xl border border-border/60 bg-white/60 overflow-hidden divide-y divide-border/50">
+      <div className="rounded-xl border border-border/60 bg-card/70 overflow-hidden divide-y divide-border/50">
         {steps.map((action, index) => (
           <WorkflowStep
             key={action.id}
@@ -61,9 +61,9 @@ function WorkflowStep({
         className={cn(
           'shrink-0 flex h-6 w-6 items-center justify-center rounded-full text-xs font-semibold border',
           action.urgency === 'critical'
-            ? 'border-red-500/40 bg-red-50 text-red-700'
+            ? 'border-red-500/40 bg-red-500/[0.08] text-red-800 dark:text-red-400'
             : action.urgency === 'high'
-              ? 'border-amber-500/40 bg-amber-50 text-amber-700'
+              ? 'border-amber-500/40 bg-amber-500/[0.08] text-amber-800 dark:text-amber-400'
               : 'border-border/70 bg-muted/30 text-muted-foreground'
         )}
       >

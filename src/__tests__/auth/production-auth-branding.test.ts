@@ -8,12 +8,15 @@ import {
   PRODUCTION_GOOGLE_OAUTH_REDIRECT_URI,
   PRODUCTION_SUPABASE_PROJECT_REF,
   PROVVYPAY_AUTH_SENDER,
+  PROVVYPAY_AUTH_REPLY_TO,
   PROVVYPAY_HOMEPAGE_URL,
   PROVVYPAY_PRIVACY_URL,
   PROVVYPAY_SUPPORT_EMAIL,
   PROVVYPAY_TERMS_URL,
   REAUTHENTICATION_TOKEN_PLACEHOLDER,
+  RECOMMENDED_SUPABASE_AUTH_SMTP,
   SUPABASE_AUTH_EMAIL_SUBJECTS,
+  SUPABASE_DEFAULT_MAILER_FROM,
   brandedAuthFromAddress,
 } from '@/lib/auth/production-auth-branding';
 import { SUPABASE_AUTH_EMAIL_TEMPLATES } from '@/lib/auth/supabase-auth-email-templates';
@@ -49,6 +52,10 @@ describe('production auth branding', () => {
     expect(PROVVYPAY_TERMS_URL).toBe('https://provvypay.com/terms');
     expect(PROVVYPAY_SUPPORT_EMAIL).toBe('support@provvypay.com');
     expect(PROVVYPAY_AUTH_SENDER).toBe('Provvypay <auth@provvypay.com>');
+    expect(PROVVYPAY_AUTH_REPLY_TO).toBe('support@provvypay.com');
+    expect(RECOMMENDED_SUPABASE_AUTH_SMTP.senderEmail).toBe('auth@provvypay.com');
+    expect(RECOMMENDED_SUPABASE_AUTH_SMTP.host).toBe('smtp.resend.com');
+    expect(SUPABASE_DEFAULT_MAILER_FROM).toBe('noreply@mail.app.supabase.io');
   });
 
   it('falls back to the branded Provvypay sender when env is unset', () => {
@@ -96,6 +103,17 @@ describe('production auth branding', () => {
       expect(html).not.toContain('{{ .SiteURL }}');
       expect(html).not.toContain('{{ .RedirectTo }}');
     }
+  });
+
+  it('keeps the confirmation email transactional and preserves the verification link', () => {
+    const html = SUPABASE_AUTH_EMAIL_TEMPLATES.confirmation;
+    expect(SUPABASE_AUTH_EMAIL_SUBJECTS.confirmation).toBe('Verify your Provvypay email');
+    expect(html).toContain('Verify your email');
+    expect(html).toContain('{{ .Email }}');
+    expect(html).toContain('Verify email address');
+    expect(html).toContain(`href="${MAGIC_LINK_CONFIRMATION_PLACEHOLDER}"`);
+    expect(html).not.toMatch(/!!!|act now|limited time|congratulations/i);
+    expect(html).not.toContain('Thanks for signing up');
   });
 
   it('replaces the generic magic-link copy with branded Provvypay sign-in copy', () => {

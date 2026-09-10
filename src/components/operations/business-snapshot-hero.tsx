@@ -152,7 +152,7 @@ export function BusinessSnapshotHero({
 
 function FlowGroupCard({ group }: { group: FlowGroup }) {
   return (
-    <div className="rounded-xl border border-border/60 bg-white/70 px-4 py-4 space-y-3">
+    <div className="rounded-xl border border-border/60 bg-card/70 px-4 py-4 space-y-3">
       <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/80">
         {group.heading}
       </p>

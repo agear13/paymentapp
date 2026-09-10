@@ -4,6 +4,7 @@ import {
   hasRecoveryAmr,
   resolveSensitiveActionBlock,
   enrolledUserNeedsMfaChallenge,
+  MFA_STEP_UP_MESSAGES,
 } from '@/lib/auth/mfa-assurance';
 
 describe('MFA assurance helpers', () => {
@@ -81,6 +82,12 @@ describe('MFA assurance helpers', () => {
         currentLevel: 'aal1',
       })
     ).toBe(true);
+  });
+
+  it('describes TOTP confirmation, not a push notification', () => {
+    expect(MFA_STEP_UP_MESSAGES.STEP_UP_REQUIRED).toMatch(/6-digit code/i);
+    expect(MFA_STEP_UP_MESSAGES.STEP_UP_REQUIRED).not.toMatch(/notification|approve|waiting/i);
+    expect(MFA_STEP_UP_MESSAGES.MFA_CHALLENGE_REQUIRED).toMatch(/6-digit code/i);
   });
 
   it('recognizes recovery AMR for password-reset completion only', () => {

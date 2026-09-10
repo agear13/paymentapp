@@ -16,7 +16,7 @@ import {
 
 function MetricTile({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-lg border bg-white/70 px-4 py-3">
+    <div className="rounded-lg border bg-card/70 px-4 py-3">
       <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="text-2xl font-semibold mt-1">{value}</p>
     </div>

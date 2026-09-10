@@ -8,6 +8,8 @@ import { useProjectWorkspace } from '@/components/projects/project-workspace-pro
 import { SupplierOnboardingForm } from '@/components/commercial/supplier-onboarding/supplier-onboarding-form';
 import { buildSupplierOnboardingInput, hasSubmittedOnboarding } from '@/lib/commercial/build-supplier-onboarding-input';
 import type { SupplierOnboardingInput } from '@/lib/commercial/supplier-onboarding';
+import { opSurfaceAction, opSurfaceCritical, opSurfaceSuccess, opToneDanger, opToneSuccess, opToneWarning } from '@/lib/design/operational-surfaces';
+import { cn } from '@/lib/utils';
 
 /**
  * Operator-on-behalf supplier onboarding form.
@@ -74,13 +76,13 @@ export function SupplierOnboardingFormScreen({
   if (submitted || alreadySubmitted) {
     return (
       <div className="max-w-lg mx-auto py-12 px-4">
-        <div className="rounded-lg border border-green-200 bg-green-50 p-8 text-center space-y-4">
-          <CheckCircle2 className="h-10 w-10 text-green-600 mx-auto" />
+        <div className={cn(opSurfaceSuccess, 'p-8 text-center space-y-4')}>
+          <CheckCircle2 className="h-10 w-10 text-green-600 dark:text-green-400 mx-auto" />
           <div>
-            <h2 className="text-lg font-semibold text-green-900">
+            <h2 className={cn('text-lg font-semibold', opToneSuccess)}>
               {submitted ? 'Payment information submitted' : 'Already submitted'}
             </h2>
-            <p className="text-sm text-green-700 mt-1">
+            <p className={cn('text-sm mt-1', opToneSuccess)}>
               {participant.name}'s payment information is now with the organiser for review.
               You'll be notified once it's been approved.
             </p>
@@ -88,7 +90,7 @@ export function SupplierOnboardingFormScreen({
           <Link
             href={backHref}
             data-testid="onboard-back-link"
-            className="inline-flex items-center gap-1.5 text-sm text-green-700 hover:underline mt-2"
+            className={cn('inline-flex items-center gap-1.5 text-sm hover:underline mt-2', opToneSuccess)}
           >
             <ArrowLeft className="h-4 w-4" />
             Back to participants
@@ -101,15 +103,15 @@ export function SupplierOnboardingFormScreen({
   if (participant.approvalStatus !== 'Approved') {
     return (
       <div className="max-w-lg mx-auto py-12 px-4">
-        <div className="rounded-lg border bg-amber-50 border-amber-200 p-6 text-center space-y-3">
-          <p className="text-sm text-amber-700">
+        <div className={cn(opSurfaceAction, 'p-6 text-center space-y-3')}>
+          <p className={cn('text-sm', opToneWarning)}>
             {participant.name} has not yet approved their agreement. Payment setup
             is only available after agreement approval.
           </p>
           <Link
             href={backHref}
             data-testid="onboard-back-link"
-            className="text-sm text-amber-700 hover:underline"
+            className={cn('text-sm hover:underline', opToneWarning)}
           >
             Back to participants
           </Link>
@@ -140,7 +142,7 @@ export function SupplierOnboardingFormScreen({
       </div>
 
       {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className={cn(opSurfaceCritical, 'mb-4 px-4 py-3 text-sm', opToneDanger)}>
           {error}
         </div>
       )}

@@ -134,6 +134,20 @@ describe('persistPilotDealForUser', () => {
     expect(written.projectDescription).toBe('Replaced');
     expect(written.conversationImportHistory).toEqual(history);
   });
+
+  it('can change project value later without loading or rewriting participants', async () => {
+    mockDealFindFirst.mockResolvedValue({
+      id: 'onb-deal-target',
+      deal_payload: incomingDeal({ value: 0 }),
+    });
+
+    await persistPilotDealForUser(USER, incomingDeal({ value: 100000 }));
+
+    expectNoParticipantAccess();
+    const written = mockDealUpsert.mock.calls[0][0].update.deal_payload as RecentDeal;
+    expect(written.value).toBe(100000);
+    expect(written.dealName).toBe('Launch Event');
+  });
 });
 
 describe('findOnboardingDealIdByName', () => {

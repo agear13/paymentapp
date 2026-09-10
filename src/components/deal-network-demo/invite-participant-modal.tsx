@@ -102,6 +102,16 @@ export interface DemoParticipant {
   payoutDueDate?: string;
   participantNotes?: string;
   companyName?: string;
+  /** Human-facing role label (e.g. Community Organiser). Operational union stays unchanged. */
+  roleLabel?: string;
+  /** Optional phone captured during promoter onboarding or a suggested correction. */
+  phone?: string;
+  /** Audience-facing discount offered through this affiliate relationship, if any. */
+  audienceDiscountPct?: number;
+  /** Immutable agreement presentation versions (branding + terms at issue time). */
+  agreementVersions?: import('@/lib/agreements/agreement-presentation').AgreementPresentationSnapshot[];
+  /** Affiliate-proposed corrections awaiting operator review. */
+  agreementChangeRequests?: import('@/lib/agreements/agreement-change-request').AgreementChangeRequest[];
   /** Operator referral commerce configuration (invite/agreement time). */
   referralCommerce?: import('@/lib/referrals/referral-commerce-config').ParticipantReferralCommerce;
   /** Participant-level manual payout instructions (shared with checkout / payment links). */
@@ -120,6 +130,11 @@ export interface DemoParticipant {
   payoutBlocked?: boolean;
   /** How this participant earns — orchestration metadata, not settlement engine. */
   compensationProfile?: import('@/lib/participants/participant-compensation-types').ParticipantCompensationProfile;
+  /**
+   * Referral earning source — Provvy catalogue service or an external platform.
+   * Stored on participant_payload so later webhooks can attribute external events.
+   */
+  earningSource?: import('@/lib/workflows/referral-management/earning-source').ReferralEarningSource;
   /** v4 obligation graph from AI extraction import. */
   extractedObligations?: import('@/lib/ai-extractor/extraction-obligations').ParticipantObligationGraph;
   operationalStatus?: import('@/lib/operational/operational-lifecycle-types').ParticipantOperationalStatus;
@@ -205,6 +220,7 @@ export interface InviteParticipantModalProps {
   /** Featured deal value for commission previews */
   featuredDealValue: number;
   featuredRoleAmounts?: Partial<Record<BaseParticipantSlot, number>>;
+  onAddProjectValue?: () => void;
   /** Referral/Rabbit Hole pilot (default) vs project coordination UI. */
   experienceMode?: 'referral' | 'project';
   /** Invitees on this deal eligible as %-of-participant base (excludes internal deal-role rows). */
@@ -238,6 +254,7 @@ export function InviteParticipantModal({
   experienceMode = 'referral',
   commissionBaseParticipantOptions = [],
   organizationId = null,
+  onAddProjectValue,
 }: InviteParticipantModalProps) {
   const isProjectMode = experienceMode === 'project';
   /** Strait / project: simplify invite UX; engine still supports all kinds for existing rows. */
@@ -907,6 +924,31 @@ export function InviteParticipantModal({
                     onChange={(e) => setCommissionValue(e.target.value)}
                     required
                   />
+                  {preview.missingProjectValue ? (
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm">
+                      <p>
+                        Commission: {commissionValue || '0'}% of project value
+                      </p>
+                      <p className="mt-1">Project value: Not yet specified</p>
+                      <p className="mt-1 text-amber-800 dark:text-amber-200">
+                        Project value is required to calculate earnings.
+                      </p>
+                      {onAddProjectValue ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="mt-2"
+                          onClick={() => {
+                            onOpenChange(false);
+                            onAddProjectValue();
+                          }}
+                        >
+                          Add project value
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
 

@@ -176,6 +176,15 @@ export interface ExtractedParty {
   /** v5 — settlement blockers linked to deliverables or compensation. */
   commercialDependencies?: ExtractedCommercialDependency[];
   notes: ExtractionField<string | null>;
+  /** Optional — referral earning source. Never invent catalogue/checkout IDs. */
+  referralEarningSource?: ExtractedReferralEarningSource;
+}
+
+export interface ExtractedReferralEarningSource {
+  type: ExtractionField<'internal_service' | 'external' | null>;
+  externalPlatform: ExtractionField<string | null>;
+  externalService: ExtractionField<string | null>;
+  attributionMethod: ExtractionField<string | null>;
 }
 
 export interface ExtractedPaymentTerm {

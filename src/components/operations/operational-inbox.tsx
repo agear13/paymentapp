@@ -49,7 +49,7 @@ export function OperationalInbox({ items }: OperationalInboxProps) {
           {visible.length} item{visible.length === 1 ? '' : 's'}
         </span>
       </div>
-      <div className="rounded-xl border border-border/60 bg-white/60 overflow-hidden divide-y divide-border/40">
+      <div className="rounded-xl border border-border/60 bg-card/70 overflow-hidden divide-y divide-border/40">
         {visible.map((item) => (
           <InboxRow key={item.id} item={item} />
         ))}

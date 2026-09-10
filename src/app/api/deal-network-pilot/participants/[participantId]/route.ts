@@ -51,6 +51,8 @@ const patchSchema = z
     payoutVerificationConfirmed: z.boolean().optional(),
     name: z.string().min(1).max(255).optional(),
     email: z.string().email().max(255).optional().or(z.literal('')),
+    phone: z.string().max(40).optional(),
+    roleLabel: z.string().trim().max(80).optional(),
     role: z.enum(['Introducer', 'Connector', 'Closer', 'Contributor']).optional(),
     roleDetails: z.string().max(2000).optional(),
     agreementNotes: z.string().max(2000).optional(),
@@ -67,6 +69,8 @@ const patchSchema = z
       body.payoutVerificationConfirmed != null ||
       body.name != null ||
       body.email != null ||
+      body.phone != null ||
+      body.roleLabel != null ||
       body.role != null ||
       body.roleDetails != null ||
       body.agreementNotes != null ||
@@ -101,14 +105,15 @@ export async function PATCH(
 
     let working = existing;
     let invitationResendRequired = false;
-    const identityEmail = body.email?.trim() ? body.email.trim() : undefined;
-    if (body.name != null || identityEmail != null) {
+    if (body.name != null || body.email != null || body.phone != null || body.roleLabel != null) {
       try {
         const identity = await updateParticipantIdentity({
           participantId,
           operatorUserId: user.id,
           name: body.name,
-          email: identityEmail,
+          email: body.email,
+          phone: body.phone,
+          roleLabel: body.roleLabel,
         });
         working = identity.participant;
         invitationResendRequired = identity.invitationResendRequired;

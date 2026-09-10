@@ -209,6 +209,8 @@ describe('Commercial Workspace operator surface', () => {
     expect(screen.getByTestId('workspace-tab-activity')).toBeInTheDocument();
     expect(screen.getByTestId('commercial-workspace-overview')).toBeInTheDocument();
     expect(screen.getByTestId('workspace-next-step')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit project' })).toBeInTheDocument();
+    expect(screen.getByText(/Project value:/)).toBeInTheDocument();
   });
 
   it('omits the Agreement tab for a manually created workspace', async () => {

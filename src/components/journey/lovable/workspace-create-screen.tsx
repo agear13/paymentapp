@@ -25,6 +25,9 @@ import {
 } from '@/lib/journey/journey-assessment-storage.client';
 import { emitAuthAuditEvent } from '@/lib/security/auth-audit.client';
 import { ACCOUNT_EXISTS_CODE, ACCOUNT_EXISTS_MESSAGE } from '@/lib/auth/auth-errors';
+import { SignupCheckEmail } from '@/components/auth/signup-check-email';
+import { VERIFICATION_RESEND_COOLDOWN_SECONDS } from '@/lib/auth/email-verification';
+import { opSurfaceCritical, opToneDanger } from '@/lib/design/operational-surfaces';
 
 type AuthMode = 'signup' | 'signin';
 
@@ -49,6 +52,7 @@ export function WorkspaceCreateScreen() {
   const [turnstileRequired, setTurnstileRequired] = useState(false);
   const [turnstileSiteKey, setTurnstileSiteKey] = useState<string | null>(null);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [awaitingVerification, setAwaitingVerification] = useState(false);
 
   useEffect(() => {
     restoreJourneyAssessment();
@@ -200,7 +204,9 @@ export function WorkspaceCreateScreen() {
       if (!response.ok) {
         if (data.turnstileRequired) setTurnstileRequired(true);
         if (data.code === 'EMAIL_NOT_VERIFIED') {
-          setNotice('Please verify your email address before signing in.');
+          setAwaitingVerification(true);
+          setNotice(null);
+          setError(null);
           return;
         }
         throw new Error(data.error || 'Failed to sign in');
@@ -278,8 +284,9 @@ export function WorkspaceCreateScreen() {
       }
 
       if (data.requiresVerification) {
-        setNotice(data.message ?? 'Check your email to verify your account, then sign in.');
-        setAuthMode('signin');
+        setAwaitingVerification(true);
+        setNotice(null);
+        setError(null);
         return;
       }
 
@@ -328,7 +335,7 @@ export function WorkspaceCreateScreen() {
     <section className="relative px-6 pt-14 pb-24 animate-fade-up">
       <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[1fr_1fr]">
         <div>
-          {awaitingNameConfirm ? null : (
+          {awaitingNameConfirm || awaitingVerification ? null : (
             <Link
               href="/journey/assessment/business"
               className="mb-6 inline-flex items-center gap-1.5 text-[13px] text-ink-soft hover:text-foreground"
@@ -386,6 +393,20 @@ export function WorkspaceCreateScreen() {
                 Saving your assessment and preparing Commercial OS…
               </div>
             </div>
+          ) : awaitingVerification ? (
+            <div className="mt-6">
+              <SignupCheckEmail
+                email={email}
+                variant="journey"
+                initialCooldownSeconds={VERIFICATION_RESEND_COOLDOWN_SECONDS}
+                onUseDifferentEmail={() => {
+                  setAwaitingVerification(false);
+                  setNotice(null);
+                  setError(null);
+                  setAuthMode('signup');
+                }}
+              />
+            </div>
           ) : awaitingNameConfirm ? (
             <form
               className="mt-6 space-y-4"
@@ -417,7 +438,7 @@ export function WorkspaceCreateScreen() {
                 />
               </div>
               {error ? (
-                <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-700">
+                <div className={`rounded-xl ${opSurfaceCritical} px-3 py-2.5 text-[13px] ${opToneDanger}`}>
                   {error}
                 </div>
               ) : null}
@@ -502,7 +523,7 @@ export function WorkspaceCreateScreen() {
                 ) : null}
 
                 {error ? (
-                  <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-700">
+                  <div className={`rounded-xl ${opSurfaceCritical} px-3 py-2.5 text-[13px] ${opToneDanger}`}>
                     {error}
                   </div>
                 ) : null}

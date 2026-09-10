@@ -1942,6 +1942,29 @@ model user_mfa_recovery_codes {
   @@index([user_id])
 }
 
+/// Time-stamped route-intelligence observations. Not capability, pricing, or FX.
+model route_intelligence_observation {
+  id               String   @id @default(uuid()) @db.Uuid
+  observation_type String   @db.VarChar(64)
+  subject_kind     String   @db.VarChar(64)
+  subject_id       String   @db.VarChar(128)
+  provider_id      String   @db.VarChar(64)
+  value            Json
+  observed_at      DateTime @db.Timestamptz(6)
+  fetched_at       DateTime @db.Timestamptz(6)
+  source_id        String   @db.VarChar(64)
+  source_url       String   @db.VarChar(512)
+  provenance       String   @db.VarChar(32)
+  confidence       String   @db.VarChar(32)
+  stale_after      DateTime @db.Timestamptz(6)
+  raw_hash         String   @db.VarChar(64)
+  raw_payload      Json
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([observation_type, subject_id, fetched_at(sort: Desc)], map: "route_intel_obs_type_subject_fetched_idx")
+  @@index([provider_id, fetched_at(sort: Desc)], map: "route_intel_obs_provider_fetched_idx")
+}
+
 /// Public campaign waitlist (e.g. Jarvis). Not an account and not an Agreement Analyzer lead.
 model marketing_waitlist_signups {
   id                      String   @id @default(uuid()) @db.Uuid

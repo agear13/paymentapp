@@ -9,7 +9,16 @@ import {
   deriveStripeSetupDisplayStatus,
   isStripePersistedConnected,
 } from '@/lib/settings/merchant-settings-section-save';
+import { completeTotpStepUp } from '@/lib/auth/step-up-totp.client';
 import { toast } from 'sonner';
+
+jest.mock('@/lib/auth/step-up-totp.client', () => {
+  const actual = jest.requireActual('@/lib/auth/step-up-totp.client');
+  return {
+    ...actual,
+    completeTotpStepUp: jest.fn(),
+  };
+});
 
 jest.mock('@/hooks/use-organization', () => ({
   useOrganization: () => ({
@@ -70,11 +79,15 @@ function resolveFetchUrl(input: RequestInfo | URL): string {
 }
 
 function jsonResponse(body: unknown, status = 200) {
-  return {
+  const response = {
     ok: status >= 200 && status < 300,
     status,
+    clone() {
+      return jsonResponse(body, status);
+    },
     json: async () => body,
   };
+  return response;
 }
 
 function installMerchantSettingsFetch(options: {
@@ -82,8 +95,11 @@ function installMerchantSettingsFetch(options: {
   afterSaveStripe?: string | null;
   patchStatus?: number;
   patchError?: string;
+  patchCode?: string;
+  patchFailOnce?: boolean;
 }) {
   let persistedStripe = options.initialStripe;
+  let patchAttempts = 0;
 
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = resolveFetchUrl(input);
@@ -94,8 +110,16 @@ function installMerchantSettingsFetch(options: {
     }
 
     if (url.includes(`/api/merchant-settings/${SETTINGS_ID}`) && method === 'PATCH') {
-      if (options.patchStatus && options.patchStatus >= 400) {
-        return jsonResponse({ error: options.patchError ?? 'Save failed' }, options.patchStatus);
+      patchAttempts += 1;
+      const shouldFailPatch =
+        options.patchStatus &&
+        options.patchStatus >= 400 &&
+        (!options.patchFailOnce || patchAttempts === 1);
+      if (shouldFailPatch) {
+        return jsonResponse(
+          { error: options.patchError ?? 'Save failed', code: options.patchCode },
+          options.patchStatus
+        );
       }
 
       const body = JSON.parse(String(init?.body ?? '{}')) as { stripeAccountId?: string };
@@ -314,5 +338,65 @@ describe('MerchantSettingsForm providers stripe UX', () => {
     });
     expect(toast.error).toHaveBeenCalledWith('Forbidden - insufficient organization permissions');
     expect(stripeStatus().queryByText('Connected')).not.toBeInTheDocument();
+  });
+
+  it('asks for a TOTP code when payment-rail save needs step-up', async () => {
+    installMerchantSettingsFetch({
+      initialStripe: null,
+      patchStatus: 403,
+      patchCode: 'STEP_UP_REQUIRED',
+      patchError: 'Enter the 6-digit code from your authenticator app to confirm this action.',
+    });
+
+    render(<MerchantSettingsForm sections={['providers']} presentation="commercial-os" />);
+
+    await waitForProvidersForm();
+    const input = screen.getByPlaceholderText('acct_xxxxxxxxxxxxx');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'acct_stepup_000' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save payment providers' }));
+
+    expect(await screen.findByText('Confirm this action')).toBeInTheDocument();
+    expect(screen.getByLabelText('6-digit verification code')).toBeInTheDocument();
+    expect(screen.queryByText(/waiting for approval/i)).not.toBeInTheDocument();
+    expect(toast.error).not.toHaveBeenCalledWith(
+      'Please confirm this action with your authenticator app.'
+    );
+  });
+
+  it('retries the payment-rail save after a valid TOTP code', async () => {
+    (completeTotpStepUp as jest.Mock).mockResolvedValue({ ok: true });
+    installMerchantSettingsFetch({
+      initialStripe: null,
+      afterSaveStripe: 'acct_after_stepup',
+      patchStatus: 403,
+      patchFailOnce: true,
+      patchCode: 'STEP_UP_REQUIRED',
+      patchError: 'Enter the 6-digit code from your authenticator app to confirm this action.',
+    });
+
+    render(<MerchantSettingsForm sections={['providers']} presentation="commercial-os" />);
+
+    await waitForProvidersForm();
+    const input = screen.getByPlaceholderText('acct_xxxxxxxxxxxxx');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'acct_after_stepup' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save payment providers' }));
+
+    expect(await screen.findByText('Confirm this action')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('6-digit verification code'), {
+      target: { value: '123456' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => {
+      expect(stripeStatus().getByText('Connected')).toBeInTheDocument();
+    });
+    expect(completeTotpStepUp).toHaveBeenCalledWith({ code: '123456' });
+    expect(
+      (global.fetch as jest.Mock).mock.calls.filter(
+        (call) => String(call[1]?.method ?? 'GET') === 'PATCH'
+      )
+    ).toHaveLength(2);
   });
 });

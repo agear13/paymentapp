@@ -87,48 +87,57 @@ const EVENT_ICONS: Record<CommercialEventType, React.ElementType> = {
   settlement_ready:                      Wallet,
 };
 
+const ICON_INFO = 'text-blue-600 dark:text-blue-400 bg-blue-500/[0.10]';
+const ICON_SUCCESS = 'text-green-600 dark:text-green-400 bg-green-500/[0.10]';
+const ICON_WARNING = 'text-amber-600 dark:text-amber-400 bg-amber-500/[0.10]';
+const ICON_NEUTRAL = 'text-muted-foreground bg-muted';
+const ICON_ACCENT = 'text-purple-600 dark:text-purple-400 bg-purple-500/[0.10]';
+const ICON_INDIGO = 'text-indigo-600 dark:text-indigo-400 bg-indigo-500/[0.10]';
+const ICON_EMERALD = 'text-emerald-600 dark:text-emerald-400 bg-emerald-500/[0.10]';
+const ICON_ROSE = 'text-rose-600 dark:text-rose-400 bg-rose-500/[0.10]';
+
 const EVENT_ICON_COLOURS: Record<CommercialEventType, string> = {
-  agreement_negotiated:           'text-blue-600 bg-blue-50',
-  agreement_generated:            'text-slate-600 bg-slate-50',
-  agreement_sent:                 'text-amber-600 bg-amber-50',
-  agreement_viewed:               'text-slate-500 bg-slate-50',
-  agreement_approved:             'text-green-600 bg-green-50',
-  participant_added:              'text-blue-600 bg-blue-50',
-  earnings_configured:            'text-purple-600 bg-purple-50',
-  payment_provider_connected:     'text-indigo-600 bg-indigo-50',
-  revenue_received:               'text-emerald-600 bg-emerald-50',
-  revenue_confirmed:              'text-emerald-600 bg-emerald-50',
-  revenue_threshold_achieved:     'text-emerald-700 bg-emerald-50',
-  deposit_received:               'text-emerald-600 bg-emerald-50',
-  payment_evidence_uploaded:      'text-blue-600 bg-blue-50',
-  forecast_updated:               'text-slate-600 bg-slate-50',
-  commercial_risk_resolved:       'text-amber-600 bg-amber-50',
-  obligations_created:            'text-slate-600 bg-slate-50',
-  obligations_funded:             'text-emerald-600 bg-emerald-50',
-  invoice_requested:              'text-amber-600 bg-amber-50',
-  invoice_received:               'text-blue-600 bg-blue-50',
-  exported_to_xero:               'text-blue-700 bg-blue-50',
-  payment_released:               'text-green-700 bg-green-50',
-  settlement_complete:            'text-green-700 bg-green-50',
-  conditional_bonus_unlocked:     'text-rose-600 bg-rose-50',
-  referral_commission_confirmed:  'text-purple-600 bg-purple-50',
-  supplier_onboarding_requested:       'text-amber-600 bg-amber-50',
-  supplier_invoice_generated:          'text-slate-600 bg-slate-50',
-  supplier_onboarding_started:           'text-blue-600 bg-blue-50',
-  supplier_onboarding_completed:         'text-blue-600 bg-blue-50',
-  supplier_abn_verified:                 'text-green-600 bg-green-50',
-  supplier_abn_manual_review:            'text-amber-600 bg-amber-50',
-  supplier_gst_confirmed:                'text-green-600 bg-green-50',
-  supplier_alternative_payment_supplied: 'text-indigo-600 bg-indigo-50',
-  supplier_invoice_approved:             'text-green-600 bg-green-50',
-  supplier_invoice_exported_to_xero:   'text-blue-700 bg-blue-50',
-  payment_request_generated:             'text-slate-600 bg-slate-50',
-  payment_request_opened:                'text-blue-600 bg-blue-50',
-  payment_information_submitted:         'text-blue-600 bg-blue-50',
-  operator_review_started:               'text-amber-600 bg-amber-50',
-  operator_approved:                     'text-green-600 bg-green-50',
-  xero_invoice_created:                  'text-blue-700 bg-blue-50',
-  settlement_ready:                      'text-green-700 bg-green-50',
+  agreement_negotiated:           ICON_INFO,
+  agreement_generated:            ICON_NEUTRAL,
+  agreement_sent:                 ICON_WARNING,
+  agreement_viewed:               ICON_NEUTRAL,
+  agreement_approved:             ICON_SUCCESS,
+  participant_added:              ICON_INFO,
+  earnings_configured:            ICON_ACCENT,
+  payment_provider_connected:     ICON_INDIGO,
+  revenue_received:               ICON_EMERALD,
+  revenue_confirmed:              ICON_EMERALD,
+  revenue_threshold_achieved:     ICON_EMERALD,
+  deposit_received:               ICON_EMERALD,
+  payment_evidence_uploaded:      ICON_INFO,
+  forecast_updated:               ICON_NEUTRAL,
+  commercial_risk_resolved:       ICON_WARNING,
+  obligations_created:            ICON_NEUTRAL,
+  obligations_funded:             ICON_EMERALD,
+  invoice_requested:              ICON_WARNING,
+  invoice_received:               ICON_INFO,
+  exported_to_xero:               ICON_INFO,
+  payment_released:               ICON_SUCCESS,
+  settlement_complete:            ICON_SUCCESS,
+  conditional_bonus_unlocked:     ICON_ROSE,
+  referral_commission_confirmed:  ICON_ACCENT,
+  supplier_onboarding_requested:       ICON_WARNING,
+  supplier_invoice_generated:          ICON_NEUTRAL,
+  supplier_onboarding_started:           ICON_INFO,
+  supplier_onboarding_completed:         ICON_INFO,
+  supplier_abn_verified:                 ICON_SUCCESS,
+  supplier_abn_manual_review:            ICON_WARNING,
+  supplier_gst_confirmed:                ICON_SUCCESS,
+  supplier_alternative_payment_supplied: ICON_INDIGO,
+  supplier_invoice_approved:             ICON_SUCCESS,
+  supplier_invoice_exported_to_xero:   ICON_INFO,
+  payment_request_generated:             ICON_NEUTRAL,
+  payment_request_opened:                ICON_INFO,
+  payment_information_submitted:         ICON_INFO,
+  operator_review_started:               ICON_WARNING,
+  operator_approved:                     ICON_SUCCESS,
+  xero_invoice_created:                  ICON_INFO,
+  settlement_ready:                      ICON_SUCCESS,
 };
 
 /* ─── Props ─────────────────────────────────────────────────────────────────── */
@@ -289,7 +298,7 @@ export function ParticipantCommercialHistory({
             className={cn(
               'flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
               step.completed
-                ? 'bg-green-50 text-green-700'
+                ? 'bg-green-500/[0.08] text-green-800 dark:text-green-400'
                 : 'bg-muted text-muted-foreground'
             )}
           >

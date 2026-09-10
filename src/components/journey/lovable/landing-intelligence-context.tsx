@@ -37,7 +37,7 @@ export function LandingIntelligenceProvider({ children }: { children: ReactNode 
     DEFAULT_LANDING_SEARCH.destinationCountry
   );
   const [scope, setScope] = useState<PaymentWatchScope>('all');
-  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [highlightedId, setHighlightedIdState] = useState<string | null>(null);
   const compareHandler = useRef<CompareHandler>(null);
 
   const setCorridor = useCallback(
@@ -47,6 +47,10 @@ export function LandingIntelligenceProvider({ children }: { children: ReactNode 
     },
     []
   );
+
+  const setHighlightedId = useCallback((id: string) => {
+    setHighlightedIdState((current) => (current === id ? current : id));
+  }, []);
 
   const requestCompare = useCallback((hint?: PaymentIntelligenceSearchHint | null) => {
     compareHandler.current?.(hint);
@@ -68,7 +72,16 @@ export function LandingIntelligenceProvider({ children }: { children: ReactNode 
       requestCompare,
       registerCompare,
     }),
-    [origin, destination, scope, highlightedId, setCorridor, requestCompare, registerCompare]
+    [
+      origin,
+      destination,
+      scope,
+      highlightedId,
+      setCorridor,
+      setHighlightedId,
+      requestCompare,
+      registerCompare,
+    ]
   );
 
   return (

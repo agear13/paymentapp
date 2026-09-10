@@ -3,6 +3,8 @@ import type { WorkflowCoordinationAgreementStatus } from '@/lib/workflows/agreem
 
 export const PARTICIPANT_IDENTITY_NAME_MAX = 255;
 export const PARTICIPANT_IDENTITY_EMAIL_MAX = 255;
+export const PARTICIPANT_IDENTITY_PHONE_MAX = 40;
+export const PARTICIPANT_IDENTITY_ROLE_LABEL_MAX = 80;
 
 export function isParticipantIdentityBound(input: {
   authenticatedUserId?: string | null;
@@ -50,6 +52,16 @@ export function participantInvitationCopy(input: {
       destinationEmail,
       headline: 'Agreement approved',
       statusLine: destinationEmail ? `Bound to ${destinationEmail}` : 'Participant identity is bound',
+      stale: false,
+      previousDestinationEmail: null,
+    };
+  }
+
+  if (!destinationEmail) {
+    return {
+      destinationEmail: null,
+      headline: 'Add an email to send the agreement',
+      statusLine: 'Email not provided',
       stale: false,
       previousDestinationEmail: null,
     };

@@ -16,6 +16,10 @@ import {
   recommendedWhy,
   type LandingProviderResult,
 } from '@/lib/journey/landing-provider-search';
+import {
+  getPublicRouteIntelligenceSnapshot,
+  type PublicRouteIntelligenceSnapshotInput,
+} from '@/lib/route-intelligence';
 
 export {
   countryName,
@@ -73,14 +77,22 @@ export type LandingComparisonResult = {
   routes: LandingComparedRoute[];
 };
 
-export function compareLandingRoutes(query: LandingSearchQuery): LandingComparisonResult {
+export function compareLandingRoutes(
+  query: LandingSearchQuery,
+  intelligence: PublicRouteIntelligenceSnapshotInput = {}
+): LandingComparisonResult {
+  const snapshot = getPublicRouteIntelligenceSnapshot(intelligence);
   const ranked = rankLandingRoutes(query);
   const routes = ranked.map((entry, index) => ({
     ...presentLandingRoute(entry.id, query),
     isGenericBest: index === 0,
   }));
   const genericBest = routes[0];
-  const offerings = buildProviderResults(query);
+  const offerings = buildProviderResults(query, snapshot.catalogOfferings, snapshot.capabilities, {
+    health: intelligence.wisePaymentsHealth,
+    incidents: intelligence.wiseIncidents,
+    now: intelligence.now,
+  });
   const recommendedOffering = offerings.find((item) => item.isRecommended) ?? offerings[0];
 
   if (!genericBest || !recommendedOffering) {

@@ -106,6 +106,7 @@ export type WorkflowCoordinationCompensationKind = 'fixed' | 'revenue_share' | '
 
 export type WorkflowCoordinationNextActionKind =
   | 'request_approval'
+  | 'review_change_request'
   | 'request_payout_details'
   | 'review_payout_details'
   | 'request_update'
@@ -145,6 +146,7 @@ export type WorkflowOperationalParticipant = {
   eligibleServiceIds: string[];
   workspaceUrl: string | null;
   email: string | null;
+  phone: string | null;
   identityBound: boolean;
   lastInvitationEmail: string | null;
   payoutReview: {
@@ -153,6 +155,18 @@ export type WorkflowOperationalParticipant = {
     gst: string | null;
     submittedAt: string | null;
   } | null;
+  pendingChangeRequests?: Array<{
+    id: string;
+    fieldLabel: string;
+    previousValue: string;
+    suggestedValue: string;
+    reason: string;
+    classification: 'administrative' | 'commercial';
+    createdAt: string;
+    agreementVersionNumber: number;
+    status: string;
+    reviewNote?: string | null;
+  }>;
 };
 
 export type WorkflowOperationalObligation = {

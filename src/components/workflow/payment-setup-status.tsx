@@ -3,6 +3,7 @@
 import { Check, Circle, Dot } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
+import { opSurfacePanel } from '@/lib/design/operational-surfaces';
 import type { WorkspaceActivationSnapshot } from '@/lib/onboarding/workspace-activation-types';
 
 /* ─── Journey steps ─── */
@@ -111,7 +112,7 @@ export function PaymentSetupStatus() {
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-border/50 bg-white/60 px-5 py-5 space-y-3 animate-pulse">
+      <div className={`${opSurfacePanel} border-border/50 bg-card/60 px-5 py-5 space-y-3 animate-pulse`}>
         <div className="h-3 w-32 bg-muted/60 rounded" />
         <div className="h-4 w-2/3 bg-muted rounded" />
         <div className="space-y-1.5">
@@ -134,7 +135,7 @@ export function PaymentSetupStatus() {
     : 'Customer payments are not yet enabled.';
 
   return (
-    <div className="rounded-xl border border-border/60 bg-white/70 px-5 py-5 space-y-5">
+    <div className={`${opSurfacePanel} px-5 py-5 space-y-5`}>
       {/* Current status */}
       <div>
         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground mb-1">
@@ -142,7 +143,7 @@ export function PaymentSetupStatus() {
         </p>
         <p className={cn(
           'text-sm font-semibold',
-          allDone ? 'text-[rgb(29,111,66)]' : 'text-foreground'
+          allDone ? 'text-[rgb(var(--settlement-success-text))]' : 'text-foreground'
         )}>
           {statusSentence}
         </p>

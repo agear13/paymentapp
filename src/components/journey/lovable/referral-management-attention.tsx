@@ -19,6 +19,7 @@ import {
 } from '@/lib/workflows/referral-management/attention';
 
 const SHORT_KIND_LABEL: Record<ReferralAttentionKind, string> = {
+  change_request: 'Changes',
   commission_review: 'Review',
   approval_required: 'Approval',
   payout_details: 'Payout',

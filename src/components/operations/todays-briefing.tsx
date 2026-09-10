@@ -102,7 +102,7 @@ export function TodaysBriefing({
 }: TodaysBriefingProps) {
   if (loading) {
     return (
-      <div className="rounded-xl border border-border/60 bg-white/70 px-5 py-5 space-y-3 animate-pulse">
+      <div className="rounded-xl border border-border/60 bg-card/70 px-5 py-5 space-y-3 animate-pulse">
         <div className="h-4 w-48 bg-muted rounded" />
         <div className="space-y-2">
           <div className="h-3 w-64 bg-muted/70 rounded" />
@@ -124,7 +124,7 @@ export function TodaysBriefing({
   return (
     <div
       className={cn(
-        'rounded-xl border border-border/60 bg-gradient-to-br from-white via-white to-[rgba(124,92,255,0.03)]',
+        'rounded-xl border border-border/60 bg-gradient-to-br from-card via-card to-[rgba(124,92,255,0.03)]',
         'px-5 py-5 space-y-4'
       )}
     >

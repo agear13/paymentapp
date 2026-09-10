@@ -21,6 +21,7 @@ import {
   PAYOUTS_SETTLEMENTS_HREF,
 } from '@/lib/navigation/operator-nav';
 import { opPage } from '@/lib/design/operational-spacing';
+import { opSurfaceAction, opSurfacePanel, opToneWarning } from '@/lib/design/operational-surfaces';
 
 /* ─── Settlement area navigation ─── */
 
@@ -133,13 +134,13 @@ function PayoutsHubContent() {
   return (
     <div className="space-y-5">
       {/* ── Section 1: Current Status ── */}
-      <div className="rounded-xl border border-border/60 bg-white/70 px-5 py-4 space-y-1">
+      <div className={`${opSurfacePanel} px-5 py-4 space-y-1`}>
         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           Current status
         </p>
         <p className={cn(
           'text-sm font-semibold',
-          isReady ? 'text-[rgb(29,111,66)]' : 'text-foreground'
+          isReady ? 'text-[rgb(var(--settlement-success-text))]' : 'text-foreground'
         )}>
           {statusSentence}
         </p>
@@ -147,8 +148,8 @@ function PayoutsHubContent() {
 
       {/* ── Section 2: Single highest-priority action (only when there's work) ── */}
       {action && !wfCtx.isCompleted ? (
-        <div className="rounded-xl border border-amber-200/50 bg-amber-50/30 px-5 py-4 space-y-3">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-amber-700/70">
+        <div className={cn(opSurfaceAction, 'rounded-xl px-5 py-4 space-y-3')}>
+          <p className={cn('text-[10px] font-semibold uppercase tracking-[0.12em]', opToneWarning, 'opacity-70')}>
             Today&apos;s priority
           </p>
           <div className="space-y-2">
@@ -162,7 +163,7 @@ function PayoutsHubContent() {
               </p>
               {consequences.slice(0, 3).map((c) => (
                 <div key={c} className="flex items-center gap-1.5">
-                  <Check className="h-3 w-3 text-[rgb(29,111,66)] shrink-0" />
+                  <Check className="h-3 w-3 text-[rgb(var(--settlement-success-text))] shrink-0" />
                   <span className="text-xs text-foreground/80">{c}</span>
                 </div>
               ))}
@@ -181,7 +182,7 @@ function PayoutsHubContent() {
       ) : null}
 
       {/* ── Section 3: Commercial journey ── */}
-      <div className="rounded-xl border border-border/60 bg-white/70 px-5 py-4 space-y-3">
+      <div className={`${opSurfacePanel} px-5 py-4 space-y-3`}>
         <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           Commercial journey
         </p>
@@ -221,7 +222,7 @@ function PayoutsHubContent() {
       </div>
 
       {/* ── Section 4: Settlement area navigation ── */}
-      <div className="rounded-xl border border-border/60 bg-white/70 overflow-hidden">
+      <div className={`${opSurfacePanel} overflow-hidden`}>
         {SETTLEMENT_LINKS.map((link, i) => (
           <Link
             key={link.href}
@@ -245,7 +246,7 @@ function PayoutsHubContent() {
 
       {/* ── Section 5: Recent business activity (progressive disclosure) ── */}
       <Collapsible>
-        <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl border border-border/60 bg-white/70 px-5 py-3.5 text-sm font-medium text-foreground hover:bg-muted/20 transition-colors">
+        <CollapsibleTrigger className={`flex w-full items-center justify-between ${opSurfacePanel} px-5 py-3.5 text-sm font-medium text-foreground hover:bg-muted/20 transition-colors`}>
           Recent business activity
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform data-[state=open]:rotate-180" />
         </CollapsibleTrigger>

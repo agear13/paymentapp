@@ -179,7 +179,7 @@ export function WorkspaceActivityFeed({
     return (
       <section aria-label="Business story" className="space-y-2.5">
         <h2 className="text-sm font-semibold text-foreground">Business story</h2>
-        <div className="rounded-xl border border-dashed border-border/50 bg-white/40 px-5 py-6 text-center space-y-1.5">
+        <div className="rounded-xl border border-dashed border-border/50 bg-card/40 px-5 py-6 text-center space-y-1.5">
           <p className="text-sm font-medium text-foreground/70">No activity yet.</p>
           <p className="text-xs text-muted-foreground">
             Approvals, payments, and milestones will appear here as your business progresses.
@@ -192,7 +192,7 @@ export function WorkspaceActivityFeed({
   return (
     <section aria-label="Business story" className="space-y-2.5">
       <h2 className="text-sm font-semibold text-foreground">Business story</h2>
-      <div className="rounded-xl border border-border/50 bg-white/50 px-4 py-4">
+      <div className="rounded-xl border border-border/50 bg-card/50 px-4 py-4">
         {hasAudit ? (
           <BusinessStoryTimeline entries={auditEntries} maxItems={maxItems} />
         ) : (

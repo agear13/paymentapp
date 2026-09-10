@@ -5,6 +5,15 @@ import { Check, Circle, ChevronDown, AlertTriangle, Loader2, RefreshCw } from 'l
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import {
+  opChipDanger,
+  opChipNeutral,
+  opChipSuccess,
+  opChipWarning,
+  opSurfaceAction,
+  opSurfacePanel,
+  opToneWarning,
+} from '@/lib/design/operational-surfaces';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { resolveAgreementDestination } from '@/components/workflow/workflow-navigation';
@@ -68,10 +77,10 @@ function obStatusLabel(status: string): string {
 function obStatusColor(status: string): string {
   switch (status.toLowerCase()) {
     case 'funded':
-    case 'ready':    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    case 'released': return 'bg-slate-50 text-slate-500 border-slate-200';
-    case 'blocked':  return 'bg-red-50 text-red-700 border-red-200';
-    default:         return 'bg-amber-50 text-amber-700 border-amber-200';
+    case 'ready':    return opChipSuccess;
+    case 'released': return opChipNeutral;
+    case 'blocked':  return opChipDanger;
+    default:         return opChipWarning;
   }
 }
 
@@ -191,14 +200,14 @@ export function ProjectObligationsView() {
         </p>
       </div>
 
-      <div className="rounded-xl border border-border/60 bg-white divide-y divide-border/40 overflow-hidden">
+      <div className={`${opSurfacePanel} divide-y divide-border/40 overflow-hidden`}>
 
         {/* ── Section 1: Settlement Status ── */}
         <div className="px-5 py-4 space-y-1">
           <SectionLabel>Settlement status</SectionLabel>
           <p className={cn(
             'text-sm font-semibold mt-1',
-            isReady ? 'text-[rgb(29,111,66)]' : 'text-foreground'
+            isReady ? 'text-[rgb(var(--settlement-success-text))]' : 'text-foreground'
           )}>
             {loading || opLoading
               ? 'Loading settlement status…'
@@ -214,7 +223,7 @@ export function ProjectObligationsView() {
           <>
             <div className="px-5 py-4 space-y-3">
               <SectionLabel>Action required</SectionLabel>
-              <div className="rounded-lg border border-amber-200/60 bg-amber-50/40 px-4 py-3.5 space-y-2.5">
+              <div className={cn(opSurfaceAction, 'px-4 py-3.5 space-y-2.5')}>
                 <p className="text-sm font-semibold text-foreground">{primaryBlocker.label}</p>
                 <p className="text-xs text-muted-foreground leading-snug">{primaryBlocker.reason}</p>
                 {/* Consequences */}
@@ -222,7 +231,7 @@ export function ProjectObligationsView() {
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Doing this enables</p>
                   {BLOCKER_CONSEQUENCES[wfCtx.currentStage]?.map((c) => (
                     <div key={c} className="flex items-center gap-1.5">
-                      <Check className="h-3 w-3 text-[rgb(29,111,66)] shrink-0" />
+                      <Check className="h-3 w-3 text-[rgb(var(--settlement-success-text))] shrink-0" />
                       <span className="text-xs text-foreground/80">{c}</span>
                     </div>
                   ))}
@@ -258,15 +267,15 @@ export function ProjectObligationsView() {
                     key={field.label}
                     className={cn(
                       'rounded-lg border px-3 py-2.5',
-                      field.highlight ? 'border-[rgba(29,111,66,0.25)] bg-[rgba(29,111,66,0.04)]'
-                        : field.warn ? 'border-amber-200/60 bg-amber-50/30'
+                      field.highlight ? 'border-[rgba(29,111,66,0.25)] bg-green-500/[0.06]'
+                        : field.warn ? opSurfaceAction
                         : 'border-border/40 bg-muted/20'
                     )}
                   >
                     <p className={cn(
                       'text-xs font-medium',
-                      field.highlight ? 'text-[rgb(29,111,66)]'
-                        : field.warn ? 'text-amber-700'
+                      field.highlight ? 'text-[rgb(var(--settlement-success-text))]'
+                        : field.warn ? opToneWarning
                         : field.muted ? 'text-muted-foreground'
                         : 'text-foreground'
                     )}>

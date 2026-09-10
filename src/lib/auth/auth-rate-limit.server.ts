@@ -106,13 +106,24 @@ export async function checkMfaVerifyRateLimit(userId: string) {
   return { allowed: true as const };
 }
 
-export async function checkResendVerificationRateLimit(request: Request, userId: string) {
+export async function checkResendVerificationRateLimit(request: Request, identity: string) {
   const ip = getClientIdentifier(request);
-  const hourly = await checkRateLimit(authRateLimiters.resendVerification, `${userId}:${ip}`);
+  const ipHourly = await checkRateLimit(authRateLimiters.resendVerification, `ip:${ip}`);
+  if (!ipHourly.success) {
+    return { allowed: false as const, retryAfterSeconds: secondsUntilReset(ipHourly.reset) };
+  }
+
+  const hourly = await checkRateLimit(authRateLimiters.resendVerification, `${identity}:${ip}`);
   if (!hourly.success) {
     return { allowed: false as const, retryAfterSeconds: secondsUntilReset(hourly.reset) };
   }
   return { allowed: true as const };
+}
+
+export function verificationResendIdentity(userIdOrEmail: { userId?: string | null; email?: string | null }): string {
+  if (userIdOrEmail.userId) return userIdOrEmail.userId;
+  if (userIdOrEmail.email) return `email:${emailKey(userIdOrEmail.email)}`;
+  return 'anonymous';
 }
 
 export async function getVerificationResendCooldownRemaining(userId: string): Promise<number> {

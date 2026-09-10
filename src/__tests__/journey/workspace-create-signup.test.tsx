@@ -49,7 +49,9 @@ jest.mock('@/components/auth/turnstile-widget', () => ({
 const EMAIL = 'existing@company.com';
 const PASSWORD = 'correct-horse-battery';
 
-function mockFetch(signupBody: Record<string, unknown>, status = 409) {
+function mockFetch(
+  handlers: Record<string, { body: Record<string, unknown>; status?: number; ok?: boolean }>
+) {
   global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.includes('/api/auth/turnstile-config')) {
@@ -58,16 +60,27 @@ function mockFetch(signupBody: Record<string, unknown>, status = 409) {
         json: async () => ({ required: false, siteKey: null }),
       } as Response;
     }
-    if (url.includes('/api/auth/signup')) {
-      expect(init?.method).toBe('POST');
-      return {
-        ok: false,
-        json: async () => signupBody,
-        status,
-      } as Response;
+    for (const [path, result] of Object.entries(handlers)) {
+      if (url.includes(path)) {
+        if (path.includes('/api/auth/signup')) {
+          expect(init?.method).toBe('POST');
+        }
+        const status = result.status ?? (result.ok === false ? 400 : 200);
+        return {
+          ok: result.ok ?? status < 400,
+          json: async () => result.body,
+          status,
+        } as Response;
+      }
     }
     throw new Error(`Unexpected fetch: ${url}`);
   }) as jest.Mock;
+}
+
+function mockSignupFetch(signupBody: Record<string, unknown>, status = 409) {
+  mockFetch({
+    '/api/auth/signup': { body: signupBody, status, ok: false },
+  });
 }
 
 async function submitSignupForm() {
@@ -90,7 +103,7 @@ describe('WorkspaceCreateScreen signup failures', () => {
   });
 
   it('switches to sign-in when signup reports ACCOUNT_EXISTS', async () => {
-    mockFetch({
+    mockSignupFetch({
       error: ACCOUNT_EXISTS_MESSAGE,
       code: ACCOUNT_EXISTS_CODE,
     });
@@ -109,7 +122,7 @@ describe('WorkspaceCreateScreen signup failures', () => {
   });
 
   it('shows the signup failure message, not login credentials copy, for unexpected errors', async () => {
-    mockFetch(
+    mockSignupFetch(
       {
         error: GENERIC_SIGNUP_FAILURE,
       },
@@ -124,5 +137,26 @@ describe('WorkspaceCreateScreen signup failures', () => {
 
     expect(screen.queryByText(GENERIC_AUTH_FAILURE)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /create account and continue/i })).toBeInTheDocument();
+  });
+
+  it('shows check-your-email with resend after signup requires verification', async () => {
+    mockFetch({
+      '/api/auth/signup': {
+        body: { ok: true, requiresVerification: true },
+        status: 200,
+      },
+    });
+
+    await submitSignupForm();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('signup-check-email')).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('heading', { name: /check your email/i })).toBeInTheDocument();
+    expect(screen.getByText(EMAIL)).toBeInTheDocument();
+    expect(screen.getByText(/spam or junk folder/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /resend available in/i })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /create account and continue/i })).not.toBeInTheDocument();
   });
 });

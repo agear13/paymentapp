@@ -81,7 +81,7 @@ export function AgreementComparativeIntelligence({
               <li key={item.projectId}>
                 <Link
                   href={`${projectOverviewPath(item.projectId)}#briefing-health`}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-white/70 px-4 py-3 hover:bg-accent/30 transition-colors"
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-card/70 px-4 py-3 hover:bg-accent/30 transition-colors"
                 >
                   <div className="min-w-0 flex items-center gap-3">
                     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">

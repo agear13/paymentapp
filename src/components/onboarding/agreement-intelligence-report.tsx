@@ -40,6 +40,13 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
+import {
+  opChipDanger,
+  opChipWarning,
+  opSurfaceAction,
+  opSurfaceCritical,
+  opToneWarning,
+} from '@/lib/design/operational-surfaces';
 import type { AgreementIntelligenceInsight } from '@/lib/onboarding/agreement-intelligence-insights';
 import { OnboardingTemplateDraftBanner } from '@/components/onboarding/onboarding-template-draft-banner';
 import { commercialTermIsUntouchedDefault } from '@/lib/onboarding/template-draft-state';
@@ -119,7 +126,7 @@ function ProjectCashflowSection({ cashflow }: { cashflow: ProjectCashflowSnapsho
           return (
             <li
               key={`${entry.description}-${index}`}
-              className="rounded-lg border border-[rgba(124,92,255,0.12)] bg-white/80 px-3 py-2.5"
+              className="rounded-lg border border-[rgba(124,92,255,0.12)] bg-card/80 px-3 py-2.5"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <span className="text-sm font-medium">{entry.description}</span>
@@ -148,15 +155,15 @@ function CommercialRiskSummarySection({ items }: { items: CommercialRiskItem[] }
       <div className="surface-agreement-card px-4 py-4 space-y-1">
         {facts.map((item) => (
           <div key={item.text} className="flex items-center gap-2 text-sm py-0.5">
-            <Check className="h-3.5 w-3.5 text-[rgb(29,111,66)] shrink-0" />
+            <Check className="h-3.5 w-3.5 text-[rgb(var(--settlement-success-text))] shrink-0" />
             <span>{item.text}</span>
           </div>
         ))}
         {warnings.length > 0 ? (
           <div className="border-t border-border/30 pt-2 mt-2 space-y-1">
             {warnings.map((item) => (
-              <div key={item.text} className="flex items-start gap-2 text-sm py-0.5 text-amber-900">
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+              <div key={item.text} className={cn('flex items-start gap-2 text-sm py-0.5', opToneWarning)}>
+                <AlertTriangle className={cn('h-3.5 w-3.5 shrink-0 mt-0.5', opToneWarning)} />
                 <span>{item.text}</span>
               </div>
             ))}
@@ -181,7 +188,7 @@ function RevenueShareSummarySection({
         {rows.map((row) => (
           <div
             key={row.participantId}
-            className="rounded-lg border border-[rgba(124,92,255,0.12)] bg-white/80 px-3 py-3 space-y-1.5"
+            className="rounded-lg border border-[rgba(124,92,255,0.12)] bg-card/80 px-3 py-3 space-y-1.5"
           >
             <p className="font-semibold text-sm">{row.participantName}</p>
             <p className="text-2xl font-bold text-[rgb(124,92,255)] leading-none">{row.percentage}%</p>
@@ -205,7 +212,7 @@ function RevenueShareSummarySection({
               {row.condition ? (
                 <div>
                   <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Condition</span>
-                  <p className="mt-0.5 text-amber-900 text-xs bg-amber-50 rounded px-1.5 py-0.5">{row.condition}</p>
+                  <p className={cn('mt-0.5 text-xs rounded px-1.5 py-0.5', opChipWarning)}>{row.condition}</p>
                 </div>
               ) : null}
             </div>
@@ -242,7 +249,7 @@ function GroupedBlockersList({ blockers }: { blockers: GroupedBlocker[] }) {
           return (
             <div
               key={blocker.type}
-              className="rounded-lg border border-amber-200/80 bg-amber-50/50 overflow-hidden"
+              className={`${opSurfaceAction} overflow-hidden`}
             >
               <button
                 type="button"
@@ -250,25 +257,25 @@ function GroupedBlockersList({ blockers }: { blockers: GroupedBlocker[] }) {
                 onClick={() => toggle(blocker.type)}
               >
                 <div className="flex items-start gap-2 flex-1 min-w-0">
-                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                  <AlertTriangle className={cn('h-4 w-4 shrink-0 mt-0.5', opToneWarning)} />
                   <div>
-                    <p className="text-sm font-semibold text-amber-950">{blocker.title}</p>
-                    <p className="text-xs text-amber-800 mt-0.5">{blocker.description}</p>
+                    <p className={cn('text-sm font-semibold', opToneWarning)}>{blocker.title}</p>
+                    <p className={cn('text-xs mt-0.5', opToneWarning, 'opacity-90')}>{blocker.description}</p>
                   </div>
                 </div>
                 {blocker.participants.length > 1 ? (
                   isExpanded ? (
-                    <ChevronDown className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <ChevronDown className={cn('h-4 w-4 shrink-0 mt-0.5', opToneWarning)} />
                   ) : (
-                    <ChevronRight className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <ChevronRight className={cn('h-4 w-4 shrink-0 mt-0.5', opToneWarning)} />
                   )
                 ) : null}
               </button>
               {isExpanded && blocker.participants.length > 1 ? (
-                <div className="px-3 pb-2.5 border-t border-amber-200/60">
+                <div className="px-3 pb-2.5 border-t border-amber-500/20">
                   <ul className="mt-1.5 space-y-0.5">
                     {blocker.participants.map((p) => (
-                      <li key={p} className="text-xs text-amber-800 flex items-center gap-1.5">
+                      <li key={p} className={cn('text-xs flex items-center gap-1.5', opToneWarning)}>
                         <span className="h-1 w-1 rounded-full bg-amber-500" />
                         {p}
                       </li>
@@ -297,7 +304,7 @@ function ReviewStatusBadge({
 
   if (status === 'ready') {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[rgba(29,111,66,0.1)] text-[rgb(29,111,66)]">
+      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[rgba(29,111,66,0.1)] text-[rgb(var(--settlement-success-text))]">
         <CheckCircle2 className="h-3 w-3" />
         Ready
       </span>
@@ -306,7 +313,7 @@ function ReviewStatusBadge({
 
   if (status === 'needs_review') {
     return (
-      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200/60">
+      <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${opChipWarning}`}>
         <Eye className="h-3 w-3" />
         Needs Review{count > 0 ? ` (${count})` : ''}
       </span>
@@ -314,7 +321,7 @@ function ReviewStatusBadge({
   }
 
   return (
-    <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200/60">
+    <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${opChipDanger}`}>
       <XCircle className="h-3 w-3" />
       Missing Info{count > 0 ? ` (${count})` : ''}
     </span>
@@ -347,7 +354,7 @@ function PaymentEventCard({
         ))}
       </ul>
       {event.condition ? (
-        <p className="text-xs text-amber-700 bg-amber-50/80 rounded px-2 py-1 mt-1">
+        <p className={cn('text-xs rounded px-2 py-1 mt-1', opChipWarning)}>
           Condition: {event.condition}
         </p>
       ) : null}
@@ -381,10 +388,10 @@ function ParticipantReviewCard({
       className={cn(
         'rounded-lg border overflow-hidden',
         card.reviewStatus === 'ready'
-          ? 'border-[rgba(124,92,255,0.12)] bg-white/80'
+          ? 'border-[rgba(124,92,255,0.12)] bg-card/80'
           : card.reviewStatus === 'needs_review'
-            ? 'border-amber-200/80 bg-amber-50/30'
-            : 'border-red-200/80 bg-red-50/20'
+            ? opSurfaceAction
+            : opSurfaceCritical
       )}
     >
       {/* Header row — always visible */}
@@ -430,8 +437,8 @@ function ParticipantReviewCard({
           {hasReasons && !isTemplate ? (
             <div className="pt-3 flex flex-col gap-1">
               {card.reviewReasons.map((r) => (
-                <div key={r.code} className="flex items-center gap-2 text-xs text-amber-900">
-                  <Info className="h-3 w-3 text-amber-600 shrink-0" />
+                <div key={r.code} className={cn('flex items-center gap-2 text-xs', opToneWarning)}>
+                  <Info className={cn('h-3 w-3 shrink-0', opToneWarning)} />
                   {r.label}
                 </div>
               ))}
@@ -453,8 +460,8 @@ function ParticipantReviewCard({
                       return (
                         <li key={item} className="flex items-start gap-1.5 text-sm">
                           <Check className={cn('h-3.5 w-3.5 shrink-0 mt-0.5', isLow ? 'text-amber-500' : 'text-[rgb(124,92,255)]')} />
-                          <span className={isLow ? 'text-amber-900' : undefined}>{item}</span>
-                          {isLow ? <span className="ml-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">Review</span> : null}
+                          <span className={isLow ? opToneWarning : undefined}>{item}</span>
+                          {isLow ? <span className={cn('ml-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full border shrink-0', opChipWarning)}>Review</span> : null}
                         </li>
                       );
                     })}
@@ -471,8 +478,8 @@ function ParticipantReviewCard({
                       return (
                         <li key={item} className="flex items-start gap-1.5 text-sm">
                           <Check className={cn('h-3.5 w-3.5 shrink-0 mt-0.5', isLow ? 'text-amber-500' : 'text-[rgb(124,92,255)]')} />
-                          <span className={isLow ? 'text-amber-900' : undefined}>{item}</span>
-                          {isLow ? <span className="ml-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">Review</span> : null}
+                          <span className={isLow ? opToneWarning : undefined}>{item}</span>
+                          {isLow ? <span className={cn('ml-1 text-[9px] font-semibold px-1.5 py-0.5 rounded-full border shrink-0', opChipWarning)}>Review</span> : null}
                         </li>
                       );
                     })}
@@ -485,8 +492,8 @@ function ParticipantReviewCard({
                   <p className="text-[10px] text-muted-foreground mb-1">Conditional Bonus</p>
                   <ul className="space-y-0.5">
                     {card.conditionalBonuses.map((item) => (
-                      <li key={item} className="flex items-start gap-1.5 text-sm text-amber-900">
-                        <Check className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                      <li key={item} className={cn('flex items-start gap-1.5 text-sm', opToneWarning)}>
+                        <Check className={cn('h-3.5 w-3.5 shrink-0 mt-0.5', opToneWarning)} />
                         {item}
                       </li>
                     ))}
@@ -625,19 +632,19 @@ function AgreementHero({
           {cards.length > 0 ? (
             <div className="flex gap-2 flex-wrap justify-end">
               {readyCount > 0 ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[rgba(29,111,66,0.1)] text-[rgb(29,111,66)]">
+                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[rgba(29,111,66,0.1)] text-[rgb(var(--settlement-success-text))]">
                   <CheckCircle2 className="h-3 w-3" />
                   {readyCount} ready
                 </span>
               ) : null}
               {needsReviewCount > 0 ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200/60">
+                <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${opChipWarning}`}>
                   <Eye className="h-3 w-3" />
                   {needsReviewCount} needs review
                 </span>
               ) : null}
               {missingInfoCount > 0 ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200/60">
+                <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${opChipDanger}`}>
                   <XCircle className="h-3 w-3" />
                   {missingInfoCount} missing info
                 </span>
@@ -693,7 +700,7 @@ export function AgreementIntelligenceReport({
     <div className={cn('space-y-5 animate-in fade-in slide-in-from-bottom-3 duration-700', className)}>
       <div
         className={cn(
-          'relative overflow-hidden rounded-2xl border border-[rgba(124,92,255,0.18)] bg-gradient-to-br from-[rgba(124,92,255,0.08)] via-white to-[rgba(124,92,255,0.04)] shadow-lg shadow-[rgba(124,92,255,0.08)]',
+          'relative overflow-hidden rounded-2xl border border-[rgba(124,92,255,0.18)] bg-gradient-to-br from-[rgba(124,92,255,0.08)] via-card to-[rgba(124,92,255,0.04)] shadow-lg shadow-[rgba(124,92,255,0.08)]',
           analyzing && 'animate-shimmer'
         )}
       >
@@ -798,7 +805,7 @@ export function AgreementIntelligenceReport({
                         'flex items-center gap-2.5 rounded-lg border px-3 py-2 text-sm',
                         isDefaultPlaceholder(term)
                           ? 'border-dashed border-[rgba(124,92,255,0.15)] bg-muted/40 text-muted-foreground'
-                          : 'border-[rgba(124,92,255,0.1)] bg-white/80'
+                          : 'border-[rgba(124,92,255,0.1)] bg-card/80'
                       )}
                     >
                       <Check className={cn('h-4 w-4 shrink-0', isDefaultPlaceholder(term) ? 'text-muted-foreground' : 'text-[rgb(124,92,255)]')} />
@@ -819,9 +826,9 @@ export function AgreementIntelligenceReport({
                 {flatBlockers.map((gap) => (
                   <li
                     key={gap}
-                    className="flex items-start gap-2.5 rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-sm text-amber-950"
+                    className={cn('flex items-start gap-2.5 px-3 py-2 text-sm', opSurfaceAction, opToneWarning)}
                   >
-                    <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                    <AlertTriangle className={cn('h-4 w-4 shrink-0 mt-0.5', opToneWarning)} />
                     {useAssistant ? gapToActionLabel(gap) : gap}
                   </li>
                 ))}

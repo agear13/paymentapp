@@ -15,17 +15,21 @@ function wrapProvvypayAuthEmail(options: {
   extraHtml?: string;
   cta?: AuthEmailCta;
   footer?: string;
+  preheader?: string;
 }): string {
   const extra = options.extraHtml ?? '';
   const cta = options.cta
     ? `<p style="margin:0 0 24px;">
-                <a href="${options.cta.href}" style="display:inline-block;background:#5170ff;color:#ffffff;text-decoration:none;border-radius:8px;padding:12px 20px;font-weight:600;">${options.cta.label}</a>
+                <a href="${options.cta.href}" style="display:inline-block;background:#7C5CFF;color:#ffffff;text-decoration:none;border-radius:8px;padding:12px 20px;font-weight:600;">${options.cta.label}</a>
               </p>
-              <p style="margin:0 0 20px;font-size:12px;line-height:1.5;color:#94a3b8;word-break:break-all;">If the button does not work, copy this link:<br>${options.cta.href}</p>`
+              <p style="margin:0 0 20px;font-size:12px;line-height:1.5;color:#94a3b8;word-break:break-all;">If the button does not work, paste this link into your browser:<br>${options.cta.href}</p>`
     : '';
   const footer =
     options.footer ??
     `If you did not request this email, you can ignore it. Need help? Contact ${PROVVYPAY_SUPPORT_EMAIL}.`;
+  const preheader = options.preheader
+    ? `  <div style="display:none;font-size:1px;line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;mso-hide:all;">${options.preheader}</div>\n`
+    : '';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -35,13 +39,13 @@ function wrapProvvypayAuthEmail(options: {
   <title>${options.title}</title>
 </head>
 <body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fafc;padding:24px 12px;">
+${preheader}  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fafc;padding:24px 12px;">
     <tr>
       <td align="center">
         <table role="presentation" width="560" cellspacing="0" cellpadding="0" style="max-width:560px;width:100%;background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;">
           <tr>
             <td style="padding:32px;">
-              <p style="margin:0 0 16px;font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5170ff;">Provvypay</p>
+              <p style="margin:0 0 16px;font-size:13px;font-weight:700;letter-spacing:.04em;color:#7C5CFF;">Provvypay</p>
               <h1 style="margin:0 0 12px;font-size:22px;line-height:1.3;color:#0f172a;">${options.title}</h1>
               <p style="margin:0 0 20px;font-size:15px;line-height:1.6;color:#475569;">${options.intro}</p>
               ${extra}${cta}
@@ -64,10 +68,12 @@ const confirmationUrlCta = (label: string): AuthEmailCta => ({
 
 export const SUPABASE_AUTH_EMAIL_TEMPLATES = {
   confirmation: wrapProvvypayAuthEmail({
-    title: 'Confirm your Provvypay account',
+    title: 'Verify your email',
+    preheader: 'Verify your email to activate your Provvypay account.',
     intro:
-      'Thanks for signing up. Confirm this email address to finish creating your Provvypay account.',
-    cta: confirmationUrlCta('Confirm your email'),
+      'We received a request to create a Provvypay account for {{ .Email }}. Use the button below to verify this email address.',
+    cta: confirmationUrlCta('Verify email address'),
+    footer: `This link expires shortly and can only be used once. If you did not create a Provvypay account, you can ignore this email. Need help? Contact ${PROVVYPAY_SUPPORT_EMAIL}.`,
   }),
   magic_link: wrapProvvypayAuthEmail({
     title: 'Sign in to Provvypay',

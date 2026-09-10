@@ -39,6 +39,8 @@ export function participantsForProject(
 }
 
 export function operationalRoleLabel(participant: DemoParticipant): string {
+  const custom = participant.roleLabel?.trim();
+  if (custom) return custom;
   return DEMO_TO_OPERATIONAL_LABEL[participant.role] ?? participant.role;
 }
 

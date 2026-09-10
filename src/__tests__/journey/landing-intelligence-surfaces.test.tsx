@@ -2,10 +2,13 @@
 
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { LandingAdvisor } from '@/components/journey/lovable/landing-advisor';
 import { LandingAdvisorProvider } from '@/components/journey/lovable/landing-advisor-context';
-import { LandingIntelligenceProvider } from '@/components/journey/lovable/landing-intelligence-context';
+import {
+  LandingIntelligenceProvider,
+  useLandingIntelligence,
+} from '@/components/journey/lovable/landing-intelligence-context';
 import { LandingPaymentIntelligence } from '@/components/journey/lovable/landing-payment-intelligence';
 import { LandingPaymentSearch } from '@/components/journey/lovable/landing-payment-search';
 import { THEME_STORAGE_KEY } from '@/lib/theme/provvy-theme';
@@ -95,5 +98,46 @@ describe('payment intelligence cross-surface interactions', () => {
     });
     expect(screen.getByLabelText('To')).toHaveValue('SG');
     expect(screen.getAllByText('Australia → Singapore').length).toBeGreaterThan(0);
+  });
+
+  it('settles corridor state without repeated updates', () => {
+    let intelligenceRenders = 0;
+    function CorridorProbe() {
+      const { origin, destination, setCorridor } = useLandingIntelligence();
+      intelligenceRenders += 1;
+      useEffect(() => {
+        setCorridor({ origin, destination });
+      }, [origin, destination, setCorridor]);
+      return (
+        <span data-testid="corridor-probe">
+          {origin}:{destination}:{intelligenceRenders}
+        </span>
+      );
+    }
+
+    render(
+      <RenderSurfaces>
+        <CorridorProbe />
+      </RenderSurfaces>
+    );
+
+    expect(screen.getByLabelText('From')).toHaveValue('AU');
+    expect(screen.getByLabelText('To')).toHaveValue('ID');
+    expect(screen.getAllByText('Australia → Indonesia').length).toBeGreaterThan(0);
+
+    const afterMount = Number(screen.getByTestId('corridor-probe').textContent?.split(':')[2]);
+    expect(afterMount).toBeGreaterThan(0);
+    expect(afterMount).toBeLessThan(8);
+
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: 'SG' } });
+
+    expect(screen.getByLabelText('To')).toHaveValue('SG');
+    expect(screen.getByTestId('corridor-probe')).toHaveTextContent('AU:SG:');
+    expect(screen.getAllByText('Australia → Singapore').length).toBeGreaterThan(0);
+
+    const afterChange = Number(screen.getByTestId('corridor-probe').textContent?.split(':')[2]);
+    expect(afterChange - afterMount).toBeGreaterThan(0);
+    expect(afterChange - afterMount).toBeLessThan(6);
+    expect(afterChange).toBeLessThan(12);
   });
 });

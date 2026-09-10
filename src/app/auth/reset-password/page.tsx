@@ -13,6 +13,7 @@ import { GENERIC_RESET_RESPONSE } from '@/lib/auth/auth-errors';
 import { CsrfBootstrap } from '@/components/security/csrf-bootstrap';
 import { csrfAwareFetch } from '@/lib/security/csrf-fetch.client';
 import { CSRF_PREPARING_LABEL, useClientCsrfReady } from '@/hooks/use-client-csrf-ready';
+import { opSurfaceCritical, opSurfaceSuccess, opToneDanger, opToneSuccess } from '@/lib/design/operational-surfaces';
 
 export default function ResetPasswordPage() {
   const supabase = createClient();
@@ -228,12 +229,12 @@ export default function ResetPasswordPage() {
         )}
 
         {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className={`${opSurfaceCritical} px-3 py-2 text-sm ${opToneDanger}`}>
             {error}
           </div>
         )}
         {message && (
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          <div className={`${opSurfaceSuccess} px-3 py-2 text-sm ${opToneSuccess}`}>
             {message}
           </div>
         )}

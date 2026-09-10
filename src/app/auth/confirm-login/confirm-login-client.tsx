@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { ProvvypayLogoMark } from '@/components/provvypay/provvypay-logo-mark';
 import { emitAuthAuditEvent } from '@/lib/security/auth-audit.client';
 import { postLoginDestination } from '@/lib/journey/commercial-os-routes';
+import { opSurfaceCritical, opToneDanger } from '@/lib/design/operational-surfaces';
 
 export function ConfirmLoginClient({ reason }: { reason?: string | null }) {
   const supabase = createClient();
@@ -52,7 +53,7 @@ export function ConfirmLoginClient({ reason }: { reason?: string | null }) {
           </p>
         </div>
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className={`${opSurfaceCritical} px-4 py-3 text-sm ${opToneDanger}`}>
             {error}
           </div>
         )}

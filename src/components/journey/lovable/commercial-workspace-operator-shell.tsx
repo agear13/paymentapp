@@ -6,8 +6,11 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ArrowLeft, Briefcase } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { useProjectWorkspace } from '@/components/projects/project-workspace-provider';
+import { EditProjectDetailsDialog } from '@/components/projects/edit-project-details-dialog';
+import { formatProjectValueLabel } from '@/lib/projects/update-project-details';
 import {
   agreementIdFromPilotDealId,
   commercialWorkspaceShowsAgreementTab,
@@ -61,6 +64,7 @@ export function CommercialWorkspaceOperatorShell({
   const ctx = useProjectWorkspace();
   const pathname = usePathname() ?? '';
   const [linkedAgreement, setLinkedAgreement] = React.useState<SourceAgreementState>(null);
+  const [editProjectOpen, setEditProjectOpen] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -141,31 +145,42 @@ export function CommercialWorkspaceOperatorShell({
         Back to Commercial Workspaces
       </Link>
 
-      <div className="flex items-start gap-4">
-        <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-purple text-primary-foreground shadow-glow">
-          <Briefcase className="h-6 w-6" />
-        </div>
-        <div className="min-w-0">
-          <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-ink-soft">
-            Commercial Workspace
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-purple text-primary-foreground shadow-glow">
+            <Briefcase className="h-6 w-6" />
           </div>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight">{item.name}</h1>
-          <p className="mt-2 max-w-2xl text-[14px] text-ink-soft">
-            {item.statusLabel}
-            {ctx.deal.partner ? ` · ${ctx.deal.partner}` : ''}
-            {' · '}
-            {item.sourceLabel}
-          </p>
-          {item.source === 'agreement_intelligence' && sourceHref ? (
-            <Link
-              href={sourceHref}
-              className="mt-3 inline-flex text-[13px] font-medium text-primary hover:underline"
-              data-testid="source-agreement-intelligence"
-            >
-              View source in Agreement Intelligence
-            </Link>
-          ) : null}
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary/60 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+              Commercial Workspace
+            </div>
+            <h1 className="mt-3 text-2xl font-semibold tracking-tight">{item.name}</h1>
+            <p className="mt-2 max-w-2xl text-[14px] text-ink-soft">
+              {item.statusLabel}
+              {ctx.deal.partner ? ` · ${ctx.deal.partner}` : ''}
+              {' · '}
+              {item.sourceLabel}
+            </p>
+            <p className="mt-2 text-[13px] text-ink-soft">
+              Project value:{' '}
+              <span className="font-medium text-foreground">
+                {formatProjectValueLabel(ctx.deal.value, ctx.deal.projectValueCurrency)}
+              </span>
+            </p>
+            {item.source === 'agreement_intelligence' && sourceHref ? (
+              <Link
+                href={sourceHref}
+                className="mt-3 inline-flex text-[13px] font-medium text-primary hover:underline"
+                data-testid="source-agreement-intelligence"
+              >
+                View source in Agreement Intelligence
+              </Link>
+            ) : null}
+          </div>
         </div>
+        <Button type="button" variant="outline" onClick={() => setEditProjectOpen(true)}>
+          Edit project
+        </Button>
       </div>
 
       <nav
@@ -195,6 +210,13 @@ export function CommercialWorkspaceOperatorShell({
       </nav>
 
       {children}
+
+      <EditProjectDetailsDialog
+        open={editProjectOpen}
+        onOpenChange={setEditProjectOpen}
+        deal={ctx.deal}
+        onSaved={() => void ctx.refresh()}
+      />
     </div>
   );
 }

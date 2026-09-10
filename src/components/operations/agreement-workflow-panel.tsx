@@ -120,7 +120,7 @@ function WorkflowGroupCard({ group }: { group: WorkflowGroup }) {
   const doneCount = group.doneSteps.length;
 
   return (
-    <div className="rounded-xl border border-border/60 bg-white/60 overflow-hidden">
+    <div className="rounded-xl border border-border/60 bg-card/70 overflow-hidden">
       {/* Card header */}
       <button
         type="button"

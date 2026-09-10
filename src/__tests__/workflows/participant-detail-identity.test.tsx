@@ -44,6 +44,7 @@ function participant(
     eligibleServiceIds: [],
     workspaceUrl: '/participant/portal-1',
     email: 'apples@example.com',
+    phone: null,
     identityBound: false,
     lastInvitationEmail: null,
     payoutReview: null,
@@ -66,7 +67,7 @@ describe('Referral Management participant detail identity', () => {
 
     const text = container.textContent ?? '';
     expect(text).toContain('apples@example.com');
-    expect(text).toContain('Edit details');
+    expect(text).toContain('Edit participant');
     expect(text).toContain('Agreement ready to send');
     expect(text).toContain('Will be sent to:');
     expect(screen.getByTestId('participant-identity-email').textContent).toBe('apples@example.com');
@@ -117,8 +118,30 @@ describe('Referral Management participant detail identity', () => {
     const text = container.textContent ?? '';
     expect(text).toContain('Verified participant identity');
     expect(text).toContain('Add a new participant instead');
-    expect(text).toContain('Edit details');
+    expect(text).toContain('Edit participant');
     expect(text).toContain('betty@example.com');
+  });
+
+  it('lets Danielle add a missing email later without recreating the participant', () => {
+    const { container } = render(
+      <AgreementIntelligenceParticipantDetail
+        participant={participant({ email: null })}
+        activity={[]}
+        coordinationBlocked={false}
+        busy={false}
+        onBack={() => undefined}
+        onAction={async () => true}
+      />
+    );
+
+    const text = container.textContent ?? '';
+    expect(text).toContain('Not provided');
+    expect(text).toContain('Add email');
+    expect(text).toContain('Add an email to send the agreement');
+    expect(text).not.toContain('Send agreement');
+    expect(screen.getByTestId('participant-identity-email').textContent).toBe('Not provided');
+    expect(screen.getAllByRole('button', { name: 'Add email' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Send agreement' })).toBeNull();
   });
 
   it('opens the existing invitation dialog when requested after extraction', () => {

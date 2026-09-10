@@ -100,7 +100,7 @@ export function AgreementsOperationalGrid({
     return (
       <section aria-label={PRODUCT_TERMINOLOGY.yourProjects} className="space-y-2.5">
         <h2 className="text-sm font-semibold text-foreground">{PRODUCT_TERMINOLOGY.yourProjects}</h2>
-        <div className="rounded-xl border border-dashed border-border/60 bg-white/40 px-5 py-8 text-center space-y-3">
+        <div className="rounded-xl border border-dashed border-border/60 bg-card/40 px-5 py-8 text-center space-y-3">
           <p className="text-sm font-medium text-foreground">{PRODUCT_TERMINOLOGY.noProjectsYet}</p>
           <p className="text-xs text-muted-foreground leading-relaxed">
             Create your first project to begin coordinating commercial relationships.
@@ -137,7 +137,7 @@ function AgreementCard({ snapshot }: { snapshot: AgreementHealthSnapshot }) {
   return (
     <Link
       href={href}
-      className="group rounded-xl border border-border/60 bg-white/60 hover:bg-white/85 hover:border-border/80 transition-all duration-150 p-4 flex flex-col gap-3.5"
+      className="group rounded-xl border border-border/60 bg-card/70 hover:bg-card hover:border-border/80 transition-all duration-150 p-4 flex flex-col gap-3.5"
     >
       {/* Name + score */}
       <div className="flex items-start justify-between gap-2">
@@ -165,7 +165,7 @@ function AgreementCard({ snapshot }: { snapshot: AgreementHealthSnapshot }) {
                     'h-4 w-4 rounded-full flex items-center justify-center shrink-0 transition-all duration-300',
                     isDone && 'bg-[rgb(29,111,66)]',
                     isActive &&
-                      'bg-white border-2 border-[rgb(29,111,66)] ring-2 ring-[rgba(29,111,66,0.15)]',
+                      'bg-background border-2 border-[rgb(29,111,66)] ring-2 ring-[rgba(29,111,66,0.15)]',
                     isFuture && 'bg-muted/30 border border-border/40'
                   )}
                 >

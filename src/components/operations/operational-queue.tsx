@@ -126,7 +126,7 @@ export function OperationalQueue({ tasks, initialMax = 5 }: OperationalQueueProp
         ) : null}
       </div>
 
-      <div className="rounded-xl border border-border/60 bg-white/60 overflow-hidden divide-y divide-border/40">
+      <div className="rounded-xl border border-border/60 bg-card/70 overflow-hidden divide-y divide-border/40">
         {visible.map((task) => (
           <QueueRow key={task.id} task={task} />
         ))}

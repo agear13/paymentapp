@@ -1,6 +1,5 @@
 import {
   LANDING_PROVIDER_CATALOG_UPDATED,
-  LANDING_PROVIDER_OFFERINGS,
   type LandingProviderOffering,
 } from '@/lib/journey/landing-provider-catalog';
 import {
@@ -23,6 +22,19 @@ import {
   priorityLabel,
   type LandingSearchQuery,
 } from '@/lib/journey/landing-route-model';
+import {
+  coverageQueryFromSearch,
+  evaluateOfferingCoverage,
+  evaluateRouteEligibility,
+  routeIsNotExcluded,
+  type CorridorCapability,
+  type LatestObservationRead,
+  type OfferingCoverage,
+  type ProviderOperationalHealthObservation,
+  type ProviderPaymentIncidentObservation,
+  type RouteEligibilityDecision,
+  type RouteImpactSubject,
+} from '@/lib/route-intelligence';
 
 export type LandingResultSort =
   | 'recommended'
@@ -60,7 +72,32 @@ export type LandingProviderResult = {
   pricingStatus: 'indicative';
   live: false;
   catalogUpdated: string;
+  coverageStatus: 'supported' | 'unspecified';
+  coverageUncertainty: boolean;
+  coverage: OfferingCoverage;
+  operationalEligibility: RouteEligibilityDecision;
 };
+
+export type ProviderResultIntelligence = {
+  health?: LatestObservationRead | ProviderOperationalHealthObservation | null;
+  incidents?: readonly ProviderPaymentIncidentObservation[];
+  now?: Date;
+};
+
+export function routeSubjectFromSearch(
+  offering: Pick<LandingProviderOffering, 'id' | 'providerId'>,
+  query: LandingSearchQuery
+): RouteImpactSubject {
+  return {
+    offeringId: offering.id,
+    providerId: offering.providerId,
+    corridor: { origin: query.originCountry, destination: query.destinationCountry },
+    currencyPair: {
+      source: query.currency,
+      target: query.destinationCurrency ?? query.currency,
+    },
+  };
+}
 
 const SPEED_ORDER: Record<LandingProviderOffering['speedBand'], number> = {
   instant: 0,
@@ -105,11 +142,31 @@ function whyShort(offering: LandingProviderOffering, query: LandingSearchQuery):
   }
 }
 
-export function buildProviderResults(query: LandingSearchQuery): LandingProviderResult[] {
+export function buildProviderResults(
+  query: LandingSearchQuery,
+  catalogOfferings: readonly LandingProviderOffering[],
+  capabilities: readonly CorridorCapability[] = [],
+  intelligence: ProviderResultIntelligence = {}
+): LandingProviderResult[] {
   const mechanismRank = new Map(rankLandingRoutes(query).map((entry, index) => [entry.id, { ...entry, index }]));
+  const coverageQuery = coverageQueryFromSearch(query);
 
-  const scored = LANDING_PROVIDER_OFFERINGS.filter((offering) => offeringApplies(offering, query))
+  const scored = catalogOfferings
+    .filter((offering) => offeringApplies(offering, query))
     .map((offering) => {
+      const coverage = evaluateOfferingCoverage(offering.id, coverageQuery, capabilities);
+      const operationalEligibility = evaluateRouteEligibility(
+        routeSubjectFromSearch(offering, query),
+        {
+          health: intelligence.health,
+          incidents: intelligence.incidents,
+          now: intelligence.now,
+        }
+      );
+      return { offering, coverage, operationalEligibility };
+    })
+    .filter((entry) => entry.coverage.eligible && routeIsNotExcluded(entry.operationalEligibility))
+    .map(({ offering, coverage, operationalEligibility }) => {
       const mechanism = mechanismRank.get(offering.mechanism);
       const mechanismScore = mechanism?.score ?? 0;
       const adj = offering.priorityAdj[query.priority];
@@ -132,6 +189,10 @@ export function buildProviderResults(query: LandingSearchQuery): LandingProvider
         pricingStatus: 'indicative' as const,
         live: false as const,
         catalogUpdated: LANDING_PROVIDER_CATALOG_UPDATED,
+        coverageStatus: coverage.status === 'supported' ? ('supported' as const) : ('unspecified' as const),
+        coverageUncertainty: coverage.uncertainty,
+        coverage,
+        operationalEligibility,
       };
     })
     .sort((a, b) => b.score - a.score || a.offering.providerName.localeCompare(b.offering.providerName));

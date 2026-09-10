@@ -8,6 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ProvvypayLogoMark } from '@/components/provvypay/provvypay-logo-mark';
 import { emitAuthAuditEvent } from '@/lib/security/auth-audit.client';
+import {
+  SIGNUP_CHECK_EMAIL_BODY,
+  SIGNUP_CHECK_EMAIL_MISSING_HINT,
+  SIGNUP_CHECK_EMAIL_TITLE,
+  VERIFICATION_RESEND_COOLDOWN_SECONDS,
+} from '@/lib/auth/email-verification';
+import { opSurfaceCritical, opToneDanger } from '@/lib/design/operational-surfaces';
 
 export function VerifyEmailClient({ email }: { email: string }) {
   const supabase = createClient();
@@ -61,7 +68,7 @@ export function VerifyEmailClient({ email }: { email: string }) {
         throw new Error(data.error || 'Could not resend verification email');
       }
       setMessage('Verification email sent. Please check your inbox.');
-      setCooldown(data.retryAfterSeconds ?? 60);
+      setCooldown(data.retryAfterSeconds ?? VERIFICATION_RESEND_COOLDOWN_SECONDS);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Could not resend verification email');
     } finally {
@@ -109,18 +116,20 @@ export function VerifyEmailClient({ email }: { email: string }) {
         </div>
 
         <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">Verify your email</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{SIGNUP_CHECK_EMAIL_TITLE}</h1>
+          <p className="text-sm text-muted-foreground leading-relaxed">{SIGNUP_CHECK_EMAIL_BODY}</p>
+          <p className="text-sm font-medium break-all">{email}</p>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Please verify your email address before continuing.
+            <span className="font-semibold text-foreground">Can&apos;t find it?</span>{' '}
+            {SIGNUP_CHECK_EMAIL_MISSING_HINT}
           </p>
-          <p className="text-sm font-medium">{email}</p>
         </div>
 
         {message && (
           <div className="surface-settlement rounded-lg px-4 py-3 text-sm">{message}</div>
         )}
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div className={`${opSurfaceCritical} px-4 py-3 text-sm ${opToneDanger}`}>
             {error}
           </div>
         )}
@@ -133,7 +142,7 @@ export function VerifyEmailClient({ email }: { email: string }) {
             onClick={handleResend}
           >
             {cooldown > 0
-              ? `You can request another verification email in ${cooldown}s`
+              ? `Resend available in ${cooldown}s`
               : loading
                 ? 'Sending...'
                 : 'Resend verification email'}

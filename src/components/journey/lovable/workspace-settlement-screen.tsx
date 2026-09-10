@@ -30,6 +30,7 @@ import { WorkspaceSettlementRailIntelligence } from '@/components/payouts/worksp
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { opSurfaceAction } from '@/lib/design/operational-surfaces';
 
 type Section = SettlementWorkspaceSection;
 
@@ -342,7 +343,7 @@ export function WorkspaceSettlementScreen({ section }: { section: Section }) {
         <ScopeBanner participantName={participantName} source={source} section={section} />
       ) : null}
       {data.error ? (
-        <p className="rounded-xl border border-amber-300/50 bg-amber-50/60 px-4 py-3 text-[13px]">
+        <p className={cn(opSurfaceAction, 'rounded-xl px-4 py-3 text-[13px]')}>
           {data.error}
         </p>
       ) : null}
@@ -816,7 +817,7 @@ export function WorkspaceSettlementObligationDetailScreen({
           <MetricCard label="Next action" value={row.nextAction} />
         </div>
         {row.reason ? (
-          <div className="rounded-xl border border-amber-300/50 bg-amber-50/50 px-4 py-3">
+          <div className={cn(opSurfaceAction, 'rounded-xl px-4 py-3')}>
             <p className="text-[12px] font-medium uppercase tracking-wide">Reason</p>
             <p className="mt-1 text-[14px]">{row.reason}</p>
           </div>

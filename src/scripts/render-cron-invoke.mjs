@@ -56,6 +56,11 @@ export const CRON_TARGETS = {
     auth: 'bearer',
     body: JSON.stringify({ limit: 10 }),
   },
+  'route-intelligence-observation': {
+    method: 'POST',
+    path: '/api/jobs/route-intelligence-observation',
+    auth: 'x-cron-secret',
+  },
 };
 
 export function validateCronInvokeEnvironment(env = process.env) {

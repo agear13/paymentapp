@@ -24,6 +24,7 @@ import {
   INVOICE_STATE_LABELS,
   invoiceStateProgress,
 } from '@/lib/commercial/invoice-lifecycle';
+import { opChipDanger, opChipSuccess, opChipWarning, opSurfaceAction, opToneDanger, opToneWarning } from '@/lib/design/operational-surfaces';
 
 /* ─── Props ──────────────────────────────────────────────────────────────── */
 
@@ -87,12 +88,12 @@ function CompactReadiness({
       {/* Status */}
       <div className="flex items-center gap-1.5">
         {readyToSettle ? (
-          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+          <Badge variant="outline" className={cn('text-xs', opChipSuccess)}>
             <Check className="h-3 w-3 mr-1" />
             Ready
           </Badge>
         ) : (
-          <Badge variant="outline" className="text-xs bg-red-50 text-red-700 border-red-200">
+          <Badge variant="outline" className={cn('text-xs', opChipDanger)}>
             <X className="h-3 w-3 mr-1" />
             {blockers.length > 0 ? `${blockers.length} blocker${blockers.length > 1 ? 's' : ''}` : 'Not ready'}
           </Badge>
@@ -129,10 +130,10 @@ function FullChecklist({
             className={cn(
               'text-xs',
               readyToSettle
-                ? 'bg-green-50 text-green-700 border-green-200'
+                ? opChipSuccess
                 : readinessScore >= 70
-                  ? 'bg-amber-50 text-amber-700 border-amber-200'
-                  : 'bg-red-50 text-red-700 border-red-200'
+                  ? opChipWarning
+                  : opChipDanger
             )}
           >
             {readyToSettle ? 'Ready' : `${readinessScore}%`}
@@ -187,8 +188,8 @@ function FullChecklist({
 
       {/* Next action callout */}
       {!readyToSettle && nextAction && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50/40 px-3 py-2.5 flex items-start gap-2">
-          <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0 mt-0.5" />
+        <div className={cn(opSurfaceAction, 'px-3 py-2.5 flex items-start gap-2')}>
+          <AlertTriangle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <div className="space-y-0.5">
             <p className="text-xs font-medium text-foreground">Recommended next action</p>
             <p className="text-xs text-muted-foreground">{nextAction}</p>
@@ -214,8 +215,8 @@ function ChecklistRow({ item }: { item: SettlementChecklistItem }) {
 
   const labelClass: Record<ChecklistItemStatus, string> = {
     complete: 'text-foreground',
-    in_progress: 'text-amber-700',
-    missing: item.isBlocker ? 'text-red-700' : 'text-muted-foreground',
+    in_progress: opToneWarning,
+    missing: item.isBlocker ? opToneDanger : 'text-muted-foreground',
   };
 
   const hasDetails = item.status !== 'complete' && (item.explanation || item.action);

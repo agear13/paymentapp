@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { opChipDanger, opChipWarning, opSurfaceCritical, opToneDanger } from '@/lib/design/operational-surfaces';
 import type {
   CommercialTask,
   CommercialTaskResult,
@@ -90,7 +91,7 @@ export function ProvvyDailyQueue({
             </Badge>
           )}
           {overdueCount > 0 && overdueCount > criticalCount && (
-            <Badge variant="outline" className="text-xs h-5 bg-red-50 text-red-700 border-red-200">
+            <Badge variant="outline" className={cn('text-xs h-5', opChipDanger)}>
               {overdueCount} overdue
             </Badge>
           )}
@@ -177,19 +178,19 @@ export function ProvvyDailyQueue({
 
 function RisksCallout({ risks }: { risks: CommercialOperationalRisk[] }) {
   return (
-    <div className="rounded-xl border border-red-200 bg-red-50/40 p-4 space-y-2.5">
+    <div className={cn(opSurfaceCritical, 'p-4 space-y-2.5')}>
       <div className="flex items-center gap-1.5">
-        <TriangleAlert className="h-4 w-4 text-red-600 shrink-0" />
-        <p className="text-xs font-semibold text-red-900">
+        <TriangleAlert className="h-4 w-4 text-red-600 dark:text-red-400 shrink-0" />
+        <p className={cn('text-xs font-semibold', opToneDanger)}>
           {risks.length} critical risk{risks.length > 1 ? 's' : ''} require immediate attention
         </p>
       </div>
       <div className="space-y-2">
         {risks.slice(0, 3).map((risk) => (
           <div key={risk.id} className="space-y-0.5">
-            <p className="text-xs font-medium text-red-800">{risk.title}</p>
-            <p className="text-xs text-red-700/80">{risk.consequence}</p>
-            <p className="text-xs font-medium text-red-900">{risk.action}</p>
+            <p className={cn('text-xs font-medium', opToneDanger)}>{risk.title}</p>
+            <p className={cn('text-xs opacity-80', opToneDanger)}>{risk.consequence}</p>
+            <p className={cn('text-xs font-medium', opToneDanger)}>{risk.action}</p>
           </div>
         ))}
       </div>
@@ -285,7 +286,7 @@ function TaskCard({
     <div
       className={cn(
         'rounded-xl border border-border/50 bg-card px-4 py-3 space-y-1.5',
-        task.isOverdue && 'border-red-200 bg-red-50/20',
+        task.isOverdue && 'border-red-500/20 bg-red-500/[0.06]',
         task.priority === 'critical' && !task.isOverdue && 'border-orange-200/60',
         isComplete && 'opacity-60',
         dimmed && 'opacity-50'
@@ -369,7 +370,7 @@ function DueBadge({ task }: { task: CommercialTask }) {
 
   if (task.isOverdue) {
     return (
-      <Badge variant="outline" className="text-xs h-5 bg-red-50 text-red-700 border-red-200 shrink-0">
+      <Badge variant="outline" className={cn('text-xs h-5 shrink-0', opChipDanger)}>
         Overdue
       </Badge>
     );
@@ -380,7 +381,7 @@ function DueBadge({ task }: { task: CommercialTask }) {
 
   if (daysUntilDue === 0) {
     return (
-      <Badge variant="outline" className="text-xs h-5 bg-orange-50 text-orange-700 border-orange-200 shrink-0">
+      <Badge variant="outline" className="text-xs h-5 bg-orange-500/[0.08] text-orange-800 dark:text-orange-400 border-orange-500/20 shrink-0">
         Today
       </Badge>
     );
@@ -388,7 +389,7 @@ function DueBadge({ task }: { task: CommercialTask }) {
 
   if (daysUntilDue <= 3) {
     return (
-      <Badge variant="outline" className="text-xs h-5 bg-amber-50 text-amber-700 border-amber-200 shrink-0">
+      <Badge variant="outline" className={cn('text-xs h-5 shrink-0', opChipWarning)}>
         {daysUntilDue}d
       </Badge>
     );

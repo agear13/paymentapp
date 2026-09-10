@@ -78,7 +78,50 @@ describe('Referral Management extract adapter', () => {
     });
     expect(extractAgreementFromText).toHaveBeenCalled();
     expect(preview.candidates[0].name).toBe('Apex Promotions');
+    expect(preview.candidates[0].earningSourceType).toBe('internal_service');
+    expect(preview.candidates[0].serviceId).toBe(SERVICE);
     expect(prisma).not.toHaveProperty('organization_workflow_agreements');
+  });
+
+  it('maps a Weso conversation to an external earning source without a catalogue service', async () => {
+    (extractAgreementFromText as jest.Mock).mockResolvedValue({
+      projectName: field('Weso affiliate'),
+      projectDescription: field(null, 'absent'),
+      projectValue: field(null, 'absent'),
+      currency: field('AUD'),
+      counterparty: field('Weso'),
+      parties: [
+        testParty({
+          id: 'jane',
+          name: field('Jane Smith'),
+          email: field('jane@example.com'),
+          role: field('Affiliate'),
+          participationModel: field('revenue_share'),
+          revenueSharePct: field(2),
+          deliverables: [
+            {
+              description: field('Promote Weso app using a unique discount code'),
+              category: field(null, 'absent'),
+            },
+          ],
+        }),
+      ],
+      paymentTerms: [],
+      uncertainties: [],
+      overallConfidence: 'high',
+      sourceHint: null,
+      extractedAt: '2026-08-20T00:00:00.000Z',
+    });
+
+    const preview = await extractReferralRelationshipsFromText({
+      organizationId: ORG,
+      workflowId: WF,
+      text: "Affiliate for Weso. Unique discount code. Earn 2% of qualifying Weso purchases.",
+    });
+    expect(preview.candidates[0].earningSourceType).toBe('external');
+    expect(preview.candidates[0].externalProvider).toBe('Weso');
+    expect(preview.candidates[0].percentage).toBe(2);
+    expect(preview.candidates[0].serviceId).toBeNull();
   });
 
   it('rejects extraction on a non-Referral Management workflow', async () => {

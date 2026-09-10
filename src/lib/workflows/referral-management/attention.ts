@@ -4,6 +4,7 @@ import type {
 } from '@/lib/workflows/agreement-intelligence/types';
 
 export const REFERRAL_ATTENTION_KINDS = [
+  'change_request',
   'commission_review',
   'approval_required',
   'payout_details',
@@ -43,6 +44,10 @@ export function attentionKindOfItem(item: WorkflowNeedsAttentionItem): ReferralA
 
 function summaryForKind(kind: ReferralAttentionKind, count: number): string {
   switch (kind) {
+    case 'change_request':
+      return count === 1
+        ? '1 agreement change awaiting review'
+        : `${count} agreement changes awaiting review`;
     case 'commission_review':
       return count === 1 ? '1 commission ready for review' : `${count} commissions ready for review`;
     case 'approval_required':
@@ -58,12 +63,23 @@ export function buildReferralAttentionItems(
   promoters: Array<
     Pick<
       WorkflowOperationalParticipant,
-      'id' | 'name' | 'manageUrl' | 'agreementStatus' | 'payoutSetupStatus'
+      'id' | 'name' | 'manageUrl' | 'agreementStatus' | 'payoutSetupStatus' | 'pendingChangeRequests'
     >
   >
 ): WorkflowNeedsAttentionItem[] {
   const items: WorkflowNeedsAttentionItem[] = [];
   for (const promoter of promoters) {
+    const pendingChanges = promoter.pendingChangeRequests?.length ?? 0;
+    if (pendingChanges > 0) {
+      items.push({
+        id: `change-${promoter.id}`,
+        kind: 'change_request',
+        label: pendingChanges === 1 ? 'Agreement change awaiting review' : 'Agreement changes awaiting review',
+        detail: `${promoter.name} · ${pendingChanges === 1 ? '1 suggested change' : `${pendingChanges} suggested changes`}`,
+        participantId: promoter.id,
+        href: promoter.manageUrl,
+      });
+    }
     if (promoter.payoutSetupStatus === 'submitted') {
       items.push({
         id: `review-${promoter.id}`,
@@ -139,10 +155,15 @@ export function groupReferralAttention(
 }
 
 export function promoterMatchesAttentionKind(
-  promoter: Pick<WorkflowOperationalParticipant, 'agreementStatus' | 'payoutSetupStatus'>,
+  promoter: Pick<
+    WorkflowOperationalParticipant,
+    'agreementStatus' | 'payoutSetupStatus' | 'pendingChangeRequests'
+  >,
   kind: ReferralAttentionKind
 ): boolean {
   switch (kind) {
+    case 'change_request':
+      return (promoter.pendingChangeRequests?.length ?? 0) > 0;
     case 'commission_review':
       return promoter.payoutSetupStatus === 'submitted';
     case 'approval_required':
@@ -172,6 +193,7 @@ export function filterCountsForPromoters(promoters: WorkflowOperationalParticipa
   const filters: ReferralPromoterFilter[] = [
     'all',
     'attention',
+    'change_request',
     'commission_review',
     'approval_required',
     'payout_details',

@@ -300,6 +300,7 @@ export type ApprovalCentreParticipantCardProps = {
   ) => void | Promise<void>;
   onConfigureEarnings: (p: DemoParticipant) => void;
   onSendPaymentRequest?: (p: DemoParticipant) => void;
+  onEditParticipant?: (p: DemoParticipant) => void;
   projectId?: string;
   organizationId?: string | null;
   workspaceCurrency?: string;
@@ -329,6 +330,7 @@ export function ApprovalCentreParticipantCard({
   onShareAgreement,
   onConfigureEarnings,
   onSendPaymentRequest,
+  onEditParticipant,
   projectId,
   organizationId,
   workspaceCurrency = 'AUD',
@@ -536,6 +538,9 @@ export function ApprovalCentreParticipantCard({
             <p className="text-sm font-medium text-foreground truncate leading-snug">
               {participant.name}
             </p>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+              {participant.email?.trim() || 'Email not provided'}
+            </p>
 
             {/* Role · Earnings — compact metadata */}
             {(roleLabel || earningsModel) ? (
@@ -603,6 +608,17 @@ export function ApprovalCentreParticipantCard({
 
         {/* ── Actions: one primary + optional more menu ── */}
         <div className="flex items-center gap-1.5 shrink-0 justify-end">
+          {onEditParticipant ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 px-3 text-xs"
+              onClick={() => onEditParticipant(participant)}
+            >
+              {participant.email?.trim() ? 'Edit participant' : 'Add email'}
+            </Button>
+          ) : null}
           {renderCta(workflow.primaryCta)}
           {workflow.secondaryCtas.map((cta) => renderCta(cta, true))}
         </div>

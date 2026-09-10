@@ -11,6 +11,8 @@ import {
   canEditParticipantEmail,
   PARTICIPANT_IDENTITY_EMAIL_MAX,
   PARTICIPANT_IDENTITY_NAME_MAX,
+  PARTICIPANT_IDENTITY_PHONE_MAX,
+  PARTICIPANT_IDENTITY_ROLE_LABEL_MAX,
 } from '@/lib/participants/participant-identity';
 import { compensationKindOf } from '@/lib/workflows/agreement-intelligence/participant-coordination';
 
@@ -25,12 +27,23 @@ export class ParticipantIdentityError extends Error {
   }
 }
 
+const optionalEmailSchema = z.union([
+  z.string().trim().email().max(PARTICIPANT_IDENTITY_EMAIL_MAX),
+  z.literal(''),
+]);
+
 export const participantIdentityPatchSchema = z
   .object({
     name: z.string().trim().min(1).max(PARTICIPANT_IDENTITY_NAME_MAX).optional(),
-    email: z.string().trim().email().max(PARTICIPANT_IDENTITY_EMAIL_MAX).optional(),
+    email: optionalEmailSchema.optional(),
+    phone: z.string().max(PARTICIPANT_IDENTITY_PHONE_MAX).optional(),
+    roleLabel: z.string().trim().max(PARTICIPANT_IDENTITY_ROLE_LABEL_MAX).optional(),
   })
-  .refine((body) => body.name != null || body.email != null, { message: 'No identity updates provided' });
+  .refine(
+    (body) =>
+      body.name != null || body.email != null || body.phone != null || body.roleLabel != null,
+    { message: 'No identity updates provided' }
+  );
 
 export type ParticipantIdentityPatch = z.infer<typeof participantIdentityPatchSchema>;
 
@@ -39,6 +52,8 @@ export async function updateParticipantIdentity(input: {
   operatorUserId: string;
   name?: string;
   email?: string;
+  phone?: string | null;
+  roleLabel?: string | null;
 }): Promise<{
   participant: DemoParticipant;
   emailChanged: boolean;
@@ -47,6 +62,8 @@ export async function updateParticipantIdentity(input: {
   const parsed = participantIdentityPatchSchema.parse({
     name: input.name,
     email: input.email,
+    phone: input.phone ?? undefined,
+    roleLabel: input.roleLabel ?? undefined,
   });
 
   const snapshot = await getPilotSnapshotForUser(input.operatorUserId);
@@ -95,6 +112,8 @@ export async function updateParticipantIdentity(input: {
     name: nextName,
     email: nextEmail,
     lastInvitationEmail,
+    ...(parsed.phone != null ? { phone: parsed.phone.trim() || undefined } : {}),
+    ...(parsed.roleLabel != null ? { roleLabel: parsed.roleLabel.trim() || existing.role } : {}),
   });
   if (!persisted) {
     throw new ParticipantIdentityError('Participant not found', 'NOT_FOUND', 404);

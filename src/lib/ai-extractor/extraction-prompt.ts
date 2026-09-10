@@ -37,7 +37,13 @@ const EXTRACTION_SCHEMA = `{
       "serviceCategories": { "value": ["MARKETING|PHOTOGRAPHY|VIDEOGRAPHY|GRAPHIC_DESIGN|VENUE|EVENT_MANAGEMENT|TALENT|SPONSORSHIP|OPERATIONS|OTHER"], "confidence": "high|medium|low|absent" },
       "conditions": [{ "description": { "value": "string" }, "dependsOn": { "value": "string|null" }, "status": "pending" }],
       "dependencies": [{ "obligation": { "value": "string" }, "dependsOn": { "value": "string" }, "status": "pending" }],
-      "notes": { "value": "string | null", "confidence": "high|medium|low|absent" }
+      "notes": { "value": "string | null", "confidence": "high|medium|low|absent" },
+      "referralEarningSource": {
+        "type": { "value": "internal_service|external|null", "confidence": "high|medium|low|absent" },
+        "externalPlatform": { "value": "string | null", "confidence": "high|medium|low|absent" },
+        "externalService": { "value": "string | null", "confidence": "high|medium|low|absent" },
+        "attributionMethod": { "value": "discount_code|referral_link|promo_code|other|null", "confidence": "high|medium|low|absent" }
+      }
     }
   ],
   "settlementRules": [
@@ -127,7 +133,15 @@ EXTRACTION RULES:
 
 12. Set extractedAt to the current ISO 8601 timestamp and schemaVersion to "v5".
 
-13. V5 commercial graph rules:
+13. Referral earning source — distinguish Provvy catalogue referrals from third-party platforms:
+    - "internal_service" when the affiliate earns on the operator's own Provvy catalogue service (e.g. "10% on Provvy consulting").
+    - "external" when they earn on another platform's commerce (e.g. Weso, an app store, a marketplace) rather than a Provvy checkout destination.
+    - Set externalPlatform ONLY if the platform is named in the conversation (e.g. "Weso").
+    - Set externalService ONLY if a specific store/service is named. Do not invent "App Store", product names, prices, checkout URLs, or external IDs.
+    - Set attributionMethod to "discount_code" only when a discount/promo/coupon code is mentioned.
+    - NEVER invent a Provvy catalogue service, checkout URL, product, price, or external database ID. Leave fields null when not evidenced.
+
+14. V5 commercial graph rules:
     - Separate operational work (deliverables → operationalObligations) from compensation (compensationTerms[]).
     - NEVER collapse instalments or milestone payments into a single fixedAmount.
     - Instalments: one compensationTerms entry per instalment with type "instalment", sequenceIndex, amount, and trigger.

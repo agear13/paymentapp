@@ -12,12 +12,42 @@ import type { ExistingPromoterRelationship } from '@/lib/workflows/referral-mana
 
 export type AddPromoterInput = {
   name: string;
-  email: string;
+  email?: string;
   phone?: string;
   role: 'Promoter' | 'Affiliate' | 'Partner' | 'Other';
+  roleLabel?: string;
   compensation:
-    | { kind: 'revenue_share'; percentage: number; serviceId?: string; serviceIds?: string[] }
-    | { kind: 'fixed'; amount: number; currency: string; serviceId?: string; serviceIds?: string[] };
+    | {
+        kind: 'revenue_share';
+        percentage: number;
+        serviceId?: string;
+        serviceIds?: string[];
+        earningSource?: {
+          type?: 'internal_service' | 'external';
+          externalProvider?: string | null;
+          externalService?: string | null;
+          attributionMethod?: 'discount_code' | 'referral_link' | 'promo_code' | 'other' | null;
+          externalIdentifier?: string | null;
+          integration?: string | null;
+          audienceDiscountPct?: number | null;
+        };
+      }
+    | {
+        kind: 'fixed';
+        amount: number;
+        currency: string;
+        serviceId?: string;
+        serviceIds?: string[];
+        earningSource?: {
+          type?: 'internal_service' | 'external';
+          externalProvider?: string | null;
+          externalService?: string | null;
+          attributionMethod?: 'discount_code' | 'referral_link' | 'promo_code' | 'other' | null;
+          externalIdentifier?: string | null;
+          integration?: string | null;
+          audienceDiscountPct?: number | null;
+        };
+      };
   reuseExisting?: boolean;
 };
 

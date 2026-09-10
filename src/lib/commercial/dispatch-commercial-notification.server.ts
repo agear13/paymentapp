@@ -31,6 +31,12 @@ import { prisma } from '@/lib/server/prisma';
 import { v4 as uuidv4 } from 'uuid';
 import type { CommercialEventKind } from '@/lib/commercial/commercial-event-bus';
 
+export type AgreementWorkflowNotificationKind =
+  | CommercialEventKind
+  | 'agreement_change_suggested'
+  | 'agreement_change_approved'
+  | 'agreement_change_rejected';
+
 /* ─── Notification templates ─────────────────────────────────────────────── */
 
 type CommercialNotificationTemplate = {
@@ -51,7 +57,29 @@ type NotificationContext = {
   emailDispatched?: boolean;
 };
 
-const TEMPLATES: Partial<Record<CommercialEventKind, CommercialNotificationTemplate>> = {
+const TEMPLATES: Partial<Record<AgreementWorkflowNotificationKind, CommercialNotificationTemplate>> = {
+  agreement_change_suggested: {
+    title: (ctx) => `${ctx.participantName} suggested a change to their agreement`,
+    message: (ctx) =>
+      `${ctx.participantName} suggested a change to their agreement. Review the proposed correction before any contractual values change.`,
+    consequence: () => 'The current agreement is unchanged until you approve or reject the suggestion.',
+    action: 'Review suggested change',
+    actionPath: (ctx) =>
+      ctx.participantId
+        ? `/workspace/workflows/referral-management?participant=${encodeURIComponent(ctx.participantId)}`
+        : `/workspace/workflows/referral-management`,
+  },
+  agreement_change_approved: {
+    title: (ctx) => `Updated agreement sent to ${ctx.participantName}`,
+    message: (ctx) =>
+      `The approved correction created a new agreement version. ${ctx.participantName} needs to review and sign the updated agreement.`,
+    consequence: () => 'The previous agreement version remains preserved in history.',
+    action: 'View agreement',
+    actionPath: (ctx) =>
+      ctx.participantId
+        ? `/workspace/workflows/referral-management?participant=${encodeURIComponent(ctx.participantId)}`
+        : `/workspace/workflows/referral-management`,
+  },
   agreement_approved: {
     title: (ctx) => `${ctx.participantName} approved the agreement`,
     message: (ctx) =>
@@ -193,7 +221,7 @@ export type DispatchCommercialNotificationInput = {
   /** Optional: the operator's email for in-app delivery. */
   operatorEmail?: string | null;
   /** The commercial event kind. */
-  eventKind: CommercialEventKind;
+  eventKind: AgreementWorkflowNotificationKind;
   /** The project/agreement ID. */
   projectId: string;
   /** The participant involved, if applicable. */
@@ -206,6 +234,10 @@ export type DispatchCommercialNotificationInput = {
   currency?: string;
   /** H-4: Whether a supplier email was actually dispatched for this event. */
   emailDispatched?: boolean;
+  /** Extra uniqueness for repeatable events (e.g. change-request id). */
+  idempotencySuffix?: string;
+  /** Override the template action URL when the workflow hub is the destination. */
+  actionUrl?: string;
 };
 
 /* ─── Idempotency key ────────────────────────────────────────────────────── */
@@ -217,6 +249,7 @@ export type DispatchCommercialNotificationInput = {
 function buildIdempotencyKey(input: DispatchCommercialNotificationInput): string {
   const parts = ['commercial', input.eventKind, input.projectId];
   if (input.participantId) parts.push(input.participantId);
+  if (input.idempotencySuffix) parts.push(input.idempotencySuffix);
   return parts.join(':');
 }
 
@@ -275,7 +308,7 @@ export async function dispatchCommercialNotification(
           participantId: input.participantId,
           consequence: template.consequence(ctx),
           action: template.action,
-          actionUrl: template.actionPath(ctx),
+          actionUrl: input.actionUrl ?? template.actionPath(ctx),
         },
         read: false,
         email_sent: false,

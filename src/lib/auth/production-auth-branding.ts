@@ -4,6 +4,13 @@
  *
  * Auth emails are sent by Supabase Auth, not by the application Resend client.
  * Changing app templates does not brand magic-link, signup, or recovery mail.
+ * Paste `supabase/templates/*.html` and `subjects.json` into Authentication →
+ * Email Templates after changing them.
+ *
+ * Deliverability that cannot be set from this repo:
+ * - Custom SMTP (recommended: Resend SMTP) instead of the shared Supabase mailer
+ * - Sender name/email/reply-to in Authentication → SMTP
+ * - DNS: SPF on the From domain, a single DKIM key per selector, DMARC
  *
  * Google consent branding lives in Google Cloud for the OAuth client wired in
  * Supabase. Renaming the Supabase project does not change the consent screen.
@@ -20,6 +27,16 @@ export const PROVVYPAY_AUTH_SENDER_NAME = 'Provvypay';
 export const PROVVYPAY_AUTH_SENDER_EMAIL = 'auth@provvypay.com';
 export const PROVVYPAY_AUTH_SENDER = `${PROVVYPAY_AUTH_SENDER_NAME} <${PROVVYPAY_AUTH_SENDER_EMAIL}>`;
 export const PROVVYPAY_SUPPORT_EMAIL = 'support@provvypay.com';
+export const PROVVYPAY_AUTH_REPLY_TO = PROVVYPAY_SUPPORT_EMAIL;
+/** Shared GoTrue mailer — using this From address is a common spam cause. */
+export const SUPABASE_DEFAULT_MAILER_FROM = 'noreply@mail.app.supabase.io';
+export const RECOMMENDED_SUPABASE_AUTH_SMTP = {
+  senderName: PROVVYPAY_AUTH_SENDER_NAME,
+  senderEmail: PROVVYPAY_AUTH_SENDER_EMAIL,
+  replyTo: PROVVYPAY_AUTH_REPLY_TO,
+  host: 'smtp.resend.com',
+  port: 587,
+} as const;
 export const PROVVYPAY_HOMEPAGE_URL = 'https://provvypay.com';
 export const PROVVYPAY_PRIVACY_URL = 'https://provvypay.com/privacy';
 export const PROVVYPAY_TERMS_URL = 'https://provvypay.com/terms';
@@ -43,7 +60,7 @@ export const FORBIDDEN_AUTH_EMAIL_BRANDING = [
 ] as const;
 
 export const SUPABASE_AUTH_EMAIL_SUBJECTS = {
-  confirmation: 'Confirm your Provvypay account',
+  confirmation: 'Verify your Provvypay email',
   magic_link: 'Sign in to Provvypay',
   invite: 'You are invited to Provvypay',
   recovery: 'Reset your Provvypay password',

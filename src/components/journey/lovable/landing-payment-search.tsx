@@ -71,8 +71,8 @@ function Field({
 }
 
 export function LandingPaymentSearch() {
-  const [originCountry, setOriginCountry] = useState(DEFAULT_LANDING_SEARCH.originCountry);
-  const [destinationCountry, setDestinationCountry] = useState(
+  const [localOrigin, setLocalOrigin] = useState(DEFAULT_LANDING_SEARCH.originCountry);
+  const [localDestination, setLocalDestination] = useState(
     DEFAULT_LANDING_SEARCH.destinationCountry
   );
   const [amountInput, setAmountInput] = useState(String(DEFAULT_LANDING_SEARCH.amount));
@@ -89,6 +89,25 @@ export function LandingPaymentSearch() {
   const lastReportedPriority = useRef<LandingPriorityId | null>(null);
   const priorityChangedRef = useRef(false);
   const runCompareRef = useRef<(hint?: PaymentIntelligenceSearchHint | null) => void>(() => {});
+
+  const originCountry = intelligence?.origin ?? localOrigin;
+  const destinationCountry = intelligence?.destination ?? localDestination;
+
+  const setOriginCountry = (next: LandingSearchQuery['originCountry']) => {
+    if (intelligence) {
+      intelligence.setCorridor({ origin: next, destination: destinationCountry });
+      return;
+    }
+    setLocalOrigin(next);
+  };
+
+  const setDestinationCountry = (next: LandingSearchQuery['destinationCountry']) => {
+    if (intelligence) {
+      intelligence.setCorridor({ origin: originCountry, destination: next });
+      return;
+    }
+    setLocalDestination(next);
+  };
 
   const query = useMemo((): LandingSearchQuery | null => {
     const amount = parseLandingAmount(amountInput);
@@ -111,11 +130,6 @@ export function LandingPaymentSearch() {
   const advisorUpdate = advisor?.update;
   const registerPriorityChange = advisor?.registerPriorityChange;
   const registerCompare = intelligence?.registerCompare;
-  const setIntelligenceCorridor = intelligence?.setCorridor;
-
-  useEffect(() => {
-    setIntelligenceCorridor?.({ origin: originCountry, destination: destinationCountry });
-  }, [setIntelligenceCorridor, originCountry, destinationCountry]);
 
   useEffect(() => {
     if (!registerPriorityChange) return;

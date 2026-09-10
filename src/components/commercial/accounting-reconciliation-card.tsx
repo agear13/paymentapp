@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import type { AccountingReconciliationResult } from '@/lib/commercial/accounting-reconciliation';
+import { opSurfaceAction, opSurfaceCritical, opSurfaceSuccess } from '@/lib/design/operational-surfaces';
 
 type Props = {
   reconciliation: AccountingReconciliationResult;
@@ -42,13 +43,13 @@ export function AccountingReconciliationCard({
 }: Props) {
   const borderClass =
     reconciliation.status === 'passed'
-      ? 'border-green-200 bg-green-50/60'
+      ? opSurfaceSuccess
       : reconciliation.status === 'warning'
-        ? 'border-amber-200 bg-amber-50/60'
-        : 'border-red-200 bg-red-50/60';
+        ? opSurfaceAction
+        : opSurfaceCritical;
 
   return (
-    <div className={`rounded-lg border p-4 space-y-3 ${borderClass}`}>
+    <div className={`${borderClass} p-4 space-y-3`}>
       <div className="flex items-start gap-2">
         {statusIcon(reconciliation.status)}
         <div>

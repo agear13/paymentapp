@@ -49,6 +49,8 @@ import type {
   PaymentPreference,
   DraftInvoice,
 } from '@/lib/commercial/supplier-onboarding';
+import { opSurfaceAction, opSurfaceInfo, opToneDanger, opToneInfo, opToneSuccess, opToneWarning } from '@/lib/design/operational-surfaces';
+import { cn } from '@/lib/utils';
 
 /* ─── Helper: format currency ────────────────────────────────────────────── */
 function fmt(amount: number, currency = 'AUD'): string {
@@ -278,9 +280,9 @@ function InvoiceReviewSection({ invoice }: { invoice: DraftInvoice }) {
         </div>
       </div>
 
-      <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 flex gap-2">
-        <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-        <p className="text-sm text-blue-700">
+      <div className={cn(opSurfaceInfo, 'p-3 flex gap-2')}>
+        <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+        <p className={cn('text-sm', opToneInfo)}>
           If the amounts or description don't match your agreement, contact the organiser before continuing.
         </p>
       </div>
@@ -466,12 +468,12 @@ function ABNSection({
           maxLength={14}
           disabled={state.notApplicable}
           className={`w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring ${
-            showError ? 'border-red-300 bg-red-50' : 'bg-background'
+            showError ? 'border-red-300 dark:border-red-500/40 bg-red-500/[0.06]' : 'bg-background'
           }`}
         />
 
         {showValid && (
-          <div className="mt-2 flex items-center gap-2 text-green-700">
+          <div className={cn('mt-2 flex items-center gap-2', opToneSuccess)}>
             <CheckCircle2 className="h-4 w-4" />
             <span className="text-sm font-medium">
               Valid ABN — {validation.formattedABN}
@@ -479,7 +481,7 @@ function ABNSection({
           </div>
         )}
         {showError && (
-          <div className="mt-2 flex items-center gap-2 text-red-600">
+          <div className={cn('mt-2 flex items-center gap-2', opToneDanger)}>
             <AlertCircle className="h-4 w-4" />
             <span className="text-sm">{validation.errorMessage}</span>
           </div>
@@ -502,9 +504,9 @@ function ABNSection({
           </div>
         </label>
         {state.notApplicable && (
-          <div className="mt-3 rounded-lg border border-amber-100 bg-amber-50 p-3 flex gap-2">
-            <AlertCircle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-            <p className="text-sm text-amber-700">
+          <div className={cn(opSurfaceAction, 'mt-3 p-3 flex gap-2')}>
+            <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <p className={cn('text-sm', opToneWarning)}>
               The organiser will need to manually review and confirm before your invoice can be exported to their accounting system.
             </p>
           </div>

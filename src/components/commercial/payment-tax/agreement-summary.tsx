@@ -2,6 +2,8 @@
 
 import { Info } from 'lucide-react';
 import type { AgreementSummaryData } from '@/lib/commercial/participant-commercial-lifecycle';
+import { opSurfaceInfo, opToneInfo } from '@/lib/design/operational-surfaces';
+import { cn } from '@/lib/utils';
 
 type Props = {
   summary: AgreementSummaryData;
@@ -61,9 +63,9 @@ export function AgreementSummary({ summary, className }: Props) {
         ))}
       </dl>
 
-      <div className="rounded-lg border border-blue-100 bg-blue-50/80 p-3 flex gap-2">
-        <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
-        <p className="text-xs text-blue-800 leading-relaxed">
+      <div className={cn(opSurfaceInfo, 'p-3 flex gap-2')}>
+        <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+        <p className={cn('text-xs leading-relaxed', opToneInfo)}>
           If anything above does not match your agreement, contact your organiser before
           submitting payment information.
         </p>

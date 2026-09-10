@@ -463,6 +463,8 @@ export function ProjectParticipantsView() {
         role: DemoParticipantRole;
         roleDetails?: string;
         agreementNotes?: string;
+        phone?: string;
+        roleLabel?: string;
       }
     ) => {
       const prev = projectParticipants.find((p) => p.id === participantId);
@@ -475,6 +477,8 @@ export function ProjectParticipantsView() {
         role: patch.role,
         roleDetails: patch.roleDetails,
         agreementNotes: patch.agreementNotes,
+        phone: patch.phone,
+        roleLabel: patch.roleLabel,
       };
       patchParticipants((list) => list.map((p) => (p.id === participantId ? optimistic : p)));
 

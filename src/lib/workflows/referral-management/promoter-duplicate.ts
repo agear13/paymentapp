@@ -29,7 +29,9 @@ export function isCompensatedPromoterEmailMatch(
   isCompensated: boolean
 ): boolean {
   if (!isCompensated) return false;
-  return normalizePromoterEmail(participant.email) === normalizePromoterEmail(email);
+  const needle = normalizePromoterEmail(email);
+  if (!needle) return false;
+  return normalizePromoterEmail(participant.email) === needle;
 }
 
 export function buildExistingPromoterRelationship(
