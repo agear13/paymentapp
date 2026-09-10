@@ -2,7 +2,7 @@
  * Mark Payout Paid API
  * POST /api/payouts/[id]/mark-paid
  * Idempotent: if already PAID, returns 200
- * 
+ *
  * NOTE: This API is restricted to beta admins during BETA_LOCKDOWN_MODE
  */
 
@@ -12,16 +12,15 @@ import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
-import { log } from '@/lib/logger';
 import {
   orchestrateOperationalMutation,
   operationalSyncJson,
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
 import { z } from 'zod';
-import { AuditEventType, createAuditLog, AuditSeverity } from '@/lib/audit/audit-log';
 import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
-import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
-import type { Prisma } from '@prisma/client';
+import { executePayoutRelease } from '@/lib/payouts/execute-payout-release.server';
+import { buildManualPaidEvent } from '@/lib/payouts/rails/manual.adapter';
+import { PayoutReleaseError } from '@/lib/payouts/payout-status-transitions';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -82,81 +81,28 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    if (payout.status === 'PAID') {
-      return NextResponse.json({
-        data: { id: payout.id, status: 'PAID', paidAt: payout.paid_at },
-        message: 'Already marked as paid (idempotent)',
-      });
-    }
-
     const paidAtDate = paid_at ? new Date(paid_at) : new Date();
+    const auditCtx = extractRequestAuditContext(request);
+    const result = await executePayoutRelease({
+      type: 'apply_event',
+      event: buildManualPaidEvent({
+        payoutId: id,
+        externalReference: external_reference,
+        paidAt: paidAtDate,
+      }),
+      actor: {
+        userId: user.id,
+        organizationId: payout.organization_id,
+        ipAddress: auditCtx.ipAddress,
+        userAgent: auditCtx.userAgent,
+        correlationId: auditCtx.correlationId,
+      },
+    });
+
+    const alreadyPaid = payout.status === 'PAID';
     const pilotParticipant = await prisma.deal_network_pilot_participants.findUnique({
       where: { id: payout.user_id },
       include: { deal: true },
-    });
-
-    await prisma.$transaction(async (tx) => {
-      await tx.payouts.update({
-        where: { id },
-        data: {
-          status: 'PAID',
-          external_reference: external_reference,
-          paid_at: paidAtDate,
-        },
-      });
-      await tx.commission_obligation_lines.updateMany({
-        where: { payout_id: id },
-        data: { status: 'PAID', paid_at: paidAtDate },
-      });
-      // Option B: mark linked commission_obligation_items as PAID
-      await tx.commission_obligation_items.updateMany({
-        where: { payout_id: id },
-        data: { status: 'PAID', paid_at: paidAtDate },
-      });
-      if (pilotParticipant) {
-        const payload = pilotParticipant.participant_payload as unknown as DemoParticipant;
-        const paidPayload: DemoParticipant = {
-          ...payload,
-          payoutSettlementStatus: 'Paid',
-          payoutPaidAt: paidAtDate.toISOString(),
-        };
-        await tx.deal_network_pilot_participants.update({
-          where: { id: pilotParticipant.id },
-          data: { participant_payload: paidPayload as unknown as Prisma.InputJsonValue },
-        });
-        await tx.deal_network_pilot_obligations.updateMany({
-          where: { participant_id: pilotParticipant.id },
-          data: { status: 'PAID' },
-        });
-      }
-    });
-
-    log.info('Payout marked paid', {
-      organizationId: payout.organization_id,
-      payoutId: id,
-      batchId: payout.batch_id,
-      externalReference: external_reference,
-    });
-
-    const auditCtx = extractRequestAuditContext(request);
-    void createAuditLog({
-      eventType: AuditEventType.PAYOUT_PAID,
-      severity: AuditSeverity.INFO,
-      userId: user.id,
-      organizationId: payout.organization_id,
-      resource: 'payout',
-      resourceId: id,
-      action: 'mark_paid',
-      oldValue: JSON.stringify({ status: payout.status }),
-      newValue: JSON.stringify({
-        status: 'PAID',
-        externalReference: external_reference,
-        paidAt: paidAtDate.toISOString(),
-      }),
-      ipAddress: auditCtx.ipAddress,
-      userAgent: auditCtx.userAgent,
-      correlationId: auditCtx.correlationId,
-      timestamp: new Date(),
     });
 
     const operationalSync = await orchestrateOperationalMutation({
@@ -166,10 +112,21 @@ export async function POST(
     });
 
     return NextResponse.json({
-      data: { id: payout.id, status: 'PAID', paidAt: paidAtDate },
+      data: {
+        id: payout.id,
+        status: result.statuses[0] ?? 'PAID',
+        paidAt: paidAtDate,
+      },
+      ...(alreadyPaid ? { message: 'Already marked as paid (idempotent)' } : {}),
       ...operationalSyncJson(operationalSync),
     });
   } catch (error: unknown) {
+    if (error instanceof PayoutReleaseError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code, details: error.details },
+        { status: error.httpStatus }
+      );
+    }
     const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }

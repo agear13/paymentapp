@@ -1,8 +1,7 @@
 /**
  * POST /api/payout-batches/[id]/hedera/confirm
- * Verifies Hedera transaction then marks only the payouts included in the tx (includedPayoutIds) as PAID.
- * includedPayoutIds is required so we never mark payouts that were not actually paid on-chain.
- * 
+ * Verifies Hedera transaction then marks only the payouts included in the tx as PAID.
+ *
  * NOTE: This API is restricted to beta admins during BETA_LOCKDOWN_MODE
  */
 
@@ -13,13 +12,19 @@ import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
-import { CURRENT_NETWORK } from '@/lib/hedera/constants';
 import { log } from '@/lib/logger';
 import { z } from 'zod';
 import {
   orchestrateOperationalMutation,
   operationalSyncJson,
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
+import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
+import { executePayoutRelease } from '@/lib/payouts/execute-payout-release.server';
+import {
+  hederaPaidEvents,
+  syncHederaMirrorTransaction,
+} from '@/lib/payouts/rails/hedera.adapter';
+import { PayoutReleaseError } from '@/lib/payouts/payout-status-transitions';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -34,13 +39,10 @@ function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
 
 const ConfirmSchema = z.object({
   transactionId: z.string().regex(/^0\.0\.\d+[@-]\d+\.\d+$/),
-  includedPayoutIds: z.array(z.string().uuid()).min(1, 'includedPayoutIds is required and must have at least one payout id'),
+  includedPayoutIds: z
+    .array(z.string().uuid())
+    .min(1, 'includedPayoutIds is required and must have at least one payout id'),
 });
-
-const MIRROR_URL =
-  CURRENT_NETWORK === 'mainnet'
-    ? 'https://mainnet-public.mirrornode.hedera.com'
-    : 'https://testnet.mirrornode.hedera.com';
 
 export async function POST(
   request: NextRequest,
@@ -73,10 +75,7 @@ export async function POST(
       const msg =
         issues.map((e: { message: string }) => e.message).join('; ') ||
         'transactionId and includedPayoutIds required';
-      return NextResponse.json(
-        { error: msg, details: issues },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: msg, details: issues }, { status: 400 });
     }
 
     const { transactionId, includedPayoutIds } = parsed.data;
@@ -90,8 +89,8 @@ export async function POST(
       where: { id: batchId },
       include: {
         payouts: {
-          where: { status: { not: 'PAID' } },
-          select: { id: true },
+          where: { status: { notIn: ['PAID', 'FAILED'] } },
+          select: { id: true, rail_id: true },
         },
       },
     });
@@ -100,10 +99,12 @@ export async function POST(
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const unpaidIds = new Set(batch.payouts.map((p) => p.id));
+    const unpaidIds = new Set(
+      batch.payouts.filter((payout) => payout.rail_id === 'hedera').map((payout) => payout.id)
+    );
     if (unpaidIds.size === 0) {
       return NextResponse.json(
-        { error: 'No unpaid payouts in this batch; nothing to confirm' },
+        { error: 'No unpaid Hedera payouts in this batch; nothing to confirm' },
         { status: 400 }
       );
     }
@@ -120,66 +121,40 @@ export async function POST(
       }
     }
 
-    const normalizedTxId = transactionId.replace('@', '-');
-    const txUrl = `${MIRROR_URL}/api/v1/transactions/${normalizedTxId}`;
-    const res = await fetch(txUrl, { headers: { Accept: 'application/json' } });
-    if (!res.ok) {
-      return NextResponse.json(
-        { error: 'Transaction not found or not yet indexed on Hedera', status: res.status },
-        { status: 404 }
-      );
-    }
-    const data = (await res.json()) as { transactions?: Array<{ result: string }> };
-    const mirrorTx = data.transactions?.[0];
-    if (!mirrorTx || mirrorTx.result !== 'SUCCESS') {
+    const mirror = await syncHederaMirrorTransaction(transactionId);
+    if (!mirror.ok) {
+      const status = mirror.httpStatus === 404 || mirror.result == null ? 404 : 400;
       return NextResponse.json(
         {
-          error: mirrorTx
-            ? `Transaction failed with result: ${mirrorTx.result}`
-            : 'Transaction not found',
+          error: mirror.result
+            ? `Transaction failed with result: ${mirror.result}`
+            : 'Transaction not found or not yet indexed on Hedera',
+          status: mirror.httpStatus,
         },
-        { status: 400 }
+        { status }
       );
     }
 
-    const paidAt = new Date();
-    const externalRef = `hedera:${normalizedTxId}`;
-    const includedPayouts = await prisma.payouts.findMany({
-      where: { id: { in: includedPayoutIds } },
-      select: { user_id: true },
-    });
-    const participantIds = [
-      ...new Set(includedPayouts.map((payout) => payout.user_id).filter(Boolean)),
-    ];
-    // Only mark payouts that were actually included in the on-chain tx (deterministic linkage).
-    await prisma.$transaction(async (tx) => {
-      await tx.payouts.updateMany({
-        where: { id: { in: includedPayoutIds } },
-        data: { status: 'PAID', external_reference: externalRef, paid_at: paidAt },
-      });
-      await tx.commission_obligation_lines.updateMany({
-        where: { payout_id: { in: includedPayoutIds } },
-        data: { status: 'PAID', paid_at: paidAt },
-      });
-      const txAny = tx as Record<string, { updateMany?: (args: unknown) => Promise<unknown> } | undefined>;
-      if (txAny.commission_obligation_items?.updateMany) {
-        await txAny.commission_obligation_items.updateMany({
-          where: { payout_id: { in: includedPayoutIds } },
-          data: { status: 'PAID', paid_at: paidAt },
-        });
-      }
-      if (participantIds.length > 0) {
-        await tx.deal_network_pilot_obligations.updateMany({
-          where: { participant_id: { in: participantIds } },
-          data: { status: 'PAID' },
-        });
-      }
+    const auditCtx = extractRequestAuditContext(request);
+    await executePayoutRelease({
+      type: 'apply_events',
+      events: hederaPaidEvents({
+        payoutIds: includedPayoutIds,
+        providerReference: mirror.providerReference,
+      }),
+      actor: {
+        userId: user.id,
+        organizationId,
+        ipAddress: auditCtx.ipAddress,
+        userAgent: auditCtx.userAgent,
+        correlationId: auditCtx.correlationId,
+      },
     });
 
     log.info('Payout batch confirmed and marked PAID (Hedera)', {
       batchId,
       organizationId,
-      transactionId: normalizedTxId,
+      transactionId: mirror.providerReference,
       payoutCount: includedPayoutIds.length,
     });
 
@@ -189,10 +164,21 @@ export async function POST(
     });
 
     return NextResponse.json({
-      data: { batchId, transactionId: normalizedTxId, payoutIds: includedPayoutIds, status: 'PAID' },
+      data: {
+        batchId,
+        transactionId: mirror.providerReference.replace(/^hedera:/, ''),
+        payoutIds: includedPayoutIds,
+        status: 'PAID',
+      },
       ...operationalSyncJson(operationalSync),
     });
   } catch (error: unknown) {
+    if (error instanceof PayoutReleaseError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code, details: error.details },
+        { status: error.httpStatus }
+      );
+    }
     const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }

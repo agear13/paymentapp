@@ -31,6 +31,9 @@ import {
   scopeReleaseBatchToParticipants,
 } from '@/lib/operations/payouts/scope-release-batch-participants';
 import { syncCantonSettlementReady } from '@/lib/commercial-network/server/canton-workflow-sync.server';
+import { buildPayoutRailCreateFields } from '@/lib/payouts/stamp-payout-rail';
+import { isMerchantCregisSelectable } from '@/lib/payouts/rails/cregis-connection.server';
+import { AuditEventType, AuditSeverity, createAuditLog } from '@/lib/audit/audit-log';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -285,6 +288,12 @@ export async function POST(request: NextRequest) {
 
     const totalAmount = payeesAboveThreshold.reduce((s, p) => s + p.amount, 0);
     const correlationId = `batch-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const merchant = await prisma.merchant_settings.findFirst({
+      where: { organization_id: organizationId },
+      select: { hedera_account_id: true },
+    });
+    const merchantHederaReady = Boolean(merchant?.hedera_account_id?.trim());
+    const merchantCregisReady = await isMerchantCregisSelectable(organizationId);
 
     const [batch] = await prisma.$transaction(async (tx) => {
       const batch = await tx.payout_batches.create({
@@ -307,8 +316,22 @@ export async function POST(request: NextRequest) {
             status: 'ACTIVE',
           },
         });
+        const railFields = buildPayoutRailCreateFields({
+          organizationId,
+          currency: currencyUpper,
+          methodType: defaultMethod?.method_type ?? null,
+          merchantHederaReady,
+          merchantCregisReady,
+          destinationHandle: defaultMethod?.handle ?? null,
+          destinationDetails:
+            defaultMethod?.details && typeof defaultMethod.details === 'object'
+              ? (defaultMethod.details as Record<string, unknown>)
+              : null,
+          payoutAmount: String(payee.amount),
+        });
         const payout = await tx.payouts.create({
           data: {
+            id: railFields.id,
             organization_id: organizationId,
             batch_id: batch.id,
             user_id: payee.userId,
@@ -318,6 +341,9 @@ export async function POST(request: NextRequest) {
             fee_amount: 0,
             net_amount: payee.amount,
             status: 'DRAFT',
+            rail_id: railFields.rail_id,
+            destination_kind: railFields.destination_kind,
+            idempotency_key: railFields.idempotency_key,
           },
         });
 
@@ -359,6 +385,22 @@ export async function POST(request: NextRequest) {
       totalAmount,
       currency: currencyUpper,
       graphEligibleCount: eligibility.participantCount,
+    });
+
+    void createAuditLog({
+      eventType: AuditEventType.PAYOUT_CREATED,
+      severity: AuditSeverity.INFO,
+      userId: user.id,
+      organizationId,
+      resource: 'payout_batch',
+      resourceId: batch.id,
+      action: 'create',
+      newValue: JSON.stringify({
+        payoutCount: payeesAboveThreshold.length,
+        currency: currencyUpper,
+        totalAmount,
+      }),
+      timestamp: new Date(),
     });
 
     assertBatchInvariants({

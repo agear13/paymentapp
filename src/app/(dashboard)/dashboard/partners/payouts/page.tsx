@@ -30,6 +30,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import { PayoutRailComparison } from '@/components/payouts/payout-rail-comparison';
+import { PayoutRailRecommendationCard } from '@/components/payouts/payout-rail-recommendation';
+import { usePayoutRailReadiness } from '@/hooks/use-payout-rail-readiness';
 
 interface Batch {
   id: string;
@@ -43,6 +46,7 @@ interface Batch {
 export default function PartnerPayoutsPage() {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
   const { currency: orgCurrency } = useOrganizationCurrency();
+  const railReadiness = usePayoutRailReadiness();
   const {
     settlementInitialization,
     releaseInteraction,
@@ -295,6 +299,20 @@ export default function PartnerPayoutsPage() {
                   </Select>
                 </div>
               </div>
+              <PayoutRailRecommendationCard
+                currency={createCurrency}
+                pendingDestination
+                merchantHederaReady={railReadiness.merchantHederaReady}
+                merchantCregisReady={railReadiness.merchantCregisReady}
+                merchantAirwallexReady={railReadiness.merchantAirwallexReady}
+              />
+              <PayoutRailComparison
+                currency={createCurrency}
+                hideRecommendation
+                merchantHederaReady={railReadiness.merchantHederaReady}
+                merchantCregisReady={railReadiness.merchantCregisReady}
+                merchantAirwallexReady={railReadiness.merchantAirwallexReady}
+              />
               <Button
                 onClick={handleCreateBatch}
                 disabled={createLoading || !releaseInteraction.canCreateReleaseBatch}

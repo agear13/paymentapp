@@ -9,6 +9,7 @@ export const CSRF_EXEMPT_PATH_PREFIXES = [
   '/api/public/',
   '/api/stripe/webhook',
   '/api/webhooks/',
+  '/api/payouts/webhooks/',
   '/api/internal/',
   '/api/jobs/',
   '/api/health',

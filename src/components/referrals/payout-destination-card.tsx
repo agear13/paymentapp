@@ -25,6 +25,14 @@ import {
 } from '@/components/ui/dialog';
 import { Wallet, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  CryptoPayoutDestinationFields,
+  EMPTY_CRYPTO_PAYOUT_DESTINATION,
+  cryptoDestinationDetailsPayload,
+  cryptoDestinationFormErrors,
+  type CryptoPayoutDestinationForm,
+} from '@/components/payouts/crypto-payout-destination-fields';
+import { payoutDestinationTypeLabel } from '@/lib/payouts/payout-rail-presentation';
 
 const METHOD_TYPES = ['PAYPAL', 'WISE', 'BANK_TRANSFER', 'CRYPTO', 'MANUAL_NOTE', 'HEDERA'] as const;
 
@@ -35,6 +43,12 @@ interface PayoutMethod {
   notes: string | null;
   isDefault: boolean;
   hederaAccountId?: string | null;
+  details?: {
+    address?: string;
+    asset?: string;
+    network?: string;
+    memo?: string;
+  } | null;
   createdAt: string;
 }
 
@@ -53,6 +67,7 @@ export function PayoutDestinationCard() {
     handle: '',
     notes: '',
     hederaAccountId: '',
+    crypto: EMPTY_CRYPTO_PAYOUT_DESTINATION as CryptoPayoutDestinationForm,
     isDefault: true,
   });
 
@@ -86,10 +101,15 @@ export function PayoutDestinationCard() {
         body: JSON.stringify({
           organizationId,
           methodType: form.methodType,
-          handle: form.handle.trim() || null,
+          handle:
+            form.methodType === 'CRYPTO'
+              ? form.crypto.address.trim() || null
+              : form.handle.trim() || null,
           notes: form.notes.trim() || null,
           hederaAccountId:
             form.methodType === 'HEDERA' ? form.hederaAccountId.trim() || null : null,
+          details:
+            form.methodType === 'CRYPTO' ? cryptoDestinationDetailsPayload(form.crypto) : undefined,
           isDefault: form.isDefault,
         }),
       });
@@ -97,7 +117,14 @@ export function PayoutDestinationCard() {
       if (!res.ok) throw new Error(data.error || 'Failed to add');
       toast.success('Payout destination added');
       setDialogOpen(false);
-      setForm({ methodType: 'PAYPAL', handle: '', notes: '', hederaAccountId: '', isDefault: true });
+      setForm({
+        methodType: 'PAYPAL',
+        handle: '',
+        notes: '',
+        hederaAccountId: '',
+        crypto: EMPTY_CRYPTO_PAYOUT_DESTINATION,
+        isDefault: true,
+      });
       fetchMethods();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to add');
@@ -118,7 +145,7 @@ export function PayoutDestinationCard() {
               Payout destination
             </CardTitle>
             <CardDescription>
-              Set your default payout method so commissions can be paid to you.
+              Set your default destination. Provvy determines which payout rail can service it.
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -148,7 +175,7 @@ export function PayoutDestinationCard() {
               >
                 <div>
                   <Badge variant="outline" className="mr-2">
-                    {m.methodType}
+                    {payoutDestinationTypeLabel(m.methodType)}
                   </Badge>
                   {m.isDefault && (
                     <Badge variant="secondary" className="text-xs">
@@ -157,7 +184,13 @@ export function PayoutDestinationCard() {
                   )}
                 </div>
                 <span className="font-mono text-muted-foreground">
-                  {m.methodType === 'HEDERA' ? m.hederaAccountId || m.notes || '—' : m.handle || m.notes || '—'}
+                  {m.methodType === 'HEDERA'
+                    ? m.hederaAccountId || m.notes || '—'
+                    : m.methodType === 'CRYPTO'
+                      ? [m.handle || m.details?.address, m.details?.asset, m.details?.network]
+                          .filter(Boolean)
+                          .join(' · ') || '—'
+                      : m.handle || m.notes || '—'}
                 </span>
               </div>
             ))}
@@ -170,7 +203,8 @@ export function PayoutDestinationCard() {
           <DialogHeader>
             <DialogTitle>Add payout destination</DialogTitle>
             <DialogDescription>
-              PayPal email, Wise email, or other handle. No raw bank account numbers.
+              PayPal email, Wise email, crypto wallet, or other handle. Provvy chooses the rail.
+              No raw bank numbers or provider wallet IDs.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAdd} className="space-y-4">
@@ -179,7 +213,11 @@ export function PayoutDestinationCard() {
               <Select
                 value={form.methodType}
                 onValueChange={(v) =>
-                  setForm((f) => ({ ...f, methodType: v as (typeof METHOD_TYPES)[number] }))
+                  setForm((f) => ({
+                    ...f,
+                    methodType: v as (typeof METHOD_TYPES)[number],
+                    crypto: EMPTY_CRYPTO_PAYOUT_DESTINATION,
+                  }))
                 }
               >
                 <SelectTrigger id="methodType">
@@ -205,6 +243,12 @@ export function PayoutDestinationCard() {
                 />
                 <p className="text-xs text-muted-foreground">Format 0.0.x for USDC/USDT payouts</p>
               </div>
+            ) : form.methodType === 'CRYPTO' ? (
+              <CryptoPayoutDestinationFields
+                value={form.crypto}
+                onChange={(crypto) => setForm((f) => ({ ...f, crypto }))}
+                showErrors
+              />
             ) : (
               <div className="space-y-2">
                 <Label htmlFor="handle">Handle (email, etc.)</Label>
@@ -240,7 +284,14 @@ export function PayoutDestinationCard() {
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={creating}>
+              <Button
+                type="submit"
+                disabled={
+                  creating ||
+                  (form.methodType === 'CRYPTO' &&
+                    cryptoDestinationFormErrors(form.crypto).length > 0)
+                }
+              >
                 {creating ? 'Adding...' : 'Add'}
               </Button>
             </DialogFooter>

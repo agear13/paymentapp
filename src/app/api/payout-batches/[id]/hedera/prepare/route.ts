@@ -1,11 +1,10 @@
 /**
  * POST /api/payout-batches/[id]/hedera/prepare
- * Builds a Hedera HTS transfer (USDC MVP) from merchant to all payees; returns frozen tx as base64 for HashPack signing.
- * 
+ * Builds a Hedera HTS transfer from merchant to Hedera-rail payees; returns frozen tx as base64.
+ *
  * NOTE: This API is restricted to beta admins during BETA_LOCKDOWN_MODE
  */
 
-import Long from 'long';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { requireAuth } from '@/lib/supabase/middleware';
@@ -13,10 +12,17 @@ import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
-import { getPayoutTokenForCurrency } from '@/lib/hedera/tokens';
-import { CURRENT_NODE_ACCOUNT_ID } from '@/lib/hedera/constants';
-import { toSmallestUnit, fromSmallestUnit } from '@/lib/hedera/amount-utils';
-import { TransferTransaction, AccountId, TransactionId } from '@hashgraph/sdk';
+import {
+  executePayoutRelease,
+  listCanonicalPayoutInstructionsForBatch,
+  toCanonicalPayoutInstruction,
+} from '@/lib/payouts/execute-payout-release.server';
+import { getPayoutRailAdapter } from '@/lib/payouts/rails/adapters';
+import {
+  hederaDestinationsByPayoutId,
+} from '@/lib/payouts/rails/hedera.adapter';
+import { PayoutReleaseError } from '@/lib/payouts/payout-status-transitions';
+import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -63,7 +69,6 @@ export async function POST(
       where: { id: batchId },
       include: {
         payouts: {
-          where: { status: { not: 'PAID' } },
           include: { payout_methods: true },
         },
         organizations: {
@@ -76,142 +81,47 @@ export async function POST(
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const merchantAccountId = batch.organizations?.merchant_settings?.[0]?.hedera_account_id;
-    if (!merchantAccountId?.trim()) {
-      return NextResponse.json(
-        { error: 'Merchant Hedera account not configured. Set hedera_account_id in merchant settings.' },
-        { status: 400 }
-      );
-    }
-
-    const tokenInfo = getPayoutTokenForCurrency(batch.currency);
-    if (!tokenInfo || !tokenInfo.tokenId) {
-      return NextResponse.json(
-        {
-          error: `Batch currency ${batch.currency} is not supported for on-chain payout. Supported: USD/USDC → USDC, AUD/AUDD → AUDD.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    const unpaid = batch.payouts;
-    const missing: string[] = [];
-    const payees: {
-      payoutId: string;
-      userId: string;
-      hederaAccountId: string;
-      netAmountStr: string;
-    }[] = [];
-    for (const p of unpaid) {
-      const method = p.payout_methods;
-      const isHedera = String(method?.method_type) === 'HEDERA';
-      const hederaId = isHedera ? (method as { hedera_account_id?: string | null })?.hedera_account_id?.trim() : undefined;
-      if (!hederaId) {
-        missing.push(p.user_id);
-        continue;
-      }
-      payees.push({
-        payoutId: p.id,
-        userId: p.user_id,
-        hederaAccountId: hederaId,
-        netAmountStr: p.net_amount.toString(),
-      });
-    }
-
-    if (missing.length > 0) {
-      return NextResponse.json(
-        {
-          error: 'Some payees do not have a Hedera payout destination (method_type must be HEDERA)',
-          missingPayeeUserIds: missing,
-        },
-        { status: 400 }
-      );
-    }
-
-    if (payees.length === 0) {
-      return NextResponse.json(
-        { error: 'No unpaid payouts in this batch or all payouts already paid' },
-        { status: 400 }
-      );
-    }
-
-    const decimals = tokenInfo.decimals;
-    const transferTx = new TransferTransaction()
-      .setNodeAccountIds([AccountId.fromString(CURRENT_NODE_ACCOUNT_ID)]);
-
-    const includedPayees: typeof payees = [];
-    const includedPayoutIds: string[] = [];
-    let totalSmallest = BigInt(0);
-
-    for (const payee of payees) {
-      let small: bigint;
-      try {
-        small = toSmallestUnit(payee.netAmountStr, decimals);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Invalid amount';
-        return NextResponse.json(
-          { error: `Invalid payout amount for payee: ${msg}` },
-          { status: 400 }
+    const hederaRows = batch.payouts.filter((payout) => payout.rail_id === 'hedera');
+    const instructions = hederaRows.length
+      ? hederaRows.map(toCanonicalPayoutInstruction)
+      : (await listCanonicalPayoutInstructionsForBatch(batchId)).filter(
+          (instruction) => instruction.railId === 'hedera'
         );
-      }
-      if (small === BigInt(0)) {
-        continue;
-      }
-      totalSmallest += small;
-      includedPayees.push(payee);
-      includedPayoutIds.push(payee.payoutId);
-      // Hedera SDK expects int64; Long avoids bigint/Number overflow for token units.
-      transferTx.addTokenTransfer(
-        tokenInfo.tokenId!,
-        AccountId.fromString(payee.hederaAccountId),
-        Long.fromString(small.toString())
-      );
-    }
 
-    if (includedPayees.length === 0 || totalSmallest === BigInt(0)) {
-      return NextResponse.json(
-        { error: 'Nothing to pay (all payee amounts are zero)' },
-        { status: 400 }
-      );
-    }
+    const adapter = getPayoutRailAdapter('hedera');
+    const prepared = await adapter.prepareGroup!(instructions, {
+      merchantHederaAccountId: batch.organizations?.merchant_settings?.[0]?.hedera_account_id,
+      hederaDestinationsByPayoutId: hederaDestinationsByPayoutId(hederaRows),
+    });
 
-    transferTx.addTokenTransfer(
-      tokenInfo.tokenId!,
-      AccountId.fromString(merchantAccountId),
-      Long.fromString(totalSmallest.toString()).negate()
-    );
-    transferTx.setTransactionMemo(`Provvypay payout batch ${batchId}`);
-
-    const txId = TransactionId.generate(AccountId.fromString(merchantAccountId));
-    transferTx.setTransactionId(txId);
-
-    const frozen = transferTx.freeze();
-    const bytes = frozen.toBytes();
-    const transactionBase64 = Buffer.from(bytes).toString('base64');
-
-    const summary = includedPayees.map((p) => ({
-      userId: p.userId,
-      hederaAccountId: p.hederaAccountId,
-      amount: p.netAmountStr,
-      symbol: tokenInfo.symbol,
-    }));
+    const auditCtx = extractRequestAuditContext(request);
+    await executePayoutRelease({
+      type: 'mark_processing',
+      payoutIds: prepared.payoutIds,
+      providerPayload: prepared.providerPayload,
+      actor: {
+        userId: user.id,
+        organizationId,
+        ipAddress: auditCtx.ipAddress,
+        userAgent: auditCtx.userAgent,
+        correlationId: auditCtx.correlationId,
+      },
+    });
 
     return NextResponse.json({
       data: {
-        transactionBase64,
-        merchantAccountId,
-        summary,
-        includedPayoutIds,
-        totalAmount: fromSmallestUnit(totalSmallest, decimals),
-        totalSmallestUnit: totalSmallest.toString(),
-        decimals,
-        tokenSymbol: tokenInfo.symbol,
-        tokenId: tokenInfo.tokenId,
+        ...prepared.providerPayload,
+        includedPayoutIds: prepared.payoutIds,
         batchId,
-        payeeCount: includedPayees.length,
       },
     });
   } catch (error: unknown) {
+    if (error instanceof PayoutReleaseError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code, details: error.details, ...error.details },
+        { status: error.httpStatus }
+      );
+    }
     const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }

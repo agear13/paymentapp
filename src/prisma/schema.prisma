@@ -38,6 +38,11 @@ model audit_logs {
 
 enum WebhookProvider {
   STRIPE
+  HEDERA
+  MANUAL
+  CREGIS
+  STRIPE_TREASURY
+  AIRWALLEX
 }
 
 enum WebhookEventStatus {
@@ -72,14 +77,17 @@ model webhook_events {
   correlation_id           String?             @db.VarChar(255)
   organization_id          String?             @db.Uuid
   payment_link_id          String?             @db.Uuid
+  payout_id                String?             @db.Uuid
   stripe_payment_intent_id String?             @db.VarChar(255)
   stripe_charge_id         String?             @db.VarChar(255)
   stripe_refund_id         String?             @db.VarChar(255)
+  payouts                  payouts?            @relation(fields: [payout_id], references: [id], onDelete: SetNull)
 
   @@unique([provider, provider_event_id], name: "ux_webhook_events_provider_event_id")
   @@index([provider, status, received_at(sort: Desc)])
   @@index([payment_link_id, received_at(sort: Desc)])
   @@index([organization_id, received_at(sort: Desc)])
+  @@index([payout_id, received_at(sort: Desc)])
   @@index([stripe_payment_intent_id])
   @@index([stripe_refund_id])
 }
@@ -959,8 +967,15 @@ enum PayoutMethodType {
 enum PayoutStatus {
   DRAFT
   SUBMITTED
+  PROCESSING
   PAID
   FAILED
+}
+
+enum PayoutDestinationKind {
+  BANK_ACCOUNT
+  WALLET
+  PLATFORM_HANDLE
 }
 
 enum PayoutBatchStatus {
@@ -1215,18 +1230,19 @@ model commission_obligation_lines {
 }
 
 model payout_methods {
-  id                String           @id @default(uuid()) @db.Uuid
-  organization_id   String           @db.Uuid
-  user_id           String           @db.VarChar(255)
+  id                String                  @id @default(uuid()) @db.Uuid
+  organization_id   String                  @db.Uuid
+  user_id           String                  @db.VarChar(255)
   method_type       PayoutMethodType
-  handle            String?          @db.VarChar(255)
-  notes             String?          @db.Text
-  is_default        Boolean          @default(false)
-  status            String           @default("ACTIVE") @db.VarChar(50)
-  hedera_account_id String?          @db.VarChar(50)
-  created_at        DateTime         @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime         @updatedAt @db.Timestamptz(6)
-  organizations     organizations    @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  handle            String?                 @db.VarChar(255)
+  notes             String?                 @db.Text
+  is_default        Boolean                 @default(false)
+  status            String                  @default("ACTIVE") @db.VarChar(50)
+  hedera_account_id String?                 @db.VarChar(50)
+  details           Json?
+  created_at        DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime                @updatedAt @db.Timestamptz(6)
+  organizations     organizations           @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   payouts           payouts[]
 
   @@index([organization_id, user_id])
@@ -1260,6 +1276,10 @@ model payouts {
   fee_amount         Decimal                       @default(0) @db.Decimal(18, 8)
   net_amount         Decimal                       @db.Decimal(18, 8)
   status             PayoutStatus                  @default(DRAFT)
+  rail_id            String                        @default("manual") @db.VarChar(64)
+  destination_kind   PayoutDestinationKind?
+  idempotency_key    String                        @db.VarChar(255)
+  provider_payload   Json?
   external_reference String?                       @db.VarChar(255)
   paid_at            DateTime?                     @db.Timestamptz(6)
   failed_reason      String?                       @db.Text
@@ -1268,9 +1288,12 @@ model payouts {
   payout_methods     payout_methods?               @relation(fields: [payout_method_id], references: [id], onDelete: SetNull)
   obligation_lines   commission_obligation_lines[]
   obligation_items   commission_obligation_items[]
+  webhook_events     webhook_events[]
 
+  @@unique([idempotency_key], name: "payouts_idempotency_key_key")
   @@index([organization_id, user_id, status])
   @@index([batch_id])
+  @@index([rail_id, status])
 }
 
 /// Rabbit Hole Deal Network pilot — per Supabase auth user (user_id = auth.users.id)

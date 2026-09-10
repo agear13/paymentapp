@@ -82,6 +82,31 @@ const envSchema = z.object({
   DEFAULT_WISE_PROFILE_ID: z.string().optional(),
 
   // Feature Flags
+  /** Cregis outbound payouts — platform gate. Org connection must also enable execution. */
+  CREGIS_PAYOUTS_ENABLED: z.string().optional().default('false'),
+  CREGIS_PRODUCTION_PAYOUTS_ENABLED: z.string().optional().default('false'),
+  CREGIS_ENVIRONMENT: z.enum(['sandbox', 'production']).optional(),
+  CREGIS_API_KEY: z.string().optional(),
+  CREGIS_GATEWAY_URL: z.string().url().optional(),
+  CREGIS_PID: z.string().optional(),
+  CREGIS_WALLET_ID: z.string().optional(),
+  CREGIS_FROM_ADDRESS: z.string().optional(),
+  CREGIS_CALLBACK_URL: z.string().url().optional(),
+
+  /**
+   * Airwallex outbound payouts — sandbox only. There is no production API
+   * host path. Optional x-on-behalf-of is a capability, not a chosen funds model.
+   */
+  AIRWALLEX_PAYOUTS_ENABLED: z.string().optional().default('false'),
+  AIRWALLEX_CLIENT_ID: z.string().optional(),
+  AIRWALLEX_API_KEY: z.string().optional(),
+  AIRWALLEX_WEBHOOK_SECRET: z.string().optional(),
+  AIRWALLEX_ON_BEHALF_OF: z.string().optional(),
+  AIRWALLEX_LOGIN_AS: z.string().optional(),
+  AIRWALLEX_SOURCE_CURRENCY: z.string().optional(),
+  AIRWALLEX_TRANSFER_METHOD: z.enum(['LOCAL', 'SWIFT']).optional(),
+  AIRWALLEX_TRANSFER_REASON: z.string().optional(),
+
   ENABLE_HEDERA_PAYMENTS: z.string().optional().default('true'),
   ENABLE_HEDERA_STABLECOINS: z.string().optional().default('false'),
   ENABLE_XERO_SYNC: z.string().optional().default('true'),
@@ -209,6 +234,8 @@ function stripInvalidOptionalUrls(record: Record<string, string | undefined>) {
     'R2_PUBLIC_BASE_URL',
     'R2_ENDPOINT',
     'ASSET_CDN_URL',
+    'CREGIS_GATEWAY_URL',
+    'CREGIS_CALLBACK_URL',
   ] as const;
 
   for (const key of optionalUrlKeys) {

@@ -61,6 +61,7 @@ export enum AuditEventType {
   PAYOUT_CREATED = 'payout.created',
   PAYOUT_APPROVED = 'payout.approved',
   PAYOUT_PAID = 'payout.paid',
+  PAYOUT_FAILED = 'payout.failed',
 
   // Commission Events
   COMMISSION_CREATED = 'commission.created',

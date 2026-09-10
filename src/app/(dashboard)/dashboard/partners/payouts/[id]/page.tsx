@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useParams, usePathname, useRouter } from 'next/navigation';
+import { useParams, usePathname } from 'next/navigation';
 import { PAYOUTS_SETTLEMENTS_HREF } from '@/lib/navigation/operator-nav';
 import { ArrowLeft, Copy, Check, Download, CheckCircle2, XCircle, Wallet } from 'lucide-react';
 import { useOrganization } from '@/hooks/use-organization';
@@ -16,7 +16,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +36,20 @@ import {
 } from '@/hooks/use-global-operational-sync';
 import { useReleaseInteractionCapability } from '@/hooks/use-release-interaction-capability';
 import { ReleaseInteractionNotice } from '@/components/payouts/release-interaction-notice';
+import { PayoutRailBadge } from '@/components/payouts/payout-rail-badge';
+import { PayoutStatusBadge } from '@/components/payouts/payout-status-badge';
+import { PayoutRailComparison } from '@/components/payouts/payout-rail-comparison';
+import { PayoutRailRecommendationCard } from '@/components/payouts/payout-rail-recommendation';
+import { PayoutReviewSummary } from '@/components/payouts/payout-review-summary';
+import { PayoutTimeline } from '@/components/payouts/payout-timeline';
+import {
+  formatPayoutDestination,
+  formatPayoutRecipient,
+} from '@/lib/payouts/payout-rail-presentation';
+import { isPayoutRailId } from '@/lib/payouts/rails/types';
+import { usePayoutRailReadiness } from '@/hooks/use-payout-rail-readiness';
+import { presentPayoutStatus } from '@/lib/payouts/payout-status-presentation';
+import { cn } from '@/lib/utils';
 
 interface Payout {
   id: string;
@@ -44,10 +57,19 @@ interface Payout {
   currency: string;
   netAmount: number;
   status: string;
+  railId?: string;
+  destinationKind?: string | null;
   externalReference?: string;
   paidAt?: string;
   failedReason?: string;
-  method?: { type: string; handle?: string; notes?: string; hederaAccountId?: string };
+  createdAt?: string;
+  method?: {
+    type: string;
+    handle?: string;
+    notes?: string;
+    hederaAccountId?: string;
+    details?: Record<string, unknown> | null;
+  };
 }
 
 interface Batch {
@@ -62,12 +84,12 @@ interface Batch {
 export default function PayoutBatchDetailPage() {
   const params = useParams();
   const pathname = usePathname();
-  const router = useRouter();
   const id = params?.id ?? '';
   const settlementsListHref = pathname?.includes('/dashboard/payouts/settlements')
     ? PAYOUTS_SETTLEMENTS_HREF
     : '/dashboard/partners/payouts';
   const { organizationId } = useOrganization();
+  const railReadiness = usePayoutRailReadiness();
   const releaseInteraction = useReleaseInteractionCapability();
   const [batch, setBatch] = React.useState<Batch | null>(null);
   const [payouts, setPayouts] = React.useState<Payout[]>([]);
@@ -88,7 +110,13 @@ export default function PayoutBatchDetailPage() {
     tokenSymbol: string;
   } | null>(null);
   const [hederaSigning, setHederaSigning] = React.useState(false);
+  const [selectedPayoutId, setSelectedPayoutId] = React.useState<string | null>(null);
   const syncHandlers = useGlobalOperationalSyncHandlers();
+  const selectedPayout = payouts.find((payout) => payout.id === selectedPayoutId) ?? payouts[0] ?? null;
+  const hasHederaPayouts = payouts.some(
+    (payout) =>
+      payout.railId === 'hedera' && payout.status !== 'PAID' && payout.status !== 'FAILED'
+  );
 
   const fetchData = React.useCallback(async () => {
     if (!organizationId || !id || !releaseInteraction.canQueryReleaseHistory) return;
@@ -321,7 +349,8 @@ export default function PayoutBatchDetailPage() {
             <div>
               <CardTitle>Payouts</CardTitle>
               <CardDescription>
-                Mark each payout as paid after transfer. Mark failed to unassign and re-batch.
+                Select a payout to review the destination, selected rail, and status timeline.
+                Mark paid after the transfer, or mark failed to unassign and re-batch.
               </CardDescription>
             </div>
             <div className="flex gap-2">
@@ -329,7 +358,7 @@ export default function PayoutBatchDetailPage() {
                 <Download className="h-4 w-4 mr-2" />
                 Export CSV
               </Button>
-              {(batch.status === 'DRAFT' || batch.status === 'SUBMITTED') && (
+              {(batch.status === 'DRAFT' || batch.status === 'SUBMITTED') && hasHederaPayouts && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -352,46 +381,65 @@ export default function PayoutBatchDetailPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Payee</TableHead>
-                <TableHead>Method</TableHead>
-                <TableHead>Handle / Notes</TableHead>
+                <TableHead>Recipient</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Destination</TableHead>
+                <TableHead>Selected rail</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead>Completed</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {payouts.map((p) => (
-                <TableRow key={p.id}>
-                  <TableCell className="font-mono text-sm">{p.userId.slice(0, 8)}...</TableCell>
-                  <TableCell>{p.method?.type ?? '—'}</TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {p.method?.type === 'HEDERA'
-                      ? p.method?.hederaAccountId || p.method?.notes || '—'
-                      : p.method?.handle || p.method?.notes || '—'}
+                <TableRow
+                  key={p.id}
+                  className={cn(
+                    'cursor-pointer',
+                    selectedPayout?.id === p.id && 'bg-muted/40'
+                  )}
+                  onClick={() => setSelectedPayoutId(p.id)}
+                >
+                  <TableCell className="font-mono text-sm">
+                    {formatPayoutRecipient(p.userId)}
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     {p.currency} {p.netAmount.toFixed(2)}
                   </TableCell>
+                  <TableCell className="max-w-xs truncate">
+                    {formatPayoutDestination({
+                      methodType: p.method?.type,
+                      handle: p.method?.handle,
+                      hederaAccountId: p.method?.hederaAccountId,
+                      details: p.method?.details,
+                    })}
+                  </TableCell>
                   <TableCell>
-                    <Badge
-                      variant={
-                        p.status === 'PAID'
-                          ? 'default'
-                          : p.status === 'FAILED'
-                            ? 'destructive'
-                            : 'secondary'
-                      }
-                    >
-                      {p.status}
-                    </Badge>
+                    <PayoutRailBadge railId={p.railId} />
+                  </TableCell>
+                  <TableCell>
+                    <PayoutStatusBadge
+                      status={p.status}
+                      railId={p.railId}
+                      failedReason={p.failedReason}
+                    />
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {p.createdAt ? new Date(p.createdAt).toLocaleDateString() : '—'}
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {p.paidAt ? new Date(p.paidAt).toLocaleDateString() : '—'}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => copyPayoutDetails(p)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          copyPayoutDetails(p);
+                        }}
                         title="Copy details"
                       >
                         {copiedId === p.id ? (
@@ -405,7 +453,10 @@ export default function PayoutBatchDetailPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setMarkPaidPayout(p)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setMarkPaidPayout(p);
+                            }}
                           >
                             <CheckCircle2 className="h-4 w-4 mr-1" />
                             Mark paid
@@ -413,7 +464,10 @@ export default function PayoutBatchDetailPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setMarkFailedPayout(p)}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setMarkFailedPayout(p);
+                            }}
                           >
                             <XCircle className="h-4 w-4 mr-1" />
                             Mark failed
@@ -429,6 +483,97 @@ export default function PayoutBatchDetailPage() {
         </CardContent>
       </Card>
 
+      {selectedPayout ? (
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <Card>
+            <CardHeader>
+              <CardTitle>Payout review</CardTitle>
+              <CardDescription>
+                {presentPayoutStatus({
+                  status: selectedPayout.status,
+                  railId: selectedPayout.railId,
+                  failedReason: selectedPayout.failedReason,
+                }).explanation}{' '}
+                Provvy can route payouts across registered rails. Unconfigured rails stay visible
+                as coming soon and cannot be executed.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <PayoutReviewSummary
+                recipient={selectedPayout.userId}
+                amount={selectedPayout.netAmount}
+                currency={selectedPayout.currency}
+                methodType={selectedPayout.method?.type}
+                destinationHandle={selectedPayout.method?.handle}
+                hederaAccountId={selectedPayout.method?.hederaAccountId}
+                destinationDetails={selectedPayout.method?.details}
+                railId={selectedPayout.railId}
+                merchantHederaReady={railReadiness.merchantHederaReady}
+                merchantCregisReady={railReadiness.merchantCregisReady}
+                merchantAirwallexReady={railReadiness.merchantAirwallexReady}
+                requireAvailableRail={false}
+                confirmLabel="Confirm mark paid"
+                confirmDisabled={
+                  selectedPayout.status === 'PAID' || selectedPayout.status === 'FAILED'
+                }
+                onConfirm={
+                  selectedPayout.status === 'PAID' || selectedPayout.status === 'FAILED'
+                    ? undefined
+                    : () => setMarkPaidPayout(selectedPayout)
+                }
+              />
+              <PayoutRailRecommendationCard
+                currency={selectedPayout.currency}
+                methodType={selectedPayout.method?.type}
+                destinationHandle={selectedPayout.method?.handle}
+                destinationDetails={selectedPayout.method?.details}
+                payoutAmount={String(selectedPayout.netAmount)}
+                merchantHederaReady={railReadiness.merchantHederaReady}
+                merchantCregisReady={railReadiness.merchantCregisReady}
+                merchantAirwallexReady={railReadiness.merchantAirwallexReady}
+                selectedRailId={
+                  selectedPayout.railId && isPayoutRailId(selectedPayout.railId)
+                    ? selectedPayout.railId
+                    : undefined
+                }
+              />
+              <PayoutRailComparison
+                currency={selectedPayout.currency}
+                methodType={selectedPayout.method?.type}
+                destinationHandle={selectedPayout.method?.handle}
+                destinationDetails={selectedPayout.method?.details}
+                payoutAmount={String(selectedPayout.netAmount)}
+                merchantHederaReady={railReadiness.merchantHederaReady}
+                merchantCregisReady={railReadiness.merchantCregisReady}
+                merchantAirwallexReady={railReadiness.merchantAirwallexReady}
+                selectedRailId={
+                  selectedPayout.railId && isPayoutRailId(selectedPayout.railId)
+                    ? selectedPayout.railId
+                    : undefined
+                }
+              />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Payout timeline</CardTitle>
+              <CardDescription>
+                Canonical states stay Draft → Submitted → Processing → Paid or Failed.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PayoutTimeline
+                status={selectedPayout.status}
+                railId={selectedPayout.railId}
+                createdAt={selectedPayout.createdAt}
+                paidAt={selectedPayout.paidAt}
+                failedReason={selectedPayout.failedReason}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
       <OperationalActivitySection
         title="Release activity"
         emptyMessage="Payout release and funding events appear here as this batch progresses."
@@ -436,14 +581,30 @@ export default function PayoutBatchDetailPage() {
       />
 
       <Dialog open={!!markPaidPayout} onOpenChange={(o) => !o && setMarkPaidPayout(null)}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Mark payout paid</DialogTitle>
+            <DialogTitle>Confirm payout as paid</DialogTitle>
             <DialogDescription>
-              Enter the external reference (e.g. bank transfer ref, PayPal batch ID).
+              Review the selected rail and destination, then record the external reference.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {markPaidPayout ? (
+              <PayoutReviewSummary
+                recipient={markPaidPayout.userId}
+                amount={markPaidPayout.netAmount}
+                currency={markPaidPayout.currency}
+                methodType={markPaidPayout.method?.type}
+                destinationHandle={markPaidPayout.method?.handle}
+                hederaAccountId={markPaidPayout.method?.hederaAccountId}
+                destinationDetails={markPaidPayout.method?.details}
+                railId={markPaidPayout.railId}
+                merchantHederaReady={railReadiness.merchantHederaReady}
+                merchantCregisReady={railReadiness.merchantCregisReady}
+                merchantAirwallexReady={railReadiness.merchantAirwallexReady}
+                requireAvailableRail={false}
+              />
+            ) : null}
             <div>
               <Label htmlFor="extRef">External reference</Label>
               <Input
@@ -459,7 +620,7 @@ export default function PayoutBatchDetailPage() {
               Cancel
             </Button>
             <Button onClick={handleMarkPaid} disabled={submitting || !externalRef.trim()}>
-              {submitting ? 'Saving...' : 'Mark paid'}
+              {submitting ? 'Saving...' : 'Confirm paid'}
             </Button>
           </DialogFooter>
         </DialogContent>

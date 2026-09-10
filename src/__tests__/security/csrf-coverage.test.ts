@@ -51,10 +51,11 @@ describe('CSRF coverage matrix', () => {
   });
 
   it('documents intentional CSRF exemptions', () => {
-    expect(CSRF_EXEMPT_PATH_PREFIXES).toEqual(
+        expect(CSRF_EXEMPT_PATH_PREFIXES).toEqual(
       expect.arrayContaining([
         '/api/public/',
         '/api/stripe/webhook',
+        '/api/payouts/webhooks/',
         '/api/jobs/',
         '/api/auth/login',
         '/api/auth/reset-password',

@@ -9,7 +9,7 @@
  * Earned → Owed → Pending | Requires action | Ready for payout → Released → Paid
  *
  * Recovery (existing payout domain only — PayoutStatus is DRAFT | SUBMITTED |
- * PAID | FAILED; PayoutBatchStatus is DRAFT | SUBMITTED | COMPLETED):
+ * PROCESSING | PAID | FAILED; PayoutBatchStatus is DRAFT | SUBMITTED | COMPLETED):
  * - A removed draft release (no remaining payout rows) must not consume Ready.
  * - FAILED never overlays as Paid or Released; the obligation returns to its
  *   stored status (typically Ready) so it can be re-released. mark-failed

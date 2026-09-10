@@ -16,6 +16,11 @@ import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
 import { loggers } from '@/lib/logger';
 import { z } from 'zod';
+import {
+  persistablePayoutMethodDetails,
+  publicPayoutMethodDetails,
+  resolveCryptoHandle,
+} from '@/lib/payouts/crypto-payout-destination';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -41,6 +46,7 @@ const CreatePayoutMethodSchema = z
     notes: z.string().optional().nullable(),
     isDefault: z.boolean().optional(),
     hederaAccountId: z.string().max(50).optional().nullable(),
+    details: z.record(z.string(), z.unknown()).optional().nullable(),
   })
   .refine(
     (data) => {
@@ -105,6 +111,7 @@ export async function GET(request: NextRequest) {
         isDefault: m.is_default,
         status: m.status,
         hederaAccountId: m.hedera_account_id ?? undefined,
+        details: publicPayoutMethodDetails(m.details),
         createdAt: m.created_at,
       })),
     });
@@ -138,13 +145,25 @@ export async function POST(request: NextRequest) {
     const parsed = CreatePayoutMethodSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Validation error', details: parsed.error.errors },
+        { error: 'Validation error', details: parsed.error.issues },
         { status: 400 }
       );
     }
 
-    const { methodType, handle, notes, isDefault, hederaAccountId } = parsed.data;
+    const { methodType, handle, notes, isDefault, hederaAccountId, details } = parsed.data;
     const userId = parsed.data.userId ?? user.id;
+    const persistedDetails = persistablePayoutMethodDetails({
+      methodType,
+      handle,
+      details,
+    });
+    if (!persistedDetails.ok) {
+      return NextResponse.json({ error: persistedDetails.error }, { status: 400 });
+    }
+    const resolvedHandle =
+      methodType === 'CRYPTO'
+        ? resolveCryptoHandle({ handle, details: persistedDetails.details })
+        : handle?.trim() || undefined;
 
     if (methodType === 'HEDERA') {
       const stepUp = await assertRecentStepUp({
@@ -180,20 +199,21 @@ export async function POST(request: NextRequest) {
         organization_id: organizationId,
         user_id: userId,
         method_type: methodType,
-        handle: handle ?? undefined,
+        handle: resolvedHandle,
         notes: notes ?? undefined,
         is_default: isDefault ?? false,
         hedera_account_id:
           methodType === 'HEDERA' && hederaAccountId?.trim()
             ? hederaAccountId.trim()
             : undefined,
+        details: persistedDetails.details ?? undefined,
       },
     });
 
-    loggers.payment.info(
-      { msg: 'Payout operation', userId: user.id, organizationId },
-      'Payout method created'
-    );
+    loggers.payment.info('Payout method created', {
+      userId: user.id,
+      organizationId,
+    });
 
     return NextResponse.json(
       {
@@ -204,6 +224,7 @@ export async function POST(request: NextRequest) {
           notes: method.notes,
           isDefault: method.is_default,
           hederaAccountId: method.hedera_account_id ?? undefined,
+          details: publicPayoutMethodDetails(method.details),
         },
       },
       { status: 201 }

@@ -2,7 +2,7 @@
  * Mark Payout Failed API
  * POST /api/payouts/[id]/mark-failed
  * Unassigns obligation lines (payout_id = null) so they can be re-batched
- * 
+ *
  * NOTE: This API is restricted to beta admins during BETA_LOCKDOWN_MODE
  */
 
@@ -12,12 +12,15 @@ import { requireAuth } from '@/lib/supabase/middleware';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
-import { log } from '@/lib/logger';
 import { z } from 'zod';
 import {
   orchestrateOperationalMutation,
   operationalSyncJson,
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
+import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
+import { executePayoutRelease } from '@/lib/payouts/execute-payout-release.server';
+import { buildManualFailedEvent } from '@/lib/payouts/rails/manual.adapter';
+import { PayoutReleaseError } from '@/lib/payouts/payout-status-transitions';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -61,11 +64,8 @@ export async function POST(
       );
     }
 
-    const { failed_reason } = parsed.data;
-
     const payout = await prisma.payouts.findUnique({
       where: { id },
-      include: { obligation_lines: true },
     });
 
     if (!payout) {
@@ -77,26 +77,20 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    await prisma.$transaction(async (tx) => {
-      await tx.payouts.update({
-        where: { id },
-        data: { status: 'FAILED', failed_reason: failed_reason },
-      });
-      await tx.commission_obligation_lines.updateMany({
-        where: { payout_id: id },
-        data: { payout_id: null, status: 'POSTED', paid_at: null },
-      });
-      // Option B: unassign commission_obligation_items (so they can be re-batched); do not touch already PAID
-      await tx.commission_obligation_items.updateMany({
-        where: { payout_id: id, status: { not: 'PAID' } },
-        data: { payout_id: null },
-      });
-    });
-
-    log.info('Payout marked failed, obligation lines unassigned', {
-      organizationId: payout.organization_id,
-      payoutId: id,
-      failedReason: failed_reason,
+    const auditCtx = extractRequestAuditContext(request);
+    const result = await executePayoutRelease({
+      type: 'apply_event',
+      event: buildManualFailedEvent({
+        payoutId: id,
+        failedReason: parsed.data.failed_reason,
+      }),
+      actor: {
+        userId: user.id,
+        organizationId: payout.organization_id,
+        ipAddress: auditCtx.ipAddress,
+        userAgent: auditCtx.userAgent,
+        correlationId: auditCtx.correlationId,
+      },
     });
 
     const operationalSync = await orchestrateOperationalMutation({
@@ -105,11 +99,17 @@ export async function POST(
     });
 
     return NextResponse.json({
-      data: { id: payout.id, status: 'FAILED' },
+      data: { id: payout.id, status: result.statuses[0] ?? 'FAILED' },
       message: 'Obligation lines unassigned for re-batching',
       ...operationalSyncJson(operationalSync),
     });
   } catch (error: unknown) {
+    if (error instanceof PayoutReleaseError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code, details: error.details },
+        { status: error.httpStatus }
+      );
+    }
     const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }

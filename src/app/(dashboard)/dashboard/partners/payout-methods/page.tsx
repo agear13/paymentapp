@@ -34,6 +34,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import {
+  CryptoPayoutDestinationFields,
+  EMPTY_CRYPTO_PAYOUT_DESTINATION,
+  cryptoDestinationDetailsPayload,
+  cryptoDestinationFormErrors,
+  type CryptoPayoutDestinationForm,
+} from '@/components/payouts/crypto-payout-destination-fields';
+import { payoutDestinationTypeLabel } from '@/lib/payouts/payout-rail-presentation';
 
 const METHOD_TYPES = ['PAYPAL', 'WISE', 'BANK_TRANSFER', 'CRYPTO', 'MANUAL_NOTE', 'HEDERA'] as const;
 
@@ -45,6 +53,12 @@ interface PayoutMethod {
   isDefault: boolean;
   status: string;
   hederaAccountId?: string;
+  details?: {
+    address?: string;
+    asset?: string;
+    network?: string;
+    memo?: string;
+  } | null;
   createdAt: string;
 }
 
@@ -58,6 +72,9 @@ export default function PayoutMethodsPage() {
   const [createHandle, setCreateHandle] = React.useState('');
   const [createNotes, setCreateNotes] = React.useState('');
   const [createHederaAccountId, setCreateHederaAccountId] = React.useState('');
+  const [createCrypto, setCreateCrypto] = React.useState<CryptoPayoutDestinationForm>(
+    EMPTY_CRYPTO_PAYOUT_DESTINATION
+  );
   const [createDefault, setCreateDefault] = React.useState(true);
   const [createLoading, setCreateLoading] = React.useState(false);
   const supabase = createClient();
@@ -100,10 +117,15 @@ export default function PayoutMethodsPage() {
           organizationId,
           userId,
           methodType: createType,
-          handle: createHandle.trim() || undefined,
+          handle:
+            createType === 'CRYPTO'
+              ? createCrypto.address.trim() || undefined
+              : createHandle.trim() || undefined,
           notes: createNotes.trim() || undefined,
           hederaAccountId:
             createType === 'HEDERA' ? createHederaAccountId.trim() || undefined : undefined,
+          details:
+            createType === 'CRYPTO' ? cryptoDestinationDetailsPayload(createCrypto) : undefined,
           isDefault: createDefault,
         }),
       });
@@ -114,6 +136,7 @@ export default function PayoutMethodsPage() {
       setCreateHandle('');
       setCreateNotes('');
       setCreateHederaAccountId('');
+      setCreateCrypto(EMPTY_CRYPTO_PAYOUT_DESTINATION);
       fetchMethods();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed');
@@ -146,7 +169,8 @@ export default function PayoutMethodsPage() {
         <div>
           <h1 className="text-3xl font-bold">Payout methods</h1>
           <p className="text-muted-foreground">
-            Add payout handles (PayPal email, Wise email, etc.). No raw bank numbers.
+            Add where you want to be paid. Provvy determines which payout rail can service each
+            destination. No raw bank numbers or provider credentials.
           </p>
         </div>
         <div className="flex gap-2">
@@ -164,7 +188,8 @@ export default function PayoutMethodsPage() {
         <CardHeader>
           <CardTitle>Your payout destinations</CardTitle>
           <CardDescription>
-            Used when creating payout batches. Handle = email or wallet address.
+            Used when creating payout batches. Provvy selects the rail from the destination — you do
+            not choose Cregis, Hedera, or another provider here.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -180,6 +205,7 @@ export default function PayoutMethodsPage() {
                 <TableRow>
                   <TableHead>Type</TableHead>
                   <TableHead>Handle</TableHead>
+                  <TableHead>Destination</TableHead>
                   <TableHead>Notes</TableHead>
                   <TableHead>Default</TableHead>
                 </TableRow>
@@ -188,10 +214,15 @@ export default function PayoutMethodsPage() {
                 {methods.map((m) => (
                   <TableRow key={m.id}>
                     <TableCell>
-                      <Badge variant="outline">{m.methodType}</Badge>
+                      <Badge variant="outline">{payoutDestinationTypeLabel(m.methodType)}</Badge>
                     </TableCell>
                     <TableCell className="font-mono text-sm">
                       {m.methodType === 'HEDERA' ? m.hederaAccountId || m.handle || '—' : m.handle || '—'}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {m.methodType === 'CRYPTO' && (m.details?.asset || m.details?.network)
+                        ? [m.details.asset, m.details.network].filter(Boolean).join(' · ')
+                        : '—'}
                     </TableCell>
                     <TableCell className="max-w-xs truncate">{m.notes || '—'}</TableCell>
                     <TableCell>{m.isDefault ? 'Yes' : '—'}</TableCell>
@@ -208,13 +239,20 @@ export default function PayoutMethodsPage() {
           <DialogHeader>
             <DialogTitle>Add payout method</DialogTitle>
             <DialogDescription>
-              Store a handle (email, wallet address) or notes. No raw bank account numbers.
+              Store a destination handle. Provvy will determine which payout rail can service it.
+              No raw bank account numbers or provider wallet IDs.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
               <Label>Type</Label>
-              <Select value={createType} onValueChange={setCreateType}>
+              <Select
+                value={createType}
+                onValueChange={(value) => {
+                  setCreateType(value);
+                  setCreateCrypto(EMPTY_CRYPTO_PAYOUT_DESTINATION);
+                }}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -239,6 +277,12 @@ export default function PayoutMethodsPage() {
                   Format: 0.0.x, used for USDC/USDT/HBAR payouts via HashPack
                 </p>
               </div>
+            ) : createType === 'CRYPTO' ? (
+              <CryptoPayoutDestinationFields
+                value={createCrypto}
+                onChange={setCreateCrypto}
+                showErrors
+              />
             ) : (
               <div>
                 <Label>Handle (e.g. PayPal email, Wise email)</Label>
@@ -271,7 +315,13 @@ export default function PayoutMethodsPage() {
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleCreate} disabled={createLoading}>
+            <Button
+              onClick={handleCreate}
+              disabled={
+                createLoading ||
+                (createType === 'CRYPTO' && cryptoDestinationFormErrors(createCrypto).length > 0)
+              }
+            >
               {createLoading ? 'Adding...' : 'Add'}
             </Button>
           </DialogFooter>

@@ -12,6 +12,7 @@ import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import { checkUserPermission } from '@/lib/auth/permissions';
 import { isBetaAdminEmail } from '@/lib/auth/admin-shared';
 import { applyRateLimit } from '@/lib/rate-limit';
+import { publicPayoutMethodDetails } from '@/lib/payouts/crypto-payout-destination';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -64,7 +65,13 @@ export async function GET(request: NextRequest) {
       where,
       include: {
         payout_methods: {
-          select: { method_type: true, handle: true, notes: true, hedera_account_id: true },
+          select: {
+            method_type: true,
+            handle: true,
+            notes: true,
+            hedera_account_id: true,
+            details: true,
+          },
         },
       },
       orderBy: { created_at: 'desc' },
@@ -81,6 +88,8 @@ export async function GET(request: NextRequest) {
         feeAmount: Number(p.fee_amount),
         netAmount: Number(p.net_amount),
         status: p.status,
+        railId: p.rail_id,
+        destinationKind: p.destination_kind,
         externalReference: p.external_reference,
         paidAt: p.paid_at,
         failedReason: p.failed_reason,
@@ -91,6 +100,7 @@ export async function GET(request: NextRequest) {
               handle: p.payout_methods.handle,
               notes: p.payout_methods.notes,
               hederaAccountId: p.payout_methods.hedera_account_id ?? undefined,
+              details: publicPayoutMethodDetails(p.payout_methods.details),
             }
           : null,
       })),

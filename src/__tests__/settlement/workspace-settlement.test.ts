@@ -42,6 +42,7 @@ describe('workspace settlement mapping', () => {
     expect(classifyWorkspaceStatus({ status: 'APPROVED' })).toBe('pending');
     expect(classifyWorkspaceStatus({ status: 'PAID' })).toBe('paid');
     expect(classifyWorkspaceStatus({ status: 'SUBMITTED' })).toBe('released');
+    expect(classifyWorkspaceStatus({ status: 'PROCESSING' })).toBe('released');
     expect(
       classifyWorkspaceStatus({ status: 'APPROVED', blockingIssue: 'Participant setup incomplete' })
     ).toBe('requires_action');

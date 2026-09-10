@@ -1,7 +1,7 @@
 /**
  * Submit Payout Batch API
  * POST /api/payout-batches/[id]/submit
- * 
+ *
  * NOTE: This API is restricted to beta admins during BETA_LOCKDOWN_MODE
  */
 
@@ -17,6 +17,9 @@ import {
   orchestrateOperationalMutation,
   operationalSyncJson,
 } from '@/lib/operations/orchestration/operational-mutation-orchestrator.server';
+import { extractRequestAuditContext } from '@/lib/audit/request-context.server';
+import { executePayoutRelease } from '@/lib/payouts/execute-payout-release.server';
+import { PayoutReleaseError } from '@/lib/payouts/payout-status-transitions';
 
 function checkBetaLockdown(userEmail?: string | null): NextResponse | null {
   const betaLockdownEnabled = process.env.BETA_LOCKDOWN_MODE !== 'false';
@@ -70,23 +73,17 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    if (batch.status !== 'DRAFT') {
-      return NextResponse.json(
-        { error: `Batch is already ${batch.status}` },
-        { status: 400 }
-      );
-    }
-
-    const now = new Date();
-    await prisma.$transaction(async (tx) => {
-      await tx.payout_batches.update({
-        where: { id },
-        data: { status: 'SUBMITTED', submitted_at: now },
-      });
-      await tx.payouts.updateMany({
-        where: { batch_id: id },
-        data: { status: 'SUBMITTED' },
-      });
+    const auditCtx = extractRequestAuditContext(request);
+    const result = await executePayoutRelease({
+      type: 'submit_batch',
+      batchId: id,
+      actor: {
+        userId: user.id,
+        organizationId,
+        ipAddress: auditCtx.ipAddress,
+        userAgent: auditCtx.userAgent,
+        correlationId: auditCtx.correlationId,
+      },
     });
 
     loggers.payment.info('Payout batch submitted', {
@@ -102,10 +99,20 @@ export async function POST(
     });
 
     return NextResponse.json({
-      data: { id: batch.id, status: 'SUBMITTED', submittedAt: now },
+      data: {
+        id: batch.id,
+        status: result.batchStatus ?? 'SUBMITTED',
+        submittedAt: new Date(),
+      },
       ...operationalSyncJson(operationalSync),
     });
   } catch (error: unknown) {
+    if (error instanceof PayoutReleaseError) {
+      return NextResponse.json(
+        { error: error.message, code: error.code, details: error.details },
+        { status: error.httpStatus }
+      );
+    }
     const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({ error: message }, { status: 500 });
   }

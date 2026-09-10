@@ -10,6 +10,9 @@ import {
   scopeReleaseBatchToParticipants,
 } from '@/lib/operations/payouts/scope-release-batch-participants';
 import type { PilotReleaseBatchLine } from '@/lib/operations/payouts/pilot-release-batch-types';
+import { buildPayoutRailCreateFields } from '@/lib/payouts/stamp-payout-rail';
+import { isMerchantCregisSelectable } from '@/lib/payouts/rails/cregis-connection.server';
+import { AuditEventType, AuditSeverity, createAuditLog } from '@/lib/audit/audit-log';
 
 export type { PilotReleaseBatchLine } from '@/lib/operations/payouts/pilot-release-batch-types';
 
@@ -49,7 +52,7 @@ export async function derivePilotReleaseBatchLines(
       ? await prisma.payouts.findMany({
           where: {
             user_id: { in: eligibleIds },
-            status: { in: ['DRAFT', 'SUBMITTED'] },
+            status: { in: ['DRAFT', 'SUBMITTED', 'PROCESSING'] },
           },
           select: { user_id: true },
         })
@@ -129,6 +132,12 @@ export async function createPilotReleaseBatch(input: {
   if (payees.length === 0) return null;
 
   const totalAmount = payees.reduce((sum, [, g]) => sum + g.amount, 0);
+  const merchant = await prisma.merchant_settings.findFirst({
+    where: { organization_id: input.organizationId },
+    select: { hedera_account_id: true },
+  });
+  const merchantHederaReady = Boolean(merchant?.hedera_account_id?.trim());
+  const merchantCregisReady = await isMerchantCregisSelectable(input.organizationId);
 
   const [batch] = await prisma.$transaction(async (tx) => {
     const batch = await tx.payout_batches.create({
@@ -152,8 +161,23 @@ export async function createPilotReleaseBatch(input: {
         },
       });
 
+      const railFields = buildPayoutRailCreateFields({
+        organizationId: input.organizationId,
+        currency: currencyUpper,
+        methodType: defaultMethod?.method_type ?? null,
+        merchantHederaReady,
+        merchantCregisReady,
+        destinationHandle: defaultMethod?.handle ?? null,
+        destinationDetails:
+          defaultMethod?.details && typeof defaultMethod.details === 'object'
+            ? (defaultMethod.details as Record<string, unknown>)
+            : null,
+        payoutAmount: String(group.amount),
+      });
+
       await tx.payouts.create({
         data: {
+          id: railFields.id,
           organization_id: input.organizationId,
           batch_id: batch.id,
           user_id: participantId,
@@ -163,11 +187,30 @@ export async function createPilotReleaseBatch(input: {
           fee_amount: 0,
           net_amount: group.amount,
           status: 'DRAFT',
+          rail_id: railFields.rail_id,
+          destination_kind: railFields.destination_kind,
+          idempotency_key: railFields.idempotency_key,
         },
       });
     }
 
     return [batch];
+  });
+
+  void createAuditLog({
+    eventType: AuditEventType.PAYOUT_CREATED,
+    severity: AuditSeverity.INFO,
+    userId: input.createdBy,
+    organizationId: input.organizationId,
+    resource: 'payout_batch',
+    resourceId: batch.id,
+    action: 'create',
+    newValue: JSON.stringify({
+      payoutCount: batch.payout_count,
+      currency: batch.currency,
+      totalAmount: Number(batch.total_amount),
+    }),
+    timestamp: new Date(),
   });
 
   return {

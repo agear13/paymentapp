@@ -51,10 +51,12 @@ import {
 } from '@/hooks/use-global-operational-sync';
 import { cn } from '@/lib/utils';
 import type { OperationalCapabilities } from '@/lib/operations/capabilities/derive-operational-capabilities';
-import { useWorkspaceActivation } from '@/hooks/use-workspace-activation';
 import { OperationalSettlementInitialization } from '@/components/operations/operational-settlement-initialization';
 import { useOperationalCoordinationState } from '@/hooks/use-operational-coordination-state';
 import { ReleaseInteractionNotice } from '@/components/payouts/release-interaction-notice';
+import { PayoutRailComparison } from '@/components/payouts/payout-rail-comparison';
+import { PayoutRailRecommendationCard } from '@/components/payouts/payout-rail-recommendation';
+import { usePayoutRailReadiness } from '@/hooks/use-payout-rail-readiness';
 
 interface Batch {
   id: string;
@@ -75,6 +77,7 @@ export function OperatorSettlementsWorkspace({
   releaseCapabilities,
 }: OperatorSettlementsWorkspaceProps) {
   const { organizationId, isLoading: isOrgLoading } = useOrganization();
+  const railReadiness = usePayoutRailReadiness();
   const {
     operationalOnboarding,
     operationalInitialization,
@@ -373,7 +376,7 @@ export function OperatorSettlementsWorkspace({
                 </Tooltip>
               </TooltipProvider>
             )}
-            <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto gap-0">
+            <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto gap-0">
               <DialogHeader className="space-y-1 pb-4">
                 <DialogTitle>Create release batch</DialogTitle>
                 <DialogDescription className="text-sm">
@@ -407,8 +410,23 @@ export function OperatorSettlementsWorkspace({
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground/80 leading-relaxed">
-                  {PAYOUT_TRUST_COPY.releaseReviewable}
+                  {PAYOUT_TRUST_COPY.releaseReviewable} Provvy selects a payout rail for each
+                  destination at create time. You do not pick a provider here.
                 </p>
+                <PayoutRailRecommendationCard
+                  currency={createCurrency}
+                  pendingDestination
+                  merchantHederaReady={railReadiness.merchantHederaReady}
+                  merchantCregisReady={railReadiness.merchantCregisReady}
+                  merchantAirwallexReady={railReadiness.merchantAirwallexReady}
+                />
+                <PayoutRailComparison
+                  currency={createCurrency}
+                  hideRecommendation
+                  merchantHederaReady={railReadiness.merchantHederaReady}
+                  merchantCregisReady={railReadiness.merchantCregisReady}
+                  merchantAirwallexReady={railReadiness.merchantAirwallexReady}
+                />
                 {noEligible ? (
                   <PayoutEmptyState
                     iconVariant="release"
