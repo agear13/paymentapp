@@ -7,11 +7,16 @@ import {
   WISE_INCIDENT_SUBJECT_PREFIX,
   WISE_PAYMENTS_SUBJECT_ID,
 } from '@/lib/route-intelligence/observation';
+import {
+  REGULATORY_STORE_PROVIDER_ID,
+  sameMeaningfulRegulatoryState,
+} from '@/lib/route-intelligence/regulatory-observation';
 import type {
   LatestObservationRead,
   ProviderFeeObservation,
   ProviderOperationalHealthObservation,
   ProviderPaymentIncidentObservation,
+  RailRegulatoryObservation,
 } from '@/lib/route-intelligence/types';
 
 export type StoredObservationRow = {
@@ -93,17 +98,37 @@ function rowToIncidentObservation(row: StoredObservationRow): ProviderPaymentInc
   };
 }
 
+function rowToRegulatoryObservation(row: StoredObservationRow): RailRegulatoryObservation {
+  return {
+    observationType: 'rail_regulatory_observation',
+    subjectKind: 'rail',
+    subjectId: row.subjectId,
+    providerId: null,
+    value: row.value as RailRegulatoryObservation['value'],
+    observedAt: row.observedAt.toISOString(),
+    fetchedAt: row.fetchedAt.toISOString(),
+    sourceId: row.sourceId,
+    sourceUrl: row.sourceUrl,
+    provenance: row.provenance === 'curated' ? 'curated' : 'externally_sourced',
+    confidence: row.confidence === 'unavailable' ? 'unavailable' : 'high',
+    staleAfter: row.staleAfter.toISOString(),
+    rawHash: row.rawHash,
+    rawEvidence: row.rawPayload as RailRegulatoryObservation['rawEvidence'],
+  };
+}
+
 export function toInsertRow(
   observation:
     | ProviderOperationalHealthObservation
     | ProviderPaymentIncidentObservation
     | ProviderFeeObservation
+    | RailRegulatoryObservation
 ): Omit<StoredObservationRow, 'id' | 'createdAt'> {
   return {
     observationType: observation.observationType,
     subjectKind: observation.subjectKind,
     subjectId: observation.subjectId,
-    providerId: observation.providerId,
+    providerId: observation.providerId ?? REGULATORY_STORE_PROVIDER_ID,
     value: observation.value,
     observedAt: new Date(observation.observedAt),
     fetchedAt: new Date(observation.fetchedAt),
@@ -173,6 +198,42 @@ export async function persistPaymentIncidentObservation(
 
   const inserted = await repository.insert(toInsertRow(observation));
   return { action: 'inserted', id: inserted.id, observation };
+}
+
+export async function persistRailRegulatoryObservation(
+  repository: ObservationRepository,
+  observation: RailRegulatoryObservation
+): Promise<PersistObservationResult<RailRegulatoryObservation>> {
+  const previous = await repository.findLatestBySubject(observation.subjectId);
+  if (
+    previous?.observationType === 'rail_regulatory_observation' &&
+    sameMeaningfulRegulatoryState(observation, rowToRegulatoryObservation(previous))
+  ) {
+    await repository.updateFetchTimestamps(
+      previous.id,
+      new Date(observation.fetchedAt),
+      new Date(observation.staleAfter)
+    );
+    return {
+      action: 'refreshed',
+      id: previous.id,
+      observation: {
+        ...rowToRegulatoryObservation(previous),
+        fetchedAt: observation.fetchedAt,
+        staleAfter: observation.staleAfter,
+      },
+    };
+  }
+
+  const inserted = await repository.insert(toInsertRow(observation));
+  return { action: 'inserted', id: inserted.id, observation };
+}
+
+export async function listRailRegulatoryObservations(
+  repository: ObservationRepository
+): Promise<RailRegulatoryObservation[]> {
+  const rows = await repository.listByType('rail_regulatory_observation');
+  return rows.map(rowToRegulatoryObservation);
 }
 
 export async function persistProviderFeeObservation(

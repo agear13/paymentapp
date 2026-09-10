@@ -15,6 +15,10 @@ import {
   partitionActiveIncidents,
   WISE_PAYMENTS_COMPONENT_ID,
 } from '@/lib/route-intelligence/observation';
+import { OFFERING_RAIL_MAPPINGS } from '@/lib/route-intelligence/offering-rail';
+import { NETWORK_RAIL_CATALOGUE } from '@/lib/route-intelligence/network-rail';
+import { RAIL_CAPABILITY_CATALOGUE } from '@/lib/route-intelligence/rail-capability';
+import { evaluateRegulatoryRouteImpacts } from '@/lib/route-intelligence/regulatory-impact';
 import { evaluateRouteEligibilities } from '@/lib/route-intelligence/route-eligibility';
 import { evaluateRouteImpacts } from '@/lib/route-intelligence/route-impact';
 import type {
@@ -75,5 +79,20 @@ export function getPublicRouteIntelligenceSnapshot(
     eligibilityDecisions,
     // Shadow only — ranking and eligibility do not read this field.
     feeObservations: input.feeObservations ?? [],
+    networkRails: [...NETWORK_RAIL_CATALOGUE],
+    railCapabilities: [...RAIL_CAPABILITY_CATALOGUE],
+    offeringRailMappings: [...OFFERING_RAIL_MAPPINGS],
+    regulatoryObservations: input.regulatoryObservations ?? [],
+    regulatoryImpacts: input.evaluateRouteSubjects
+      ? evaluateRegulatoryRouteImpacts(
+          input.evaluateRouteSubjects,
+          input.regulatoryObservations ?? [],
+          {
+            now,
+            paymentType: input.regulatoryPaymentType,
+            participantType: input.regulatoryParticipantType,
+          }
+        )
+      : [],
   };
 }

@@ -24,18 +24,88 @@ export type Provider = {
 export type MechanismId = LandingRouteId;
 
 /**
- * Underlying payment network when known from a sourced field.
- * Phase 1 catalogue has no explicit rail field — use `unknown`.
- * Never infer a rail from a provider or product name.
+ * Opaque rail identifier. Catalogue IDs live in NETWORK_RAIL_CATALOGUE.
+ * `unknown` means no sourced rail — never invent SWIFT from international_bank.
+ * Not a closed country or market enum; new rails do not require a type change.
  */
-export type NetworkRailId =
-  | 'swift'
-  | 'npp'
-  | 'visa'
-  | 'mastercard'
-  | 'apple_pay'
-  | 'google_pay'
+export type NetworkRailId = string;
+
+/** ISO 3166-style country code. Not a closed Australia/SEA/US enum. */
+export type JurisdictionCode = string;
+
+/**
+ * Primary classification of a network rail.
+ * A rail may also carry additional classifications; mechanism ≠ rail.
+ */
+export type NetworkRailType =
+  | 'domestic_payment'
+  | 'cross_border_payment'
+  | 'card_network'
+  | 'bank_messaging'
+  | 'account_to_account'
+  | 'instant_payment'
+  | 'other';
+
+export type CorridorKind = 'domestic' | 'cross_border';
+
+export type RailCapabilityStatus = 'supported' | 'unsupported' | 'restricted' | 'unknown';
+
+export type RegulatoryStatus =
+  | 'permitted'
+  | 'restricted'
+  | 'prohibited'
+  | 'required'
+  | 'changed'
   | 'unknown';
+
+/**
+ * Canonical payment-network rail. Distinct from Provider and Mechanism.
+ * Do not infer a rail from provider marketing language.
+ */
+export type NetworkRail = {
+  id: NetworkRailId;
+  name: string;
+  operator: string;
+  railType: NetworkRailType;
+  additionalTypes: NetworkRailType[];
+  jurisdictions: JurisdictionCode[];
+  currencies: string[];
+  evidence: CapabilityEvidence;
+};
+
+/**
+ * Whether a rail can carry a payment shape.
+ * restricted must not collapse into unsupported.
+ * unknown must not collapse into supported.
+ */
+export type RailCapability = {
+  id: string;
+  railId: NetworkRailId;
+  originCountry: JurisdictionCode | null;
+  destinationCountry: JurisdictionCode | null;
+  sourceCurrency: string | null;
+  destinationCurrency: string | null;
+  paymentType: string | null;
+  corridorKind: CorridorKind | null;
+  participantRequirements: string[];
+  status: RailCapabilityStatus;
+  evidence: CapabilityEvidence;
+};
+
+/**
+ * Explicit Provider → Offering → Mechanism → Network Rail link.
+ * Populate only when evidence supports the relationship.
+ */
+export type OfferingRailMapping = {
+  id: string;
+  providerId: ProviderId;
+  offeringId: string;
+  mechanismId: MechanismId;
+  railId: NetworkRailId;
+  corridor: Corridor | null;
+  currencyPair: { source: string | null; target: string | null } | null;
+  evidence: CapabilityEvidence | null;
+};
 
 export type CorridorClass = 'cross_border' | 'domestic' | 'all';
 
@@ -128,13 +198,15 @@ export type StatuspagePageIndicator = 'none' | 'minor' | 'major' | 'critical';
 export type ObservationType =
   | 'provider_operational_health'
   | 'provider_payment_incident'
-  | 'provider_fee_observation';
+  | 'provider_fee_observation'
+  | 'rail_regulatory_observation';
 
 export type ObservationSubjectKind =
   | 'provider'
   | 'provider_component'
   | 'provider_incident'
-  | 'route';
+  | 'route'
+  | 'rail';
 
 /**
  * Canonical payment-route identity.
@@ -194,6 +266,79 @@ export type ProviderFeeObservation = {
   };
 };
 
+export type RailRegulatoryObservationValue = {
+  railId: NetworkRailId;
+  jurisdiction: JurisdictionCode | null;
+  paymentType: string | null;
+  currency: string | null;
+  participantType: string | null;
+  status: RegulatoryStatus;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+};
+
+/**
+ * Structured regulatory state — not a news headline.
+ * Do not create this from prose such as "Indonesia is considering changes".
+ * Only authoritative / explicitly structured source data.
+ */
+export type RailRegulatoryObservation = {
+  observationType: 'rail_regulatory_observation';
+  subjectKind: 'rail';
+  subjectId: string;
+  /** Provider-agnostic. Stored as `none` in the shared observation table. */
+  providerId: null;
+  value: RailRegulatoryObservationValue;
+  observedAt: string;
+  fetchedAt: string;
+  sourceId: string;
+  sourceUrl: string;
+  provenance: 'externally_sourced' | 'curated';
+  confidence: ObservationConfidence;
+  staleAfter: string;
+  rawHash: string;
+  rawEvidence: {
+    railId: NetworkRailId;
+    jurisdiction: JurisdictionCode | null;
+    paymentType: string | null;
+    currency: string | null;
+    participantType: string | null;
+    status: RegulatoryStatus;
+    effectiveFrom: string | null;
+    effectiveTo: string | null;
+    source: string;
+  };
+};
+
+/** @see RailRegulatoryObservation */
+export type RegulatoryObservation = RailRegulatoryObservation;
+
+export type RegulatoryEvaluationContext = {
+  paymentType?: string | null;
+  participantType?: string | null;
+  now?: Date;
+};
+
+/** Shadow-only. Never an eligibility or ranking decision. */
+export type RegulatoryImpactEvaluation = {
+  mode: 'shadow';
+  observationType: 'rail_regulatory_observation';
+  offeringId: string;
+  providerId: ProviderId;
+  corridor: Corridor;
+  currencyPair: { source: string | null; target: string | null };
+  networkRail: NetworkRailId;
+  observationSubjectId: string | null;
+  railId: NetworkRailId | null;
+  status: RouteImpactStatus;
+  reason: RouteImpactReason;
+  freshness: ObservationEvaluationFreshness;
+  regulatoryStatus: RegulatoryStatus | null;
+  sourceUrl: string | null;
+  observedAt: string | null;
+  provenance: Provenance | null;
+};
+
 /** Statuspage incident statuses. Do not invent values. */
 export type StatuspageIncidentStatus =
   | 'investigating'
@@ -237,7 +382,17 @@ export type RouteImpactReason =
   | 'stale_observation'
   | 'missing_observation'
   | 'non_payment_component'
-  | 'unknown_component_dependency';
+  | 'unknown_component_dependency'
+  | 'rail_match'
+  | 'rail_mismatch'
+  | 'unknown_route_rail'
+  | 'regulatory_prohibited'
+  | 'regulatory_restricted'
+  | 'jurisdiction_mismatch'
+  | 'payment_type_mismatch'
+  | 'participant_type_mismatch'
+  | 'currency_mismatch'
+  | 'outside_effective_window';
 
 export type ObservationEvaluationFreshness = 'fresh' | 'stale' | 'missing';
 
@@ -540,6 +695,25 @@ export type PublicRouteIntelligenceSnapshot = {
    * Empty unless the caller supplies them — public comparison does not.
    */
   feeObservations: ProviderFeeObservation[];
+  /** Canonical network-rail catalogue. Not a ranking input. */
+  networkRails: NetworkRail[];
+  /** Rail capability facts. Distinct from offering CorridorCapability. */
+  railCapabilities: RailCapability[];
+  /**
+   * Explicit offering→rail links. Empty until evidence supports a mapping.
+   * Do not infer Wise=SWIFT or Bank=NPP.
+   */
+  offeringRailMappings: OfferingRailMapping[];
+  /**
+   * Structured regulatory state. Not curated news/developments.
+   * Empty unless the caller supplies them — public comparison does not.
+   */
+  regulatoryObservations: RailRegulatoryObservation[];
+  /**
+   * Shadow-only regulatory route-impact evaluations.
+   * Never consumed by ranking or eligibility.
+   */
+  regulatoryImpacts: RegulatoryImpactEvaluation[];
 };
 
 export type PublicRouteIntelligenceSnapshotInput = {
@@ -553,4 +727,12 @@ export type PublicRouteIntelligenceSnapshotInput = {
   now?: Date;
   /** Preloaded fee observations. Omitted = none attached. Not fetched here. */
   feeObservations?: ProviderFeeObservation[];
+  /** Preloaded structured regulatory observations. Omitted = none attached. */
+  regulatoryObservations?: RailRegulatoryObservation[];
+  /** Optional RouteSubjects for shadow regulatory evaluation. Public comparison omits this. */
+  evaluateRouteSubjects?: RouteSubject[];
+  /** Payment type for shadow regulatory evaluation. Omitted = unknown when the observation is type-specific. */
+  regulatoryPaymentType?: string | null;
+  /** Participant type for shadow regulatory evaluation. */
+  regulatoryParticipantType?: string | null;
 };

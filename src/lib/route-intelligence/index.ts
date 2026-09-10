@@ -44,6 +44,41 @@ export {
   sameRouteSubject,
   toRouteImpactSubject,
 } from '@/lib/route-intelligence/route-subject';
+export { corridorKind, normalizeJurisdiction } from '@/lib/route-intelligence/corridor-kind';
+export {
+  catalogueNetworkRailIds,
+  isUnknownNetworkRail,
+  NETWORK_RAIL_CATALOGUE,
+  networkRailById,
+  sameNetworkRail,
+  UNKNOWN_NETWORK_RAIL,
+} from '@/lib/route-intelligence/network-rail';
+export {
+  corridorKindForCapability,
+  RAIL_CAPABILITY_CATALOGUE,
+  RAIL_CAPABILITY_STATUSES,
+  railCapabilitiesFor,
+  railCapabilityId,
+  railCapabilityStatusesAreDistinct,
+} from '@/lib/route-intelligence/rail-capability';
+export {
+  mechanismIsNotNetworkRail,
+  OFFERING_RAIL_MAPPINGS,
+  resolveOfferingRail,
+} from '@/lib/route-intelligence/offering-rail';
+export {
+  buildRailRegulatoryObservation,
+  REGULATORY_OBSERVATION_SUBJECT_PREFIX,
+  REGULATORY_STATUSES,
+  REGULATORY_STORE_PROVIDER_ID,
+  regulatoryObservationSubjectId,
+  sameMeaningfulRegulatoryState,
+} from '@/lib/route-intelligence/regulatory-observation';
+export {
+  combineRegulatoryImpacts,
+  evaluateRegulatoryRouteImpact,
+  evaluateRegulatoryRouteImpacts,
+} from '@/lib/route-intelligence/regulatory-impact';
 export {
   assertExternallySourcedObservation,
   attachWisePaymentsAvailability,
@@ -102,8 +137,11 @@ export type {
   IndicativeAvailabilitySignal,
   LatestObservationRead,
   MechanismId,
+  NetworkRail,
   NetworkRailId,
+  NetworkRailType,
   ObservedAvailabilitySignal,
+  OfferingRailMapping,
   ObservationConfidence,
   ObservationFreshness,
   ObservationSubjectKind,
@@ -123,6 +161,15 @@ export type {
   PublicRouteIntelligenceSnapshot,
   PublicRouteIntelligenceSnapshotInput,
   ObservationEvaluationFreshness,
+  JurisdictionCode,
+  CorridorKind,
+  RailCapability,
+  RailCapabilityStatus,
+  RailRegulatoryObservation,
+  RegulatoryEvaluationContext,
+  RegulatoryImpactEvaluation,
+  RegulatoryObservation,
+  RegulatoryStatus,
   RouteEligibilityDecision,
   RouteEligibilityEvidence,
   RouteEligibilityReason,

@@ -32,7 +32,7 @@ function relatedProviderIds(rails: PaymentRailId[]): ProviderId[] {
 }
 
 function relatedNetworkRails(rails: PaymentRailId[]): NetworkRailId[] {
-  return rails.filter((id): id is NetworkRailId => NETWORK_RAIL_IDS.has(id as NetworkRailId));
+  return rails.filter((id) => NETWORK_RAIL_IDS.has(id));
 }
 
 export function mapDevelopment(item: PaymentIntelligenceItem): RegulatorySignal {
