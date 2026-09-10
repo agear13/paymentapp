@@ -429,10 +429,10 @@ describe('eligibility gate in public comparison', () => {
     fetchSpy.mockRestore();
 
     const comparison = fs.readFileSync(
-      path.join(process.cwd(), 'src/lib/journey/landing-route-comparison.ts'),
+      path.join(process.cwd(), 'lib/journey/landing-route-comparison.ts'),
       'utf8'
     );
-    const rank = fs.readFileSync(path.join(process.cwd(), 'src/lib/journey/landing-route-rank.ts'), 'utf8');
+    const rank = fs.readFileSync(path.join(process.cwd(), 'lib/journey/landing-route-rank.ts'), 'utf8');
     expect(comparison).not.toContain('fetch(');
     expect(comparison).not.toContain('status.wise.com');
     expect(rank).not.toContain('fetch(');
