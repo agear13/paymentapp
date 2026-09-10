@@ -10,6 +10,7 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import { supplierLifecycle, isPaymentRequestSent } from '@/lib/commercial/participant-lifecycle-primitives';
 import {
   hasApprovedAgreement,
+  hasOperatorConfirmedPayoutDetails,
   isParticipantCompensationExempt,
 } from '@/lib/operations/primitives/participant-earnings-primitives';
 
@@ -49,10 +50,10 @@ export function derivePayoutDetailsOrganiserStatus(
   if (isParticipantCompensationExempt(participant)) return 'Not required';
   if (!hasApprovedAgreement(participant)) return 'Pending';
 
-  const lifecycle = supplierLifecycle(participant);
-  if (lifecycle === 'APPROVED' || participant.payoutVerificationConfirmed) {
+  if (hasOperatorConfirmedPayoutDetails(participant)) {
     return 'Verified';
   }
+  const lifecycle = supplierLifecycle(participant);
   if (lifecycle === 'SUBMITTED' || lifecycle === 'UNDER_REVIEW') {
     return 'Submitted';
   }

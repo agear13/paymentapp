@@ -12,6 +12,7 @@ import { deriveAgreementLifecycleState } from '@/lib/operations/lifecycle/agreem
 import { normalizeParticipantEntity } from '@/lib/operations/guards/hydration-guards';
 import { projectParticipantsPath } from '@/lib/projects/project-routes';
 import { isParticipantPayoutReady } from '@/lib/operations/truth/payout-truth';
+import { hasOperatorConfirmedPayoutDetails } from '@/lib/operations/primitives/participant-earnings-primitives';
 
 const SHARED_AGREEMENT_STATES = new Set(['SHARED', 'VIEWED', 'SIGNED', 'GENERATED']);
 
@@ -21,7 +22,7 @@ export function deriveAgreementApprovalState(
 ): AgreementApprovalState {
   const p = normalizeParticipantEntity(participant);
   const persistedApproved = p.approvalStatus === 'Approved';
-  const operatorConfirmed = p.payoutVerificationConfirmed === true;
+  const operatorConfirmed = hasOperatorConfirmedPayoutDetails(p);
 
   if (persistedApproved && operatorConfirmed) return 'fully_approved';
   if (persistedApproved) return 'participant_approved';
@@ -49,7 +50,7 @@ export function deriveObligationApprovalState(input: {
   if (status === 'PENDING_APPROVAL') {
     if (!participant) return 'pending_participant';
     const agreement = deriveAgreementApprovalState(participant);
-    if (agreement === 'fully_approved' && isParticipantPayoutReady(participant)) {
+    if (agreement === 'fully_approved') {
       return 'ready';
     }
     if (agreement === 'participant_approved' || agreement === 'operator_confirmed') {
@@ -61,7 +62,7 @@ export function deriveObligationApprovalState(input: {
   if (status === 'APPROVED' && participant) {
     const agreement = deriveAgreementApprovalState(participant);
     if (agreement === 'draft' || agreement === 'shared') return 'pending_participant';
-    if (agreement === 'participant_approved' && participant.payoutVerificationConfirmed !== true) {
+    if (agreement === 'participant_approved' && !hasOperatorConfirmedPayoutDetails(participant)) {
       return 'pending_operator';
     }
     return 'ready';
@@ -230,7 +231,7 @@ export function deriveOperationalBlocker(
   if (
     agreementState === 'participant_approved' &&
     !p.compensationProfile?.exemptFromPayout &&
-    p.payoutVerificationConfirmed !== true
+    !hasOperatorConfirmedPayoutDetails(p)
   ) {
     blockers.push(
       blocker({

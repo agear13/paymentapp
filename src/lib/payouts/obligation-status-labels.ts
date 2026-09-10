@@ -77,9 +77,22 @@ type NextActionInput = {
     name?: string;
     approvalStatus?: string;
     onboardingStatus?: string;
+    payoutVerificationConfirmed?: boolean;
   } | null;
   fundingStage?: FundingCoordinationStage | null;
 };
+
+function asDemoParticipantForApproval(
+  participant: NonNullable<NextActionInput['participant']>
+): DemoParticipant {
+  return {
+    id: participant.id,
+    name: participant.name ?? 'Participant',
+    approvalStatus:
+      participant.approvalStatus === 'Approved' ? 'Approved' : 'Pending approval',
+    payoutVerificationConfirmed: participant.payoutVerificationConfirmed === true,
+  } as DemoParticipant;
+}
 
 export function getObligationNextAction(row: NextActionInput): string {
   if (row.status === 'UNFUNDED') {
@@ -89,14 +102,7 @@ export function getObligationNextAction(row: NextActionInput): string {
     return partiallyFundedLabel(row.fundingStage);
   }
   if (row.status === 'PENDING_APPROVAL') {
-    const participant = row.participant
-      ? ({
-          id: row.participant.id,
-          name: row.participant.name ?? 'Participant',
-          approvalStatus:
-            row.participant.approvalStatus === 'Approved' ? 'Approved' : 'Pending approval',
-        } as DemoParticipant)
-      : null;
+    const participant = row.participant ? asDemoParticipantForApproval(row.participant) : null;
     const approval = deriveObligationApprovalState({
       obligationStatus: row.status,
       participant,
@@ -148,14 +154,7 @@ export function getObligationBlockingIssue(row: NextActionInput): string | null 
     return unfundedLabel(row.fundingStage);
   }
   if (row.status === 'PENDING_APPROVAL') {
-    const participant = row.participant
-      ? ({
-          id: row.participant.id,
-          name: row.participant.name ?? 'Participant',
-          approvalStatus:
-            row.participant.approvalStatus === 'Approved' ? 'Approved' : 'Pending approval',
-        } as DemoParticipant)
-      : null;
+    const participant = row.participant ? asDemoParticipantForApproval(row.participant) : null;
     return obligationApprovalLabel(
       deriveObligationApprovalState({ obligationStatus: row.status, participant }),
       participant ?? undefined

@@ -82,7 +82,22 @@ describe('deriveParticipantWorkspaceOnboarding', () => {
     expect(onboarding.nextRequiredAction).toBeNull();
   });
 
-  it('shows payout submitted as complete onboarding with no next action', () => {
+  it('marks payout Verified from supplier onboarding APPROVED even without the legacy boolean', () => {
+    const participant = {
+      ...baseParticipant,
+      approvalStatus: 'Approved' as const,
+      approvedAt: '2026-06-28T10:00:00.000Z',
+      payoutVerificationConfirmed: false,
+      supplierOnboarding: {
+        lifecycle: 'APPROVED' as const,
+        events: [],
+        operator: { approvedAt: '2026-06-29T00:00:00.000Z', xeroExportedAt: null, notes: null },
+      },
+    };
+    expect(derivePayoutDetailsOrganiserStatus(participant)).toBe('Verified');
+  });
+
+  it('routes to payout submitted after the participant submits payout details', () => {
     const participant = {
       ...baseParticipant,
       approvalStatus: 'Approved' as const,

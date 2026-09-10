@@ -15,6 +15,7 @@ import {
 } from '@/lib/operations/guards/hydration-guards';
 import type { OperationalReadinessResult } from '@/lib/operations/types/readiness-result';
 import { emptyReadiness } from '@/lib/operations/types/readiness-result';
+import { hasOperatorConfirmedPayoutDetails } from '@/lib/operations/primitives/participant-earnings-primitives';
 
 export type PayoutReleaseReadiness = OperationalReadinessResult & {
   participantId: string;
@@ -47,9 +48,7 @@ export function derivePayoutReleaseReadiness(
   const agreementState = deriveAgreementApprovalState(p);
   const agreementApproved =
     agreementState === 'participant_approved' || agreementState === 'fully_approved';
-  const operatorConfirmed =
-    p.compensationProfile?.exemptFromPayout === true ||
-    p.payoutVerificationConfirmed === true;
+  const operatorConfirmed = hasOperatorConfirmedPayoutDetails(p);
   const attributionEligible = canGenerateAttributionLink(p, {
     catalogItems: context.catalogItems,
   });

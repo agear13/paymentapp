@@ -63,7 +63,31 @@ describe('obligation approval state', () => {
     expect(state).toBe('pending_operator');
   });
 
-  it('ready when participant approved, payout verified, and obligation row stale', () => {
+  it('ready when supplier onboarding is APPROVED without the legacy boolean', () => {
+    const participant = buildProjectParticipant({
+      name: 'Coastal Media',
+      role: 'Partner',
+      project: baseDeal(),
+      participationModel: 'fixed_payout',
+      commissionKind: 'fixed_amount',
+      commissionValue: 500,
+      enableCustomerAttribution: false,
+    });
+    participant.approvalStatus = 'Approved';
+    participant.payoutVerificationConfirmed = false;
+    participant.supplierOnboarding = {
+      lifecycle: 'APPROVED',
+      operator: { approvedAt: '2026-06-04T00:00:00.000Z', xeroExportedAt: null, notes: null },
+    };
+
+    const state = deriveObligationApprovalState({
+      obligationStatus: 'PENDING_APPROVAL',
+      participant,
+    });
+    expect(state).toBe('ready');
+  });
+
+  it('ready when payout is verified via the legacy confirmation flag', () => {
     const participant = buildProjectParticipant({
       name: 'Coastal Media',
       role: 'Partner',

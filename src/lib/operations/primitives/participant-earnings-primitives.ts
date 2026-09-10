@@ -1,6 +1,7 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import {
   deriveLifecycle,
+  isSupplierApproved,
   type StoredOnboardingState,
 } from '@/lib/commercial/supplier-onboarding-domain';
 import {
@@ -91,6 +92,35 @@ export function hasSupplierOnboardingComplete(
 }
 
 /**
+ * Operator confirmed this participant's payout details.
+ *
+ * `supplierOnboarding.lifecycle === APPROVED` and `payoutVerificationConfirmed === true`
+ * are the same commercial event: the operator verified submitted payout/tax details.
+ * The boolean is the legacy persisted flag; supplier onboarding APPROVED is the
+ * domain event. Both must resolve to the same answer everywhere (People, Settlement,
+ * obligation refresh, release eligibility).
+ *
+ * Does not require agreement approval — that is a separate gate.
+ * Participant-complete signals (`onboardingStatus: COMPLETE`) are NOT operator confirmation.
+ */
+export function hasOperatorConfirmedPayoutDetails(
+  participant: DemoParticipant | null | undefined
+): boolean {
+  if (!participant) return false;
+  if (isParticipantCompensationExempt(participant)) return true;
+
+  const stored = participant.supplierOnboarding as StoredOnboardingState | undefined;
+  const legacy = {
+    payoutVerificationConfirmed: participant.payoutVerificationConfirmed,
+    payoutOnboardingPhase: participant.payoutOnboardingPhase,
+    onboardingStatus: participant.onboardingStatus,
+  };
+  if (isSupplierApproved(stored, legacy)) return true;
+  if (deriveLifecycle(stored, legacy) === 'APPROVED') return true;
+  return participant.payoutVerificationConfirmed === true;
+}
+
+/**
  * Payment profile complete for settlement — operator approved or legacy confirmation.
  * Never evaluated before agreement approval (callers must gate on hasApprovedAgreement).
  */
@@ -98,17 +128,9 @@ export function hasConfirmedPayout(
   participant: DemoParticipant | null | undefined
 ): boolean {
   if (!participant) return false;
-  if (participant.compensationProfile?.exemptFromPayout) return true;
+  if (isParticipantCompensationExempt(participant)) return true;
   if (!hasApprovedAgreement(participant)) return false;
-
-  const stored = participant.supplierOnboarding as StoredOnboardingState | undefined;
-  const lifecycle = deriveLifecycle(stored, {
-    payoutVerificationConfirmed: participant.payoutVerificationConfirmed,
-    payoutOnboardingPhase: participant.payoutOnboardingPhase,
-    onboardingStatus: participant.onboardingStatus,
-  });
-  if (lifecycle === 'APPROVED') return true;
-  if (participant.payoutVerificationConfirmed === true) return true;
+  if (hasOperatorConfirmedPayoutDetails(participant)) return true;
   if (participant.payoutOnboardingPhase === 'COMPLETED') return true;
   if (participant.onboardingStatus === 'COMPLETE') return true;
   return false;

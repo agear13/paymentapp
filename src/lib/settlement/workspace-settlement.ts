@@ -74,6 +74,7 @@ export type PilotObligationApiRow = {
     name?: string | null;
     approvalStatus?: string | null;
     onboardingStatus?: string | null;
+    payoutVerificationConfirmed?: boolean | null;
   } | null;
 };
 
@@ -308,6 +309,7 @@ export function mapPilotObligation(row: PilotObligationApiRow): SettlementObliga
         name: row.participant.name ?? undefined,
         approvalStatus: row.participant.approvalStatus ?? undefined,
         onboardingStatus: row.participant.onboardingStatus ?? undefined,
+        payoutVerificationConfirmed: row.participant.payoutVerificationConfirmed === true,
       }
     : row.participant_id
       ? { id: row.participant_id }

@@ -13,7 +13,7 @@ import {
   logParticipantPersistenceFinding,
   runOperationalApiRoute,
 } from '@/lib/operations/dev/api-route-diagnostics.server';
-import { hasPersistedCompensationTerms } from '@/lib/operations/primitives/participant-earnings-primitives';
+import { hasPersistedCompensationTerms, hasOperatorConfirmedPayoutDetails } from '@/lib/operations/primitives/participant-earnings-primitives';
 import { participantRowToDemo } from '@/lib/deal-network-demo/pilot-snapshot.server';
 import { deriveCommissionScope } from '@/lib/operations/derivations/commission-scope';
 
@@ -69,13 +69,21 @@ function mapParticipantOut(
 ): Record<string, unknown> | null {
   if (participant == null) return null;
   const payload = participant.participant_payload as Partial<DemoParticipant> | null | undefined;
+  const demo = participantRowToDemo({
+    id: participant.id,
+    deal_id: '',
+    invite_token: '',
+    participant_payload: participant.participant_payload,
+    name: participant.name,
+    email: participant.email,
+  });
   return {
     id: participant.id,
     name: participant.name,
     role: participant.role,
     email: participant.email,
     approvalStatus: payload?.approvalStatus ?? 'Pending approval',
-    payoutVerificationConfirmed: payload?.payoutVerificationConfirmed === true,
+    payoutVerificationConfirmed: hasOperatorConfirmedPayoutDetails(demo),
     compensationProfile: payload?.compensationProfile ?? null,
     onboardingStatus: effectiveOnboardingStatus({
       id: participant.id,

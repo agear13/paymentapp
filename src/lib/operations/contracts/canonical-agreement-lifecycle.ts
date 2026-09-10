@@ -1,6 +1,7 @@
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import { deriveAgreementLifecycleState } from '@/lib/operations/lifecycle/agreement-lifecycle';
 import { deriveParticipantReleaseEligibility } from '@/lib/operations/readiness/derive-participant-release-eligibility';
+import { hasOperatorConfirmedPayoutDetails } from '@/lib/operations/primitives/participant-earnings-primitives';
 
 /** Explicit agreement coordination lifecycle — no implicit transitions. */
 export const CANONICAL_AGREEMENT_STATES = [
@@ -47,7 +48,7 @@ export function deriveCanonicalAgreementState(
   if (release.releaseReady && (context?.obligationCount ?? 0) > 0 && context?.fundingAllocated) {
     return 'READY_FOR_PAYOUT';
   }
-  if (participant.payoutVerificationConfirmed === true && participant.approvalStatus === 'Approved') {
+  if (hasOperatorConfirmedPayoutDetails(participant) && participant.approvalStatus === 'Approved') {
     return 'OPERATOR_CONFIRMED';
   }
   if (participant.approvalStatus === 'Approved') {

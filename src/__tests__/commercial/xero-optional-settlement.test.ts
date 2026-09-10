@@ -132,7 +132,26 @@ describe('Xero-optional settlement readiness', () => {
     expect(classifyWorkspaceStatus({ status })).not.toBe('ready');
   });
 
-  it('keeps an approved but unfunded obligation blocked from Releases', () => {
+  it('maps supplier-onboarding APPROVED without the legacy boolean to UNFUNDED when unfunded', () => {
+    const participant = {
+      ...unverifiedParticipant(),
+      supplierOnboarding: {
+        lifecycle: 'APPROVED' as const,
+        submission: { submittedAt: '2026-06-03T00:00:00.000Z', declarationAccepted: true },
+        operator: { approvedAt: '2026-06-04T00:00:00.000Z', xeroExportedAt: null, notes: null },
+      },
+      payoutVerificationConfirmed: false,
+    };
+    const status = resolvePersistedObligationStatus({
+      participant,
+      deal,
+      moneyConfirmed: false,
+      fullyFunded: false,
+    });
+    expect(status).toBe(DealNetworkPilotObligationStatus.UNFUNDED);
+  });
+
+  it('maps an approved operator-confirmed unfunded obligation to UNFUNDED', () => {
     const participant = approvedParticipantWithVerifiedPayout(deal);
     const status = resolvePersistedObligationStatus({
       participant,

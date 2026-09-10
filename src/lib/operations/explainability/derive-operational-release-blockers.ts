@@ -14,6 +14,7 @@ import {
 } from '@/lib/operations/routing/operational-route-recovery';
 import { normalizeParticipantEntity } from '@/lib/operations/guards/hydration-guards';
 import { isParticipantPayoutReady } from '@/lib/operations/truth/payout-truth';
+import { hasOperatorConfirmedPayoutDetails } from '@/lib/operations/primitives/participant-earnings-primitives';
 import {
   assertPayoutExplainabilityInvariants,
   type PayoutExplainabilityInvariantInput,
@@ -282,7 +283,7 @@ export function deriveOperationalReleaseBlockers(
     if (
       agreement === 'participant_approved' &&
       !participant.compensationProfile?.exemptFromPayout &&
-      participant.payoutVerificationConfirmed !== true
+      !hasOperatorConfirmedPayoutDetails(participant)
     ) {
       details.push({
         id: `payout-details-${participant.id}`,
