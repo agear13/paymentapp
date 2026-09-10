@@ -160,7 +160,8 @@ describe('obligation allocation status convergence', () => {
       participant: p,
     });
     expect(label).not.toMatch(/pending approval/i);
-    expect(label).toBe('Ready for release');
+    expect(label).toBe('Funding not reserved');
+    expect(label).not.toBe('Ready for release');
   });
 
   it('throws APPROVED_PARTICIPANT_SHOWING_PENDING_APPROVAL in development', () => {

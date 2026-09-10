@@ -10,7 +10,10 @@ import { hasOperatorConfirmedPayoutDetails } from '@/lib/operations/primitives/p
 import { resolvePersistedObligationStatus } from '@/lib/operations/derivations/derive-obligation-allocation-status';
 import { derivePayoutDetailsOrganiserStatus } from '@/lib/participant-portal/participant-workspace-onboarding';
 import { classifyWorkspaceStatus, mapPilotObligation } from '@/lib/settlement/workspace-settlement';
-import { getObligationBlockingIssue } from '@/lib/payouts/obligation-status-labels';
+import {
+  getObligationBlockingIssue,
+  getObligationNextAction,
+} from '@/lib/payouts/obligation-status-labels';
 import { deriveParticipantCommercialLifecycle } from '@/lib/commercial/participant-commercial-lifecycle';
 
 function deal(): RecentDeal {
@@ -230,5 +233,86 @@ describe('canonical operator payout confirmation', () => {
     });
     expect(row.reason).toBe('Funding not reserved');
     expect(row.workspaceStatus).toBe('requires_action');
+    expect(row.workspaceStatus).not.toBe('ready');
+  });
+
+  it('persists PENDING_APPROVAL when unfunded but operator has not confirmed', () => {
+    const participant = approvedUnverified();
+    const status = resolvePersistedObligationStatus({
+      participant,
+      deal: deal(),
+      moneyConfirmed: false,
+      fullyFunded: false,
+    });
+    expect(status).toBe(DealNetworkPilotObligationStatus.PENDING_APPROVAL);
+    expect(
+      getObligationNextAction({
+        status,
+        obligation_type: 'PARTICIPANT',
+        participant: {
+          id: participant.id,
+          name: participant.name,
+          approvalStatus: 'Approved',
+          payoutVerificationConfirmed: false,
+        },
+      })
+    ).toBe('Complete supplier setup');
+    expect(
+      getObligationBlockingIssue({
+        status,
+        obligation_type: 'PARTICIPANT',
+        participant: {
+          id: participant.id,
+          name: participant.name,
+          approvalStatus: 'Approved',
+          payoutVerificationConfirmed: false,
+        },
+      })
+    ).toBe('Payment setup required');
+  });
+
+  it('does not treat stale PENDING_APPROVAL plus live operator confirmation as supplier setup', () => {
+    const row = mapPilotObligation({
+      id: 'ob-stale',
+      deal_id: deal().id,
+      participant_id: 'p-alisha',
+      obligation_type: 'PARTICIPANT',
+      status: 'PENDING_APPROVAL',
+      amount_owed: 100,
+      currency: 'AUD',
+      participant: {
+        id: 'p-alisha',
+        name: 'Alisha',
+        approvalStatus: 'Approved',
+        payoutVerificationConfirmed: true,
+      },
+    });
+    expect(row.reason).toBe('Funding not reserved');
+    expect(row.nextAction).toBe('Funding not reserved');
+    expect(row.reason).not.toBe('Ready for release');
+    expect(row.nextAction).not.toBe('Complete supplier setup');
+    expect(row.workspaceStatus).toBe('requires_action');
+    expect(row.workspaceStatus).not.toBe('ready');
+  });
+
+  it('maps funded operator-confirmed obligations into Releases', () => {
+    const row = mapPilotObligation({
+      id: 'ob-ready',
+      deal_id: deal().id,
+      participant_id: 'p-alisha',
+      obligation_type: 'PARTICIPANT',
+      status: 'AVAILABLE_FOR_PAYOUT',
+      amount_owed: 100,
+      currency: 'AUD',
+      participant: {
+        id: 'p-alisha',
+        name: 'Alisha',
+        approvalStatus: 'Approved',
+        payoutVerificationConfirmed: true,
+      },
+    });
+    expect(row.workspaceStatus).toBe('ready');
+    expect(row.reason).toBeNull();
+    expect(row.nextAction).toBe('Ready to release');
   });
 });

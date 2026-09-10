@@ -61,10 +61,7 @@ export function operatorStatusLabel(
     return partiallyFundedLabel(fundingStage);
   }
   if (key === 'PENDING_APPROVAL' && participant) {
-    return obligationApprovalLabel(
-      deriveObligationApprovalState({ obligationStatus: key, participant }),
-      participant
-    );
+    return pendingApprovalSettlementCopy(participant, fundingStage).label;
   }
   return OPERATOR_OBLIGATION_STATUS_LABELS[key] ?? String(status).replace(/_/g, ' ');
 }
@@ -94,6 +91,39 @@ function asDemoParticipantForApproval(
   } as DemoParticipant;
 }
 
+/**
+ * PENDING_APPROVAL + live operator confirmation is stale persist, not a
+ * supplier-setup or release-ready blocker. Remaining commercial gate is funding.
+ */
+function pendingApprovalSettlementCopy(
+  participant: DemoParticipant | null,
+  fundingStage?: FundingCoordinationStage | null
+): { label: string; blocker: string; nextAction: string } {
+  const approval = deriveObligationApprovalState({
+    obligationStatus: 'PENDING_APPROVAL',
+    participant,
+  });
+  if (approval === 'ready') {
+    const funding = unfundedLabel(fundingStage);
+    return { label: funding, blocker: funding, nextAction: funding };
+  }
+  const blocker = obligationApprovalLabel(approval, participant ?? undefined);
+  if (approval === 'pending_participant') {
+    return {
+      label: blocker,
+      blocker,
+      nextAction: participant?.name
+        ? `Waiting for ${participant.name} to approve agreement`
+        : 'Waiting for participant agreement approval',
+    };
+  }
+  return {
+    label: blocker,
+    blocker,
+    nextAction: 'Complete supplier setup',
+  };
+}
+
 export function getObligationNextAction(row: NextActionInput): string {
   if (row.status === 'UNFUNDED') {
     return unfundedLabel(row.fundingStage);
@@ -103,16 +133,7 @@ export function getObligationNextAction(row: NextActionInput): string {
   }
   if (row.status === 'PENDING_APPROVAL') {
     const participant = row.participant ? asDemoParticipantForApproval(row.participant) : null;
-    const approval = deriveObligationApprovalState({
-      obligationStatus: row.status,
-      participant,
-    });
-    if (approval === 'pending_participant') {
-      return participant?.name
-        ? `Waiting for ${participant.name} to approve agreement`
-        : 'Waiting for participant agreement approval';
-    }
-    return 'Complete supplier setup';
+    return pendingApprovalSettlementCopy(participant, row.fundingStage).nextAction;
   }
   if (row.status === 'AVAILABLE_FOR_PAYOUT') {
     return 'Ready to release';
@@ -155,10 +176,7 @@ export function getObligationBlockingIssue(row: NextActionInput): string | null 
   }
   if (row.status === 'PENDING_APPROVAL') {
     const participant = row.participant ? asDemoParticipantForApproval(row.participant) : null;
-    return obligationApprovalLabel(
-      deriveObligationApprovalState({ obligationStatus: row.status, participant }),
-      participant ?? undefined
-    );
+    return pendingApprovalSettlementCopy(participant, row.fundingStage).blocker;
   }
   if (row.status === 'APPROVED' && row.participant && row.obligation_type !== 'PLATFORM_FEE') {
     if (

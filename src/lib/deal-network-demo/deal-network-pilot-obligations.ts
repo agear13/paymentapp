@@ -200,9 +200,9 @@ export async function refreshDealNetworkPilotObligationsForDeal(
       obligation_type: 'PARTICIPANT',
       amount_owed: new Prisma.Decimal(resolved.total.toFixed(2)),
       currency,
-      status: moneyConfirmed
-        ? payoutLineToObligationStatus(p, deal, moneyConfirmed, fullyFunded)
-        : unfundedRowStatus,
+      // Always derive from participant + funding. Skipping approval when
+      // !moneyConfirmed previously wrote UNFUNDED for unconfirmed suppliers.
+      status: payoutLineToObligationStatus(p, deal, moneyConfirmed, fullyFunded),
       calculation_explanation: resolved.previewLine,
       calculation_snapshot_json: snapshot as unknown as Prisma.InputJsonValue,
       due_date: null,
