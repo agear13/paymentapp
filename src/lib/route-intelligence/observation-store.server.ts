@@ -8,6 +8,11 @@ import {
   WISE_PAYMENTS_SUBJECT_ID,
 } from '@/lib/route-intelligence/observation';
 import {
+  sameMeaningfulAvailabilityState,
+  sameMeaningfulFxState,
+  sameMeaningfulSettlementState,
+} from '@/lib/route-intelligence/economic-observation';
+import {
   REGULATORY_STORE_PROVIDER_ID,
   sameMeaningfulRegulatoryState,
 } from '@/lib/route-intelligence/regulatory-observation';
@@ -17,6 +22,9 @@ import type {
   ProviderOperationalHealthObservation,
   ProviderPaymentIncidentObservation,
   RailRegulatoryObservation,
+  RouteAvailabilityObservation,
+  RouteFxObservation,
+  RouteSettlementObservation,
 } from '@/lib/route-intelligence/types';
 
 export type StoredObservationRow = {
@@ -117,12 +125,72 @@ function rowToRegulatoryObservation(row: StoredObservationRow): RailRegulatoryOb
   };
 }
 
+function rowToFxObservation(row: StoredObservationRow): RouteFxObservation {
+  return {
+    observationType: 'route_fx_observation',
+    subjectKind: 'route',
+    subjectId: row.subjectId,
+    providerId: row.providerId as RouteFxObservation['providerId'],
+    value: row.value as RouteFxObservation['value'],
+    observedAt: row.observedAt.toISOString(),
+    fetchedAt: row.fetchedAt.toISOString(),
+    sourceId: row.sourceId,
+    sourceUrl: row.sourceUrl,
+    provenance: row.provenance === 'curated' ? 'curated' : 'externally_sourced',
+    confidence: row.confidence === 'unavailable' ? 'unavailable' : 'high',
+    staleAfter: row.staleAfter.toISOString(),
+    rawHash: row.rawHash,
+    rawEvidence: row.rawPayload as RouteFxObservation['rawEvidence'],
+  };
+}
+
+function rowToSettlementObservation(row: StoredObservationRow): RouteSettlementObservation {
+  return {
+    observationType: 'route_settlement_observation',
+    subjectKind: 'route',
+    subjectId: row.subjectId,
+    providerId: row.providerId as RouteSettlementObservation['providerId'],
+    value: row.value as RouteSettlementObservation['value'],
+    observedAt: row.observedAt.toISOString(),
+    fetchedAt: row.fetchedAt.toISOString(),
+    sourceId: row.sourceId,
+    sourceUrl: row.sourceUrl,
+    provenance: row.provenance === 'curated' ? 'curated' : 'externally_sourced',
+    confidence: row.confidence === 'unavailable' ? 'unavailable' : 'high',
+    staleAfter: row.staleAfter.toISOString(),
+    rawHash: row.rawHash,
+    rawEvidence: row.rawPayload as RouteSettlementObservation['rawEvidence'],
+  };
+}
+
+function rowToAvailabilityObservation(row: StoredObservationRow): RouteAvailabilityObservation {
+  return {
+    observationType: 'route_availability_observation',
+    subjectKind: 'route',
+    subjectId: row.subjectId,
+    providerId: row.providerId as RouteAvailabilityObservation['providerId'],
+    value: row.value as RouteAvailabilityObservation['value'],
+    observedAt: row.observedAt.toISOString(),
+    fetchedAt: row.fetchedAt.toISOString(),
+    sourceId: row.sourceId,
+    sourceUrl: row.sourceUrl,
+    provenance: row.provenance === 'curated' ? 'curated' : 'externally_sourced',
+    confidence: row.confidence === 'unavailable' ? 'unavailable' : 'high',
+    staleAfter: row.staleAfter.toISOString(),
+    rawHash: row.rawHash,
+    rawEvidence: row.rawPayload as RouteAvailabilityObservation['rawEvidence'],
+  };
+}
+
 export function toInsertRow(
   observation:
     | ProviderOperationalHealthObservation
     | ProviderPaymentIncidentObservation
     | ProviderFeeObservation
     | RailRegulatoryObservation
+    | RouteFxObservation
+    | RouteSettlementObservation
+    | RouteAvailabilityObservation
 ): Omit<StoredObservationRow, 'id' | 'createdAt'> {
   return {
     observationType: observation.observationType,
@@ -280,6 +348,100 @@ export async function listProviderFeeHistory(
     .filter((row) => row.subjectId === subjectId)
     .sort((a, b) => a.fetchedAt.getTime() - b.fetchedAt.getTime())
     .map(rowToFeeObservation);
+}
+
+export async function persistRouteFxObservation(
+  repository: ObservationRepository,
+  observation: RouteFxObservation
+): Promise<PersistObservationResult<RouteFxObservation>> {
+  const previous = await repository.findLatestBySubject(observation.subjectId);
+  if (
+    previous?.observationType === 'route_fx_observation' &&
+    sameMeaningfulFxState(observation, rowToFxObservation(previous))
+  ) {
+    await repository.updateFetchTimestamps(
+      previous.id,
+      new Date(observation.fetchedAt),
+      new Date(observation.staleAfter)
+    );
+    return {
+      action: 'refreshed',
+      id: previous.id,
+      observation: {
+        ...rowToFxObservation(previous),
+        fetchedAt: observation.fetchedAt,
+        staleAfter: observation.staleAfter,
+      },
+    };
+  }
+  const inserted = await repository.insert(toInsertRow(observation));
+  return { action: 'inserted', id: inserted.id, observation };
+}
+
+export async function persistRouteSettlementObservation(
+  repository: ObservationRepository,
+  observation: RouteSettlementObservation
+): Promise<PersistObservationResult<RouteSettlementObservation>> {
+  const previous = await repository.findLatestBySubject(observation.subjectId);
+  if (
+    previous?.observationType === 'route_settlement_observation' &&
+    sameMeaningfulSettlementState(observation, rowToSettlementObservation(previous))
+  ) {
+    await repository.updateFetchTimestamps(
+      previous.id,
+      new Date(observation.fetchedAt),
+      new Date(observation.staleAfter)
+    );
+    return {
+      action: 'refreshed',
+      id: previous.id,
+      observation: {
+        ...rowToSettlementObservation(previous),
+        fetchedAt: observation.fetchedAt,
+        staleAfter: observation.staleAfter,
+      },
+    };
+  }
+  const inserted = await repository.insert(toInsertRow(observation));
+  return { action: 'inserted', id: inserted.id, observation };
+}
+
+export async function persistRouteAvailabilityObservation(
+  repository: ObservationRepository,
+  observation: RouteAvailabilityObservation
+): Promise<PersistObservationResult<RouteAvailabilityObservation>> {
+  const previous = await repository.findLatestBySubject(observation.subjectId);
+  if (
+    previous?.observationType === 'route_availability_observation' &&
+    sameMeaningfulAvailabilityState(observation, rowToAvailabilityObservation(previous))
+  ) {
+    await repository.updateFetchTimestamps(
+      previous.id,
+      new Date(observation.fetchedAt),
+      new Date(observation.staleAfter)
+    );
+    return {
+      action: 'refreshed',
+      id: previous.id,
+      observation: {
+        ...rowToAvailabilityObservation(previous),
+        fetchedAt: observation.fetchedAt,
+        staleAfter: observation.staleAfter,
+      },
+    };
+  }
+  const inserted = await repository.insert(toInsertRow(observation));
+  return { action: 'inserted', id: inserted.id, observation };
+}
+
+export async function listRouteFxHistory(
+  repository: ObservationRepository,
+  subjectId: string
+): Promise<RouteFxObservation[]> {
+  return (await repository.listByType('route_fx_observation'))
+    .filter((row) => row.subjectId === subjectId)
+    .sort((a, b) => a.fetchedAt.getTime() - b.fetchedAt.getTime())
+    .map(rowToFxObservation);
 }
 
 export async function getLatestWisePaymentsObservation(

@@ -199,7 +199,10 @@ export type ObservationType =
   | 'provider_operational_health'
   | 'provider_payment_incident'
   | 'provider_fee_observation'
-  | 'rail_regulatory_observation';
+  | 'rail_regulatory_observation'
+  | 'route_fx_observation'
+  | 'route_settlement_observation'
+  | 'route_availability_observation';
 
 export type ObservationSubjectKind =
   | 'provider'
@@ -265,6 +268,195 @@ export type ProviderFeeObservation = {
     feePercent: number | null;
   };
 };
+
+/**
+ * How an FX figure was produced. Do not collapse these into one rate field.
+ * mid_market_reference ≠ provider_quoted ≠ indicative ≠ executed.
+ */
+export type FxRateKind =
+  | 'mid_market_reference'
+  | 'provider_quoted'
+  | 'indicative'
+  | 'executed';
+
+export type RouteFxObservationValue = {
+  route: RouteSubject;
+  sourceCurrency: string | null;
+  destinationCurrency: string | null;
+  /** Quote amount. Null means the observation is not amount-specific. */
+  sourceAmount: number | null;
+  destinationAmount: number | null;
+  exchangeRate: number | null;
+  rateKind: FxRateKind;
+  rateSource: string;
+  /** True when the quoted rate already embeds spread. Null = not asserted. */
+  includesSpread: boolean | null;
+};
+
+export type RouteFxObservation = {
+  observationType: 'route_fx_observation';
+  subjectKind: 'route';
+  subjectId: string;
+  providerId: ProviderId;
+  value: RouteFxObservationValue;
+  observedAt: string;
+  fetchedAt: string;
+  sourceId: string;
+  sourceUrl: string;
+  provenance: 'externally_sourced' | 'curated';
+  confidence: ObservationConfidence;
+  staleAfter: string;
+  rawHash: string;
+  rawEvidence: {
+    routeKey: string;
+    sourceCurrency: string | null;
+    destinationCurrency: string | null;
+    sourceAmount: number | null;
+    destinationAmount: number | null;
+    exchangeRate: number | null;
+    rateKind: FxRateKind;
+    rateSource: string;
+    includesSpread: boolean | null;
+  };
+};
+
+export type SettlementBand =
+  | 'instant'
+  | 'minutes'
+  | 'same_day'
+  | 'next_business_day'
+  | 'multi_day'
+  | 'unknown';
+
+export type SettlementDurationUnit = 'seconds' | 'minutes' | 'hours' | 'days' | 'unknown';
+
+export type RouteSettlementObservationValue = {
+  route: RouteSubject;
+  band: SettlementBand;
+  durationMin: number | null;
+  durationMax: number | null;
+  unit: SettlementDurationUnit;
+  settlementModel: string | null;
+};
+
+export type RouteSettlementObservation = {
+  observationType: 'route_settlement_observation';
+  subjectKind: 'route';
+  subjectId: string;
+  providerId: ProviderId;
+  value: RouteSettlementObservationValue;
+  observedAt: string;
+  fetchedAt: string;
+  sourceId: string;
+  sourceUrl: string;
+  provenance: 'externally_sourced' | 'curated';
+  confidence: ObservationConfidence;
+  staleAfter: string;
+  rawHash: string;
+  rawEvidence: {
+    routeKey: string;
+    band: SettlementBand;
+    durationMin: number | null;
+    durationMax: number | null;
+    unit: SettlementDurationUnit;
+    settlementModel: string | null;
+  };
+};
+
+/**
+ * Route-level availability. Distinct from provider operational health.
+ * Do not infer this from a Statuspage component or from marketing copy.
+ */
+export type RouteAvailabilityStatus = 'available' | 'unavailable' | 'restricted' | 'unknown';
+
+export type RouteAvailabilityObservationValue = {
+  route: RouteSubject;
+  status: RouteAvailabilityStatus;
+  reason: string | null;
+  paymentType: string | null;
+};
+
+export type RouteAvailabilityObservation = {
+  observationType: 'route_availability_observation';
+  subjectKind: 'route';
+  subjectId: string;
+  providerId: ProviderId;
+  value: RouteAvailabilityObservationValue;
+  observedAt: string;
+  fetchedAt: string;
+  sourceId: string;
+  sourceUrl: string;
+  provenance: 'externally_sourced' | 'curated';
+  confidence: ObservationConfidence;
+  staleAfter: string;
+  rawHash: string;
+  rawEvidence: {
+    routeKey: string;
+    status: RouteAvailabilityStatus;
+    reason: string | null;
+    paymentType: string | null;
+  };
+};
+
+export type EconomicFactState = 'known' | 'unknown' | 'stale' | 'unavailable';
+
+export type EconomicConfidenceLevel = 'high' | 'moderate' | 'low' | 'unavailable';
+
+export type EconomicConfidence = {
+  level: EconomicConfidenceLevel;
+  reasons: string[];
+};
+
+export type EconomicFact<T> = {
+  state: EconomicFactState;
+  freshness: ObservationEvaluationFreshness;
+  observation: T | null;
+  sourceUrl: string | null;
+  provenance: Provenance | null;
+};
+
+export type RouteEconomicState = {
+  route: RouteSubject;
+  amount: number | null;
+  fee: EconomicFact<ProviderFeeObservation>;
+  fx: EconomicFact<RouteFxObservation>;
+  settlement: EconomicFact<RouteSettlementObservation>;
+  availability: EconomicFact<RouteAvailabilityObservation>;
+  confidence: EconomicConfidence;
+};
+
+export type TotalCostUnknownReason =
+  | 'missing_source_amount'
+  | 'missing_fee'
+  | 'missing_fx'
+  | 'stale_fee'
+  | 'stale_fx'
+  | 'unavailable_fee'
+  | 'unavailable_fx'
+  | 'unknown_fee'
+  | 'unknown_fx'
+  | 'indicative_fx'
+  | 'double_count_risk'
+  | 'currency_mismatch'
+  | 'incomplete_fee'
+  | 'incomplete_fx';
+
+export type TotalCostResult =
+  | {
+      state: 'known';
+      sourceAmount: number;
+      sourceCurrency: string;
+      explicitFeeAmount: number;
+      explicitFeeCurrency: string;
+      destinationAmount: number;
+      destinationCurrency: string;
+      effectiveRate: number;
+      method: 'source_fee_then_convert' | 'same_currency_net';
+    }
+  | {
+      state: 'unknown';
+      reason: TotalCostUnknownReason;
+    };
 
 export type RailRegulatoryObservationValue = {
   railId: NetworkRailId;
@@ -714,6 +906,15 @@ export type PublicRouteIntelligenceSnapshot = {
    * Never consumed by ranking or eligibility.
    */
   regulatoryImpacts: RegulatoryImpactEvaluation[];
+  /**
+   * Shadow-only economic observations. Never consumed by ranking or eligibility.
+   * Empty unless the caller supplies them — public comparison does not.
+   */
+  fxObservations: RouteFxObservation[];
+  settlementObservations: RouteSettlementObservation[];
+  availabilityObservations: RouteAvailabilityObservation[];
+  /** Aggregated economic state. Empty unless evaluateRouteSubjects is supplied. */
+  economicStates: RouteEconomicState[];
 };
 
 export type PublicRouteIntelligenceSnapshotInput = {
@@ -735,4 +936,12 @@ export type PublicRouteIntelligenceSnapshotInput = {
   regulatoryPaymentType?: string | null;
   /** Participant type for shadow regulatory evaluation. */
   regulatoryParticipantType?: string | null;
+  /** Preloaded FX observations. Omitted = none attached. Not fetched here. */
+  fxObservations?: RouteFxObservation[];
+  /** Preloaded settlement observations. Omitted = none attached. */
+  settlementObservations?: RouteSettlementObservation[];
+  /** Preloaded route-availability observations. Distinct from Wise operational health. */
+  availabilityObservations?: RouteAvailabilityObservation[];
+  /** Amount dimension for economic aggregation. Not part of RouteSubject. */
+  economicAmount?: number | null;
 };

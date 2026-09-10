@@ -18,6 +18,7 @@ import {
 import { OFFERING_RAIL_MAPPINGS } from '@/lib/route-intelligence/offering-rail';
 import { NETWORK_RAIL_CATALOGUE } from '@/lib/route-intelligence/network-rail';
 import { RAIL_CAPABILITY_CATALOGUE } from '@/lib/route-intelligence/rail-capability';
+import { getRouteEconomicState } from '@/lib/route-intelligence/economic-state';
 import { evaluateRegulatoryRouteImpacts } from '@/lib/route-intelligence/regulatory-impact';
 import { evaluateRouteEligibilities } from '@/lib/route-intelligence/route-eligibility';
 import { evaluateRouteImpacts } from '@/lib/route-intelligence/route-impact';
@@ -92,6 +93,27 @@ export function getPublicRouteIntelligenceSnapshot(
             paymentType: input.regulatoryPaymentType,
             participantType: input.regulatoryParticipantType,
           }
+        )
+      : [],
+    fxObservations: input.fxObservations ?? [],
+    settlementObservations: input.settlementObservations ?? [],
+    availabilityObservations: input.availabilityObservations ?? [],
+    economicStates: input.evaluateRouteSubjects
+      ? input.evaluateRouteSubjects.map((route) =>
+          getRouteEconomicState(
+            route,
+            {
+              feeObservations: input.feeObservations ?? [],
+              fxObservations: input.fxObservations ?? [],
+              settlementObservations: input.settlementObservations ?? [],
+              availabilityObservations: input.availabilityObservations ?? [],
+            },
+            {
+              now,
+              amount: input.economicAmount ?? null,
+              paymentType: input.regulatoryPaymentType,
+            }
+          )
         )
       : [],
   };

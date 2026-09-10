@@ -114,6 +114,10 @@ describe('public catalog snapshot', () => {
     expect(snapshot.regulatoryObservations).toEqual([]);
     expect(snapshot.regulatoryImpacts).toEqual([]);
     expect(snapshot.offeringRailMappings).toEqual([]);
+    expect(snapshot.fxObservations).toEqual([]);
+    expect(snapshot.settlementObservations).toEqual([]);
+    expect(snapshot.availabilityObservations).toEqual([]);
+    expect(snapshot.economicStates).toEqual([]);
     expect(JSON.stringify(snapshot)).not.toMatch(/retrievedAt":"[^n]/);
     expect(snapshot.offerings.every((item) => item.pricing.observedAt === null)).toBe(true);
   });

@@ -80,6 +80,28 @@ export {
   evaluateRegulatoryRouteImpacts,
 } from '@/lib/route-intelligence/regulatory-impact';
 export {
+  AVAILABILITY_OBSERVATION_SUBJECT_PREFIX,
+  availabilityObservationAppliesToRoute,
+  availabilityObservationSubjectId,
+  buildRouteAvailabilityObservation,
+  buildRouteFxObservation,
+  buildRouteSettlementObservation,
+  FX_OBSERVATION_SUBJECT_PREFIX,
+  fxObservationAppliesToRoute,
+  fxObservationSubjectId,
+  sameMeaningfulAvailabilityState,
+  sameMeaningfulFxState,
+  sameMeaningfulSettlementState,
+  SETTLEMENT_OBSERVATION_SUBJECT_PREFIX,
+  settlementObservationAppliesToRoute,
+  settlementObservationSubjectId,
+} from '@/lib/route-intelligence/economic-observation';
+export { evaluateEconomicConfidence } from '@/lib/route-intelligence/economic-confidence';
+export { getRouteEconomicState } from '@/lib/route-intelligence/economic-state';
+export { calculateTotalCost } from '@/lib/route-intelligence/total-cost';
+export { createFixtureEconomicAdapter } from '@/lib/route-intelligence/economic-adapter';
+export type { EconomicSourceAdapter, EconomicSourceReadInput } from '@/lib/route-intelligence/economic-adapter';
+export {
   assertExternallySourcedObservation,
   attachWisePaymentsAvailability,
   availabilityFromLatestRead,
@@ -170,6 +192,17 @@ export type {
   RegulatoryImpactEvaluation,
   RegulatoryObservation,
   RegulatoryStatus,
+  RouteAvailabilityObservation,
+  RouteAvailabilityStatus,
+  RouteEconomicState,
+  RouteFxObservation,
+  RouteSettlementObservation,
+  EconomicConfidence,
+  EconomicConfidenceLevel,
+  EconomicFactState,
+  FxRateKind,
+  SettlementBand,
+  TotalCostResult,
   RouteEligibilityDecision,
   RouteEligibilityEvidence,
   RouteEligibilityReason,

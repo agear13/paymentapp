@@ -59,6 +59,10 @@ describe('snapshot observation attach', () => {
     expect(snapshot.regulatoryImpacts).toEqual([]);
     expect(snapshot.offeringRailMappings).toEqual([]);
     expect(snapshot.networkRails.length).toBeGreaterThan(0);
+    expect(snapshot.fxObservations).toEqual([]);
+    expect(snapshot.settlementObservations).toEqual([]);
+    expect(snapshot.availabilityObservations).toEqual([]);
+    expect(snapshot.economicStates).toEqual([]);
     expect(
       snapshot.offerings.every((item) => item.availability.provenance === 'indicative')
     ).toBe(true);
