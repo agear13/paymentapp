@@ -60,4 +60,11 @@ describe('route-intelligence import boundary', () => {
     expect(sources).not.toContain('openai');
     expect(sources).not.toContain('anthropic');
   });
+
+  it('may call the official ECB euro reference host but not credentialed quote APIs', () => {
+    expect(sources).toContain('www.ecb.europa.eu');
+    expect(sources).not.toContain('https://api.wise.com');
+    expect(sources).not.toContain('api.sandbox.airwallex.com');
+    expect(sources).not.toContain('@/lib/fx');
+  });
 });

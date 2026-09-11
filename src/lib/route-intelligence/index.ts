@@ -114,7 +114,12 @@ export type {
   ShadowDecisionComparison,
 } from '@/lib/route-intelligence/decision-types';
 export { createFixtureEconomicAdapter } from '@/lib/route-intelligence/economic-adapter';
-export type { EconomicSourceAdapter, EconomicSourceReadInput } from '@/lib/route-intelligence/economic-adapter';
+export type {
+  EconomicAdapterFailureReason,
+  EconomicAdapterReadResult,
+  EconomicSourceAdapter,
+  EconomicSourceReadInput,
+} from '@/lib/route-intelligence/economic-adapter';
 export {
   assertExternallySourcedObservation,
   attachWisePaymentsAvailability,
