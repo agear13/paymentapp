@@ -99,6 +99,20 @@ export {
 export { evaluateEconomicConfidence } from '@/lib/route-intelligence/economic-confidence';
 export { getRouteEconomicState } from '@/lib/route-intelligence/economic-state';
 export { calculateTotalCost } from '@/lib/route-intelligence/total-cost';
+export { decideRoute, decisionPaymentFromSearch } from '@/lib/route-intelligence/decide-route';
+export { evaluateDecisionConfidence } from '@/lib/route-intelligence/decision-confidence';
+export { compareShadowDecision } from '@/lib/route-intelligence/shadow-compare';
+export type {
+  DecisionCandidate,
+  DecisionConfidence,
+  DecisionFactor,
+  DecisionIntelligence,
+  DecisionPayment,
+  RankingShadowRef,
+  RouteDecision,
+  RouteDecisionAssessment,
+  ShadowDecisionComparison,
+} from '@/lib/route-intelligence/decision-types';
 export { createFixtureEconomicAdapter } from '@/lib/route-intelligence/economic-adapter';
 export type { EconomicSourceAdapter, EconomicSourceReadInput } from '@/lib/route-intelligence/economic-adapter';
 export {
