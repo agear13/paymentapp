@@ -5,7 +5,6 @@ import {
   DEFAULT_LANDING_SEARCH,
   rankLandingRoutes,
 } from '@/lib/journey/landing-route-comparison';
-import { explainLandingRecommendation } from '@/lib/journey/landing-recommendation-explanation';
 import {
   compareShadowDecision,
   CORRIDOR_CAPABILITY_MATRIX,
@@ -251,7 +250,7 @@ describe('flagship AU→ID / AUD→IDR corridor evidence', () => {
   });
 });
 
-describe('flagship decision and explanation', () => {
+describe('flagship decision and public ranking isolation', () => {
   it('feeds RBA FX into decideRoute without inventing fees or a winner', async () => {
     const wiseFx = parseRbaAudFxObservation(RBA_FIXTURE_XML, WISE_AU_ID, FETCHED_AT);
     const ofxFx = parseRbaAudFxObservation(RBA_FIXTURE_XML, OFX_AU_ID, FETCHED_AT);
@@ -278,36 +277,6 @@ describe('flagship decision and explanation', () => {
     expect(decision.confidence.level).not.toBe('high');
   });
 
-  it('lets Phase 11 explain RBA FX only when shadow agrees with the displayed route', () => {
-    const wiseFx = parseRbaAudFxObservation(RBA_FIXTURE_XML, WISE_AU_ID, FETCHED_AT);
-    expect(wiseFx.ok).toBe(true);
-    if (!wiseFx.ok) return;
-    const isolated = decideRoute(payment(), [{ route: WISE_AU_ID }], {
-      capabilities: CORRIDOR_CAPABILITY_MATRIX,
-      fxObservations: [wiseFx.observation],
-      now: NOW,
-    });
-    const isolatedExplanation = explainLandingRecommendation(
-      {
-        ...compareLandingRoutes(FLAGSHIP_QUERY),
-        recommendedOffering: {
-          ...compareLandingRoutes(FLAGSHIP_QUERY).recommendedOffering,
-          id: 'wise-international',
-        },
-        offerings: compareLandingRoutes(FLAGSHIP_QUERY).offerings.filter((item) => item.id === 'wise-international'),
-      },
-      { capabilities: CORRIDOR_CAPABILITY_MATRIX, fxObservations: [wiseFx.observation], now: NOW }
-    );
-    expect(isolated.recommended?.route.offeringId).toBe('wise-international');
-    expect(isolatedExplanation.status).toBe('explained');
-    expect(isolatedExplanation.reasons.some((item) => item.kind === 'capability_supported' || item.kind === 'better_evidenced_fx')).toBe(
-      true
-    );
-    expect(isolatedExplanation.unknowns.some((item) => item.kind === 'missing_provider_quote')).toBe(true);
-    expect(isolatedExplanation.evidence.some((item) => item.host === 'www.rba.gov.au')).toBe(true);
-    expect(isolatedExplanation.summary).not.toMatch(/cheapest route|live pricing|98%/i);
-  });
-
   it('keeps the public AU→ID ranking unchanged and does not pretend the flagship case is solved', () => {
     const publicResult = compareLandingRoutes(FLAGSHIP_QUERY);
     expect(publicResult.recommendedOffering.id).toBe('wise-international');
@@ -319,11 +288,6 @@ describe('flagship decision and explanation', () => {
     if (!wiseFx.ok || !ofxFx.ok) return;
 
     const fetchSpy = jest.spyOn(global, 'fetch');
-    const explanation = explainLandingRecommendation(publicResult, {
-      capabilities: CORRIDOR_CAPABILITY_MATRIX,
-      fxObservations: [wiseFx.observation, ofxFx.observation],
-      now: NOW,
-    });
     const after = compareLandingRoutes(FLAGSHIP_QUERY);
     expect(after.offerings.map((item) => item.id)).toEqual(publicResult.offerings.map((item) => item.id));
     expect(after.recommendedOffering.id).toBe('wise-international');
@@ -356,11 +320,14 @@ describe('flagship decision and explanation', () => {
       },
       decision
     );
-    if (!shadow.sameRecommendation) {
-      expect(explanation.status).toBe('disagreement');
-      expect(explanation.reasons).toEqual([]);
-    }
+    expect(typeof shadow.sameRecommendation).toBe('boolean');
+    expect(decision.mode).toBe('shadow');
     expect(decision.confidence.level).not.toBe('high');
+    expect(
+      [decision.recommended, ...decision.alternatives].every(
+        (item) => !item || item.economic.fee.state === 'unavailable' || item.totalCost.state === 'unknown'
+      )
+    ).toBe(true);
   });
 });
 
