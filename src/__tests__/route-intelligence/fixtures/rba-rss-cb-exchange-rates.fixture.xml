@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns="http://purl.org/rss/1.0/" xmlns:cb="http://www.cbwiki.net/wiki/index.php/Specification_1.2/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel rdf:about="https://www.rba.gov.au/rss/rss-cb-exchange-rates.xml">
+    <title>RBA Daily Exchange Rates</title>
+    <link>https://www.rba.gov.au/statistics/frequency/exchange-rates.html</link>
+    <description>Official-source-shaped RBA RSS-CB document. Rates are the official RBA daily units of foreign currency per Australian dollar published for 10 Sep 2026. This file is a test fixture, not a live RSS capture.</description>
+  </channel>
+  <item rdf:about="https://www.rba.gov.au/statistics/frequency/exchange-rates.html#USD">
+    <cb:statistics>
+      <cb:exchangeRate>
+        <cb:baseCurrency>AUD</cb:baseCurrency>
+        <cb:targetCurrency>USD</cb:targetCurrency>
+        <cb:observation>
+          <cb:value>0.7220</cb:value>
+          <cb:period>2026-09-10</cb:period>
+        </cb:observation>
+      </cb:exchangeRate>
+    </cb:statistics>
+  </item>
+  <item rdf:about="https://www.rba.gov.au/statistics/frequency/exchange-rates.html#EUR">
+    <cb:statistics>
+      <cb:exchangeRate>
+        <cb:baseCurrency>AUD</cb:baseCurrency>
+        <cb:targetCurrency>EUR</cb:targetCurrency>
+        <cb:observation>
+          <cb:value>0.6203</cb:value>
+          <cb:period>2026-09-10</cb:period>
+        </cb:observation>
+      </cb:exchangeRate>
+    </cb:statistics>
+  </item>
+  <item rdf:about="https://www.rba.gov.au/statistics/frequency/exchange-rates.html#SGD">
+    <cb:statistics>
+      <cb:exchangeRate>
+        <cb:baseCurrency>AUD</cb:baseCurrency>
+        <cb:targetCurrency>SGD</cb:targetCurrency>
+        <cb:observation>
+          <cb:value>0.9125</cb:value>
+          <cb:period>2026-09-10</cb:period>
+        </cb:observation>
+      </cb:exchangeRate>
+    </cb:statistics>
+  </item>
+  <item rdf:about="https://www.rba.gov.au/statistics/frequency/exchange-rates.html#IDR">
+    <cb:statistics>
+      <cb:exchangeRate>
+        <cb:baseCurrency>AUD</cb:baseCurrency>
+        <cb:targetCurrency>IDR</cb:targetCurrency>
+        <cb:observation>
+          <cb:value>12655</cb:value>
+          <cb:period>2026-09-10</cb:period>
+        </cb:observation>
+      </cb:exchangeRate>
+    </cb:statistics>
+  </item>
+</rdf:RDF>

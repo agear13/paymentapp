@@ -67,4 +67,12 @@ describe('route-intelligence import boundary', () => {
     expect(sources).not.toContain('api.sandbox.airwallex.com');
     expect(sources).not.toContain('@/lib/fx');
   });
+
+  it('may call the official RBA exchange-rate host but not provider quote APIs', () => {
+    expect(sources).toContain('www.rba.gov.au');
+    expect(sources).toContain('/rss/rss-cb-exchange-rates.xml');
+    expect(sources).not.toContain('https://api.wise.com');
+    expect(sources).not.toContain('api.sandbox.airwallex.com');
+    expect(sources).not.toContain('@/lib/fx');
+  });
 });
