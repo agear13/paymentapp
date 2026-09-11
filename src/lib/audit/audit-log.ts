@@ -79,6 +79,8 @@ export enum AuditEventType {
   XERO_CONNECTED = 'xero.connected',
   XERO_DISCONNECTED = 'xero.disconnected',
   WISE_SETTINGS_CHANGED = 'wise.settings.changed',
+  WISE_INTELLIGENCE_CONSENT_GRANTED = 'wise.intelligence.consent.granted',
+  WISE_INTELLIGENCE_CONSENT_REVOKED = 'wise.intelligence.consent.revoked',
   STRIPE_SETTINGS_CHANGED = 'stripe.settings.changed',
   HEDERA_SETTINGS_CHANGED = 'hedera.settings.changed',
   EVM_SETTINGS_CHANGED = 'evm.settings.changed',

@@ -1,0 +1,27 @@
+{
+  "id": "quote-flagship-aud-idr",
+  "sourceCurrency": "AUD",
+  "targetCurrency": "IDR",
+  "sourceAmount": 10000,
+  "targetAmount": 124100000,
+  "rate": 12422.11,
+  "rateType": "FIXED",
+  "createdTime": "2026-09-11T01:00:00.000Z",
+  "paymentOptions": [
+    {
+      "payIn": "BANK_TRANSFER",
+      "payOut": "BANK_TRANSFER",
+      "disabled": false,
+      "sourceAmount": 10000,
+      "targetAmount": 124100000,
+      "fee": {
+        "transferwise": 12.4,
+        "payIn": 0,
+        "discount": 0,
+        "partner": 0,
+        "total": 12.4,
+        "currency": "AUD"
+      }
+    }
+  ]
+}

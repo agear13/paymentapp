@@ -8,6 +8,7 @@ import { advisorFilterNote } from '@/lib/journey/landing-advisor';
 import { useOptionalLandingAdvisor } from '@/components/journey/lovable/landing-advisor-context';
 import { LandingCompareTable, LandingCompareTray } from '@/components/journey/lovable/landing-compare-panel';
 import { LandingResultCard } from '@/components/journey/lovable/landing-result-card';
+import { explainLandingRecommendation } from '@/lib/journey/landing-recommendation-explanation';
 import { LandingResultFilterBar } from '@/components/journey/lovable/landing-result-filters';
 import {
   EMPTY_LANDING_FILTERS,
@@ -92,6 +93,7 @@ export function LandingComparisonResults({
     ...result.recommendation.rankingReasons.slice(0, 3),
     result.confidence.explanation,
   ];
+  const recommendationExplanation = useMemo(() => explainLandingRecommendation(result), [result]);
 
   const handleSelect = (id: string) => {
     setSelected((current) => {
@@ -141,6 +143,7 @@ export function LandingComparisonResults({
             selectDisabled={!selected.includes(item.id) && selected.length >= 3}
             priority={query.priority}
             whyDetail={item.isRecommended ? whyDetail : undefined}
+            recommendationExplanation={item.isRecommended ? recommendationExplanation : undefined}
             onPersonalise={onPersonalise}
           />
         ))}

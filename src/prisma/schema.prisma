@@ -190,6 +190,11 @@ model merchant_settings {
   wise_profile_id String? @db.VarChar(255)
   wise_enabled    Boolean @default(false)
   wise_currency   String? @db.Char(3) // default currency for Wise payouts, falls back to default_currency
+  /// Explicit opt-in to use the connected Wise profile for payment intelligence.
+  /// Distinct from wise_enabled (collection/execution). Default false.
+  wise_intelligence_consent     Boolean   @default(false)
+  wise_intelligence_consented_at DateTime? @db.Timestamptz(6)
+  wise_intelligence_revoked_at   DateTime? @db.Timestamptz(6)
 
   // Sprint 25: Multi-Currency Enhancement
   enabled_currencies            String[] @default(["USD", "AUD"])

@@ -26,6 +26,8 @@ import {
   scanTraits,
 } from '@/lib/journey/landing-result-labels';
 import type { LandingPriorityId } from '@/lib/journey/landing-route-comparison';
+import type { RecommendationExplanation } from '@/lib/route-intelligence';
+import { LandingRecommendationExplanation } from '@/components/journey/lovable/landing-recommendation-explanation';
 
 const DIGITAL_DOLLAR_EXPLAINER =
   'Fast settlement using a digital-dollar payment rail. Typically requires compatible accounts or wallets on both sides.';
@@ -61,6 +63,7 @@ export function LandingResultCard({
   selectDisabled,
   priority,
   whyDetail,
+  recommendationExplanation,
   onPersonalise,
 }: {
   item: LandingProviderResult;
@@ -69,6 +72,7 @@ export function LandingResultCard({
   selectDisabled: boolean;
   priority: LandingPriorityId;
   whyDetail?: string[];
+  recommendationExplanation?: RecommendationExplanation;
   onPersonalise: () => void;
 }) {
   const [whyOpen, setWhyOpen] = useState(false);
@@ -162,6 +166,9 @@ export function LandingResultCard({
                 <li key={line}>{line}</li>
               ))}
             </ul>
+          ) : null}
+          {recommendationExplanation ? (
+            <LandingRecommendationExplanation explanation={recommendationExplanation} />
           ) : null}
           <p className="mt-1 text-[11px] text-ink-soft">
             Ranking could change with your negotiated FX, existing rails or supplier terms.{' '}

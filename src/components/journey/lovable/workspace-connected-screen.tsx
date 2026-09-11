@@ -30,6 +30,7 @@ import {
 } from '@/lib/journey/journey-assessment-storage.client';
 import { snapshotFromOnboardingPayload } from '@/lib/journey/workspace-advisor-intro';
 import { buildConnectedSystemsPresentation } from '@/lib/journey/workspace-connected-presentation';
+import { ConnectedWiseIntelligencePanel } from '@/components/journey/lovable/connected-wise-intelligence-panel';
 
 type ConnectedSystem = {
   name: string;
@@ -449,6 +450,8 @@ export function WorkspaceConnectedScreen() {
           <p className="mt-1 text-[13px] text-ink-soft">{view.description}</p>
         </section>
       ) : null}
+
+      {organizationId ? <ConnectedWiseIntelligencePanel organizationId={organizationId} /> : null}
 
       {view.xeroOffer ? (
         <section>

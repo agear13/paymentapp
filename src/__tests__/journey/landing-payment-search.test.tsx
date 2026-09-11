@@ -50,6 +50,8 @@ describe('LandingPaymentSearch', () => {
     expect(screen.getAllByText('Wise').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Airwallex').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Why #1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Why Provvy recommends this/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/still comparing the available routes|still gathering route evidence/i)).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /connect your business/i })[0]).toHaveAttribute(
       'href',
       '/journey/assessment'

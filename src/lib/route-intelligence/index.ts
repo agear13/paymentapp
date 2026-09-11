@@ -102,6 +102,22 @@ export { calculateTotalCost } from '@/lib/route-intelligence/total-cost';
 export { decideRoute, decisionPaymentFromSearch } from '@/lib/route-intelligence/decide-route';
 export { evaluateDecisionConfidence } from '@/lib/route-intelligence/decision-confidence';
 export { compareShadowDecision } from '@/lib/route-intelligence/shadow-compare';
+export {
+  confidenceDisplayLabel,
+  explanationContainsFabricatedClaim,
+  RECOMMENDATION_REASON_KINDS,
+  toRecommendationExplanation,
+} from '@/lib/route-intelligence/recommendation-explanation';
+export type {
+  RecommendationConfidence,
+  RecommendationEvidenceRef,
+  RecommendationExplanation,
+  RecommendationExplanationContext,
+  RecommendationExplanationStatus,
+  RecommendationNote,
+  RecommendationReason,
+  RecommendationReasonKind,
+} from '@/lib/route-intelligence/recommendation-explanation';
 export type {
   DecisionCandidate,
   DecisionConfidence,
