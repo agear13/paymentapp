@@ -174,7 +174,7 @@ export function LandingAdvisor() {
         amount,
         currency,
         transactionType,
-        priority: advisor.context.priority ?? 'lowest_cost',
+        priority: advisor.context.priority ?? 'best_fit',
       })
     );
     persistJourneyBusiness({
@@ -250,7 +250,7 @@ export function LandingAdvisor() {
     <aside
       aria-label="Provvy Advisor"
       data-advisor-placement="alongside"
-      className="pointer-events-auto flex max-h-[70vh] flex-col overflow-hidden rounded-2xl border border-primary/20 bg-card/95 shadow-soft backdrop-blur-md max-md:rounded-b-none md:max-h-[calc(100vh-7rem)]"
+      className="pointer-events-auto flex max-h-[min(28rem,50vh)] flex-col overflow-hidden rounded-2xl border border-primary/20 bg-card/95 shadow-soft backdrop-blur-md max-md:rounded-b-none md:max-h-[min(32rem,calc(100vh-8rem))]"
     >
       <div className="flex items-start justify-between gap-2 border-b border-border/60 px-3.5 py-3">
         <div className="flex items-start gap-2">
@@ -345,14 +345,14 @@ export function LandingAdvisor() {
         />
       ) : null}
       {open ? (
-        <div className="pointer-events-auto absolute inset-x-0 bottom-0 md:inset-auto md:right-4 md:top-24 md:w-[20.5rem]">
+        <div className="pointer-events-auto absolute inset-x-0 bottom-0 md:inset-auto md:right-4 md:bottom-6 md:top-auto md:w-[20.5rem]">
           {panel}
         </div>
       ) : (
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="pointer-events-auto absolute bottom-24 right-3 flex items-center gap-2 rounded-full border border-primary/20 bg-card/95 py-1.5 pl-1.5 pr-3 shadow-soft backdrop-blur-md md:bottom-auto md:right-4 md:top-24"
+          className="pointer-events-auto absolute bottom-24 right-3 flex items-center gap-2 rounded-full border border-primary/20 bg-card/95 py-1.5 pl-1.5 pr-3 shadow-soft backdrop-blur-md md:bottom-6 md:right-4 md:top-auto"
           aria-label="Open Provvy Advisor"
         >
           <AdvisorMark />

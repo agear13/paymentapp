@@ -807,7 +807,7 @@ export type Offering = {
   fx: FXSnapshot;
   availability: AvailabilitySignal;
   settlement: SettlementSignal;
-  priorityAdj: { lowest_cost: number; fastest: number; simplest: number };
+  priorityAdj: { best_fit: number; lowest_cost: number; fastest: number; simplest: number };
   live: false;
   provenance: 'curated';
   source: 'static_catalog';

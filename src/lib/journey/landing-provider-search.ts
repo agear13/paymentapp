@@ -14,6 +14,7 @@ import {
   bestForTag,
   recipientScanLabel,
   setupScanLabel,
+  whyThisRank,
   type LandingResultFilters,
 } from '@/lib/journey/landing-result-labels';
 import { rankLandingRoutes } from '@/lib/journey/landing-route-rank';
@@ -63,6 +64,8 @@ export type LandingProviderResult = {
   indicativeCost: number | null;
   indicativeCostLabel: string;
   whyShort: string;
+  whyRank: string;
+  rank: number;
   bestFor: string;
   setupScan: string;
   recipientScan: string;
@@ -133,6 +136,8 @@ export function indicativeCostAmount(
 function whyShort(offering: LandingProviderOffering, query: LandingSearchQuery): string {
   const type = query.transactionType.replace(/_/g, ' ');
   switch (query.priority) {
+    case 'best_fit':
+      return `A strong overall fit for this ${type}, given the corridor, timing and setup you entered.`;
     case 'lowest_cost':
       return `Low estimated total cost with straightforward setup for this ${type}.`;
     case 'fastest':
@@ -180,6 +185,8 @@ export function buildProviderResults(
         indicativeCost: pricing.amount,
         indicativeCostLabel: pricing.totalLabel,
         whyShort: whyShort(offering, query),
+        whyRank: '',
+        rank: 0,
         bestFor: '',
         setupScan: setupScanLabel(offering.setupBand),
         recipientScan: recipientScanLabel(offering.recipientNeeds),
@@ -205,9 +212,12 @@ export function buildProviderResults(
     };
   }
 
-  return scored.map((item) =>
-    item.isRecommended ? item : { ...item, bestFor: bestForTag(item.offering, query, false) }
-  );
+  return scored.map((item, index) => ({
+    ...item,
+    rank: index + 1,
+    whyRank: whyThisRank(item, scored, query),
+    bestFor: item.isRecommended ? item.bestFor : bestForTag(item.offering, query, false),
+  }));
 }
 
 export function filterProviderResults(
@@ -285,13 +295,16 @@ export function resultCountLabel(visible: number, total: number, filtered: boole
 }
 
 export function recommendedWhy(result: LandingProviderResult, query: LandingSearchQuery): string {
+  if (query.priority === 'best_fit') {
+    return `Provvy puts ${result.offering.providerName} first among the indicative routes shown — the strongest overall fit, not automatically the cheapest.`;
+  }
   const priority = priorityLabel(query.priority).toLowerCase();
   return `Provvy puts ${result.offering.providerName} first for ${priority} among the indicative routes shown.`;
 }
 
 export const LANDING_SORT_OPTIONS: { id: LandingResultSort; label: string }[] = [
-  { id: 'recommended', label: 'Best match' },
-  { id: 'lowest_cost', label: 'Lowest cost' },
+  { id: 'recommended', label: "Provvy's pick" },
+  { id: 'lowest_cost', label: 'Lowest total cost' },
   { id: 'fastest', label: 'Fastest' },
   { id: 'simplest', label: 'Simplest' },
   { id: 'lowest_effort', label: 'Lowest operational effort' },

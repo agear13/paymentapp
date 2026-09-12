@@ -433,7 +433,7 @@ describe('ECB and AUD→IDR honesty', () => {
 
   it('keeps AUD → IDR unknown and does not attach ECB evidence', () => {
     const publicResult = compareLandingRoutes(DEFAULT_LANDING_SEARCH);
-    expect(publicResult.recommendedOffering.id).toBe('wise-international');
+    expect(publicResult.recommendedOffering.id).toBe('airwallex-international');
     const explanation = explainLandingRecommendation(publicResult);
     expect(explanation.evidence.some((item) => item.host === 'www.ecb.europa.eu')).toBe(false);
     expect(explanation.reasons.some((item) => item.kind === 'better_evidenced_fx')).toBe(false);

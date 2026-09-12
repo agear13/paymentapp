@@ -352,6 +352,10 @@ describe('route operational eligibility', () => {
 });
 
 describe('eligibility gate in public comparison', () => {
+  const lowestCostQuery = {
+    ...DEFAULT_LANDING_SEARCH,
+    priority: 'lowest_cost' as const,
+  };
   const goldenOfferingIds = [
     'wise-international',
     'airwallex-international',
@@ -382,13 +386,13 @@ describe('eligibility gate in public comparison', () => {
   });
 
   it('leaves ranking goldens unchanged when no route is excluded', () => {
-    const none = compareLandingRoutes(DEFAULT_LANDING_SEARCH);
-    const operational = compareLandingRoutes(DEFAULT_LANDING_SEARCH, {
+    const none = compareLandingRoutes(lowestCostQuery);
+    const operational = compareLandingRoutes(lowestCostQuery, {
       wisePaymentsHealth: evaluateLatestObservation(health('operational'), NOW),
       wiseIncidents: [incident()],
       now: NOW,
     });
-    const degraded = compareLandingRoutes(DEFAULT_LANDING_SEARCH, {
+    const degraded = compareLandingRoutes(lowestCostQuery, {
       wisePaymentsHealth: evaluateLatestObservation(health('degraded_performance'), NOW),
       now: NOW,
     });
@@ -399,12 +403,12 @@ describe('eligibility gate in public comparison', () => {
     expect(none.recommendedOffering.id).toBe('wise-international');
     expect(operational.recommendedOffering.id).toBe('wise-international');
     expect(degraded.recommendedOffering.id).toBe('wise-international');
-    expect(rankLandingRoutes(DEFAULT_LANDING_SEARCH)[0]?.id).toBe('international_bank');
+    expect(rankLandingRoutes(lowestCostQuery)[0]?.id).toBe('international_bank');
   });
 
   it('ranks remaining providers with the existing engine after Wise is excluded', () => {
-    const baseline = compareLandingRoutes(DEFAULT_LANDING_SEARCH);
-    const excluded = compareLandingRoutes(DEFAULT_LANDING_SEARCH, {
+    const baseline = compareLandingRoutes(lowestCostQuery);
+    const excluded = compareLandingRoutes(lowestCostQuery, {
       wisePaymentsHealth: evaluateLatestObservation(health('major_outage'), NOW),
       now: NOW,
     });
@@ -413,8 +417,8 @@ describe('eligibility gate in public comparison', () => {
     expect(excluded.offerings.map((item) => item.id)).toEqual(remaining.map((item) => item.id));
     expect(excluded.offerings.map((item) => item.score)).toEqual(remaining.map((item) => item.score));
     expect(excluded.recommendedOffering.id).toBe(remaining[0]?.id);
-    expect(rankLandingRoutes(DEFAULT_LANDING_SEARCH)).toEqual(
-      rankLandingRoutes({ ...DEFAULT_LANDING_SEARCH, destinationCurrency: 'IDR' })
+    expect(rankLandingRoutes(lowestCostQuery)).toEqual(
+      rankLandingRoutes({ ...lowestCostQuery, destinationCurrency: 'IDR' })
     );
   });
 
@@ -469,7 +473,9 @@ describe('AUD → IDR operational-state regression', () => {
     expect(excluded.offerings.map((item) => item.score)).toEqual(remaining.map((item) => item.score));
     expect(excluded.recommendedOffering.id).toBe(remaining[0]?.id);
     expect(excluded.recommendedOffering.offering.providerId).not.toBe('wise');
-    expect(rankLandingRoutes(AUD_IDR_QUERY)).toEqual(rankLandingRoutes(DEFAULT_LANDING_SEARCH));
+    expect(rankLandingRoutes(AUD_IDR_QUERY)).toEqual(
+      rankLandingRoutes({ ...DEFAULT_LANDING_SEARCH, priority: 'lowest_cost' })
+    );
   });
 
   it('keeps the existing Wise recommendation when the same major_outage is stale', () => {

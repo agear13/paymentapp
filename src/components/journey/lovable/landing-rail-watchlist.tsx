@@ -14,9 +14,9 @@ const SCOPES: { id: PaymentWatchScope; label: string }[] = [
 ];
 
 const MOVEMENT = {
-  up: '↑',
-  down: '↓',
-  steady: '→',
+  up: { mark: '↑', label: 'Rising in attention' },
+  down: { mark: '↓', label: 'Easing in attention' },
+  steady: { mark: '→', label: 'Steady' },
 } as const;
 
 export function LandingRailWatchlist() {
@@ -24,8 +24,8 @@ export function LandingRailWatchlist() {
   const items = watchlistForScope(scope);
 
   return (
-    <section id="watchlist" className="px-6 pb-6">
-      <div className="mx-auto max-w-6xl rounded-2xl border border-border/70 bg-card/90 p-3 shadow-soft sm:p-4">
+    <section id="watchlist">
+      <div className="rounded-2xl border border-border/70 bg-card/90 p-3 shadow-soft sm:p-4">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-soft">
@@ -35,6 +35,13 @@ export function LandingRailWatchlist() {
               10 payment rails Provvy is watching today
             </h2>
             <p className="mt-1 text-[12px] text-ink-soft">{intelligenceSnapshotLabel()}</p>
+            <p className="mt-2 text-[11px] text-ink-soft">
+              {MOVEMENT.up.mark} {MOVEMENT.up.label}
+              {' · '}
+              {MOVEMENT.down.mark} {MOVEMENT.down.label}
+              {' · '}
+              {MOVEMENT.steady.mark} {MOVEMENT.steady.label}
+            </p>
           </div>
           <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Watchlist scope">
             {SCOPES.map((item) => {
@@ -77,12 +84,8 @@ export function LandingRailWatchlist() {
               </div>
               <div className="text-right">
                 <p className="text-[12px] font-medium">
-                  {MOVEMENT[item.movement]}
-                  {item.movement !== 'steady' ? (
-                    <span className="sr-only">
-                      {item.movement === 'up' ? ' rising' : ' falling'}
-                    </span>
-                  ) : null}
+                  <span aria-hidden="true">{MOVEMENT[item.movement].mark}</span>
+                  <span className="sr-only">{MOVEMENT[item.movement].label}</span>
                 </p>
                 {item.movementReason ? (
                   <p className="mt-1 max-w-[14rem] text-[11px] leading-snug text-ink-soft">

@@ -4,28 +4,28 @@ import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 const LAYERS = [
   {
     title: 'Public',
-    heading: "What's happening across payments?",
-    body: 'Anyone can watch rails, regulation and provider developments.',
+    heading: 'What payment routes exist?',
+    body: 'Anyone can see the available routes for a payment.',
   },
   {
     title: 'Context',
-    heading: 'What does it mean for this payment?',
-    body: 'Search a corridor and Provvy interprets the public routes against your priority.',
+    heading: 'What does this mean for this payment?',
+    body: 'Provvy interprets those routes against the corridor, amount and what matters most.',
   },
   {
     title: 'Personal',
-    heading: 'What changes when Provvy knows your business?',
-    body: 'Connect bank accounts, payment providers, accounting, invoices, supplier terms, negotiated FX and cash position.',
+    heading: 'What changes when Provvy knows my business?',
+    body: 'Accounting, payment providers, invoices, supplier terms, agreements and payment history can change the ranking.',
   },
   {
     title: 'Advisor',
-    heading: 'Now Provvy can tell you what you should actually do.',
+    heading: 'What should I actually do?',
     body: 'Recommendations stay explainable. You decide what to authorise.',
   },
   {
     title: 'Coordination',
     heading: 'You approve. Provvy coordinates what follows.',
-    body: 'The progression is recommend → approve → automate, on your rules.',
+    body: 'The progression is recommend → authorise → coordinate, on your rules.',
   },
 ] as const;
 
@@ -39,9 +39,19 @@ const CONTROL = [
 
 export function LandingPublicToPersonal() {
   return (
-    <section id="ai-advisor" className="px-6 pb-6">
+    <section id="how-it-works" className="px-6 pb-10 sm:pb-12">
       <div className="mx-auto max-w-6xl">
-        <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-5">
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="text-[12px] uppercase tracking-[0.2em] text-ink-soft">How Provvy gets sharper</p>
+          <h2 className="mt-3 text-balance text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
+            The more Provvy knows, the smarter its recommendations become.
+          </h2>
+          <p className="mx-auto mt-4 max-w-2xl text-[15px] text-ink-soft">
+            Connecting relevant business systems gives Provvy more context. This is the same journey
+            as the comparison above — not a second product story.
+          </p>
+        </div>
+        <div className="mt-8 grid gap-2 sm:grid-cols-2 md:grid-cols-5">
           {LAYERS.map((layer) => (
             <article key={layer.title} className="rounded-xl border border-border/70 bg-card px-3 py-2.5">
               <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-ink-soft">
@@ -55,7 +65,7 @@ export function LandingPublicToPersonal() {
 
         <div className="mt-3 rounded-xl border border-border/70 bg-card px-4 py-4">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-ink-soft">
-            You stay in control
+            You stay in the driver&apos;s seat
           </p>
           <p className="mt-2 max-w-3xl text-[14px]">
             Provvy never silently takes control of money. Discovery is public. Intelligence is

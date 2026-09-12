@@ -63,8 +63,8 @@ await fastest.last().click();
 await page.getByRole('heading', { name: 'Digital-dollar transfer' }).first().waitFor();
 await shot('03-desktop-results-fastest', page.locator('#comparison-results'));
 
-await page.getByRole('radio', { name: 'Lowest cost' }).last().click();
-await page.getByText(/Provvy's best match/i).first().waitFor();
+await page.getByRole('radio', { name: 'Lowest total cost' }).last().click();
+await page.getByText(/Lowest total cost/i).first().waitFor();
 
 await page.getByRole('button', { name: /payment method/i }).click();
 await page.getByRole('checkbox', { name: 'Bank transfer' }).waitFor();

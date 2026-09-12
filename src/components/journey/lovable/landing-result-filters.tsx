@@ -95,7 +95,7 @@ export function LandingResultFilterBar({
                   : 'border-border bg-card text-ink-soft hover:text-foreground'
               }`}
             >
-              {item.label === 'Lowest total cost' ? 'Lowest cost' : item.label}
+                {item.label}
             </button>
           );
         })}

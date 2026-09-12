@@ -11,9 +11,9 @@ import {
 } from '@/lib/journey/commercial-os-routes';
 
 export const metadata: Metadata = {
-  title: 'Provvy — What’s the best way to move this money?',
+  title: 'Provvy — The Skyscanner for payments',
   description:
-    'Compare payment routes. Then connect Provvy to find what’s best for your business.',
+    'Compare payment routes, understand the trade-offs and get a recommendation built around your business.',
 };
 
 /** Uses cookie-backed Supabase (`getCurrentUser`); cannot be statically generated. */

@@ -323,7 +323,7 @@ export function buildPriorityOutlook(
   query: LandingSearchQuery,
   rankFor: (next: LandingSearchQuery) => { id: LandingRouteId }[]
 ): LandingPriorityOutlook[] {
-  const priorities: LandingPriorityId[] = ['lowest_cost', 'fastest', 'simplest'];
+  const priorities: LandingPriorityId[] = ['best_fit', 'lowest_cost', 'fastest', 'simplest'];
   return priorities.map((priority) => {
     const winner = rankFor({ ...query, priority })[0];
     if (!winner) {

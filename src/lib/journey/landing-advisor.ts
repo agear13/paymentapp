@@ -153,8 +153,10 @@ function priorityFocus(priority: LandingPriorityId | null): string {
     case 'simplest':
       return 'simplicity';
     case 'lowest_cost':
-    default:
       return 'lowest total cost';
+    case 'best_fit':
+    default:
+      return 'the best overall fit';
   }
 }
 
@@ -345,7 +347,8 @@ function routeActions(context: AdvisorContext): AdvisorAction[] {
 
   if (context.priority !== 'simplest') {
     actions.push({ id: 'whats-simpler', label: "What's simpler?" });
-  } else {
+  }
+  if (context.priority !== 'lowest_cost') {
     actions.push({ id: 'whats-cheaper', label: "What's cheaper?" });
   }
   return actions.slice(0, 3);

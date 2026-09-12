@@ -257,8 +257,7 @@ export function LandingPaymentSearch() {
           Tell Provvy what you're paying
         </h2>
         <p className="mt-2 max-w-2xl text-[13px] leading-snug text-ink-soft sm:text-[14px]">
-          Enter the details of the transaction you want to make. Provvy will compare the available
-          routes and explain what matters.
+          What are you paying, which routes exist, and which one makes the most sense right now?
         </p>
       </div>
       <form

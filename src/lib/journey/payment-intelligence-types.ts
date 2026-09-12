@@ -61,7 +61,7 @@ export type PaymentIntelligenceSearchHint = {
     | 'local_rail'
     | 'other'
   >;
-  priority: 'lowest_cost' | 'fastest' | 'simplest' | null;
+  priority: 'best_fit' | 'lowest_cost' | 'fastest' | 'simplest' | null;
 };
 
 export type PaymentWatchScope = 'all' | 'australia' | 'asia_pacific' | 'cross_border' | 'business';

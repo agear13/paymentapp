@@ -26,9 +26,7 @@ describe('LandingPaymentSearch', () => {
       screen.getByRole('heading', { name: /Tell Provvy what you're paying/i })
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
-        /Enter the details of the transaction you want to make. Provvy will compare the available routes and explain what matters./i
-      )
+      screen.getByText(/What are you paying, which routes exist, and which one makes the most sense right now\?/i)
     ).toBeInTheDocument();
     expect(screen.getByLabelText('From')).toBeInTheDocument();
     expect(screen.getByLabelText('To')).toBeInTheDocument();
@@ -36,6 +34,7 @@ describe('LandingPaymentSearch', () => {
     expect(screen.getByLabelText('Amount')).toBeInTheDocument();
     expect(screen.getByLabelText('Currency')).toBeInTheDocument();
     expect(screen.getByRole('radiogroup', { name: 'What matters most?' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: "Provvy's pick" })).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: 'Lowest total cost' })).toBeInTheDocument();
     expect(screen.queryByText(/transaction type/i)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /compare routes/i })).toBeInTheDocument();
@@ -46,12 +45,16 @@ describe('LandingPaymentSearch', () => {
 
     expect(screen.getByText(/payment routes found/i)).toBeInTheDocument();
     expect(screen.getByText(/Australia → Indonesia/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Provvy's best match/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Provvy's pick/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText('Wise').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Airwallex').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Why #1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Why this rank/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/The cheapest route isn't always the best route/i)).toBeInTheDocument();
+    expect(screen.getByText(/A little more than the cheapest route today/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /see why/i }));
     expect(screen.getAllByText(/Why Provvy recommends this/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/still comparing the available routes|still gathering route evidence/i)).toBeInTheDocument();
+    expect(screen.getByText(/You approve every payment/i)).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /connect your business/i })[0]).toHaveAttribute(
       'href',
       '/journey/assessment'
@@ -96,17 +99,29 @@ describe('LandingPaymentSearch', () => {
     expect(screen.getByText(/Provvy's view/i)).toBeInTheDocument();
   });
 
+  it('opens a review before authorising, and does not treat Select as execution', async () => {
+    render(<LandingPaymentSearch />);
+    fireEvent.click(screen.getByRole('button', { name: /compare routes/i }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Select' })[0] as HTMLElement);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/Review before you authorise/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Provvy recommends. You authorise/i)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /authorise payment/i })).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /authorise payment/i }));
+    expect(within(dialog).getByText(/You authorised. Provvy can coordinate what follows/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/does not move money until you approve/i)).toBeInTheDocument();
+  });
+
   it('opens a route detail that does not claim Provvy sent the payment', async () => {
     render(<LandingPaymentSearch />);
     fireEvent.click(screen.getByRole('button', { name: /compare routes/i }));
     fireEvent.click(screen.getAllByRole('button', { name: 'View route' })[0] as HTMLElement);
 
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByText(/does not send this payment/i)).toBeInTheDocument();
-    expect(within(dialog).getByRole('link', { name: /continue with wise/i })).toHaveAttribute(
-      'href',
-      'https://wise.com'
-    );
+    expect(within(dialog).getByText(/does not send this payment until you authorise/i)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /select airwallex to review/i })).toBeInTheDocument();
   });
 
   it('updates the corridor when the destination changes', () => {

@@ -211,9 +211,14 @@ describe('provider_fee_observation', () => {
     expect(snapshot.feeObservations).toHaveLength(1);
     expect(snapshot.feeObservations[0]?.value.amount).toBe(10000);
 
-    const comparison = compareLandingRoutes(DEFAULT_LANDING_SEARCH);
+    const comparison = compareLandingRoutes({
+      ...DEFAULT_LANDING_SEARCH,
+      priority: 'lowest_cost',
+    });
     expect(comparison.recommendedOffering.id).toBe('wise-international');
-    expect(rankLandingRoutes(DEFAULT_LANDING_SEARCH)[0]?.id).toBe('international_bank');
+    expect(rankLandingRoutes({ ...DEFAULT_LANDING_SEARCH, priority: 'lowest_cost' })[0]?.id).toBe(
+      'international_bank'
+    );
   });
 
   it('makes no provider API or network request', () => {

@@ -131,6 +131,8 @@ export function bestForTag(
 ): string {
   if (isRecommended) {
     switch (query.priority) {
+      case 'best_fit':
+        return "Provvy's pick for this payment";
       case 'lowest_cost':
         return 'Best for lowest cost';
       case 'fastest':
@@ -147,8 +149,10 @@ export function bestForTag(
 
 export function recommendationBadge(priority: LandingPriorityId): string {
   switch (priority) {
+    case 'best_fit':
+      return "Provvy's pick";
     case 'lowest_cost':
-      return "Provvy's best match";
+      return 'Lowest total cost';
     case 'fastest':
       return 'Fastest';
     case 'simplest':
@@ -158,13 +162,73 @@ export function recommendationBadge(priority: LandingPriorityId): string {
 
 export function recommendedWhyLine(priority: LandingPriorityId): string {
   switch (priority) {
+    case 'best_fit':
+      return 'The route that makes the most sense for this payment — not automatically the cheapest.';
     case 'lowest_cost':
-      return 'Lowest estimated total cost while keeping setup simple.';
+      return 'Lowest estimated total cost among the routes shown.';
     case 'fastest':
       return 'Typically the fastest arrival among the routes shown.';
     case 'simplest':
       return 'Lowest setup among the routes that can complete this payment.';
   }
+}
+
+export function cheapestOffering<T extends { indicativeCost: number | null }>(
+  ranked: T[]
+): T | undefined {
+  return ranked.reduce<T | undefined>((lowest, current) => {
+    if (current.indicativeCost == null) return lowest;
+    if (!lowest || lowest.indicativeCost == null || current.indicativeCost < lowest.indicativeCost) {
+      return current;
+    }
+    return lowest;
+  }, undefined);
+}
+
+export function whyThisRank(
+  item: {
+    id: string;
+    isRecommended: boolean;
+    indicativeCost: number | null;
+    offering: LandingProviderOffering;
+  },
+  ranked: Array<{
+    id: string;
+    isRecommended: boolean;
+    indicativeCost: number | null;
+    offering: LandingProviderOffering;
+  }>,
+  query: LandingSearchQuery
+): string {
+  const cheapest = cheapestOffering(ranked);
+  const isCheapest = Boolean(cheapest && cheapest.id === item.id);
+  const type = query.transactionType.replace(/_/g, ' ');
+  const arrival = item.offering.arrivalLabel.toLowerCase();
+
+  if (item.isRecommended) {
+    if (query.priority === 'best_fit' && !isCheapest) {
+      return `A little more than the cheapest route today, but a stronger fit for this ${type} — ${arrival}, and better aligned with how this corridor is usually paid.`;
+    }
+    return recommendedWhyLine(query.priority);
+  }
+
+  if (isCheapest && query.priority === 'best_fit') {
+    return 'Lowest total cost on this corridor — a strong option if this single transfer is all that matters.';
+  }
+
+  if (item.offering.providerId === 'ofx') {
+    return 'More relevant for larger or recurring payments, where a specialist FX desk can outweigh the extra friction.';
+  }
+
+  if (item.offering.providerId === 'bank') {
+    return 'Uses the account you already have. Usually slower and more expensive, but no new provider to open.';
+  }
+
+  if (item.offering.speedBand === 'instant' || item.offering.speedBand === 'same_day') {
+    return `Faster arrival, with a different cost and setup trade-off than the route Provvy ranked higher.`;
+  }
+
+  return `${item.offering.arrivalLabel}. ${item.offering.explanation}`;
 }
 
 export function scanTraits(offering: LandingProviderOffering): string[] {

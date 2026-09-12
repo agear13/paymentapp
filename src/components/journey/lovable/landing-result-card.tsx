@@ -20,11 +20,7 @@ import {
   pricingFreshnessLabel,
 } from '@/lib/journey/landing-provider-pricing';
 import type { LandingProviderResult } from '@/lib/journey/landing-provider-search';
-import {
-  recommendationBadge,
-  recommendedWhyLine,
-  scanTraits,
-} from '@/lib/journey/landing-result-labels';
+import { recommendationBadge } from '@/lib/journey/landing-result-labels';
 import type { LandingPriorityId } from '@/lib/journey/landing-route-comparison';
 import type { RecommendationExplanation } from '@/lib/route-intelligence';
 import { LandingRecommendationExplanation } from '@/components/journey/lovable/landing-recommendation-explanation';
@@ -35,7 +31,9 @@ const DIGITAL_DOLLAR_EXPLAINER =
 export function IndicativeHint({ pricing }: { pricing: LandingProviderResult['pricing'] }) {
   const label = pricingFreshnessLabel(pricing);
   if (pricing.type === 'live') {
-    return <span className="text-[10px] font-medium uppercase tracking-wider text-ink-soft">{label}</span>;
+    return (
+      <span className="text-[10px] font-medium uppercase tracking-wider text-ink-soft">{label}</span>
+    );
   }
   return (
     <Popover>
@@ -65,6 +63,7 @@ export function LandingResultCard({
   whyDetail,
   recommendationExplanation,
   onPersonalise,
+  onSelectRoute,
 }: {
   item: LandingProviderResult;
   selected: boolean;
@@ -74,94 +73,148 @@ export function LandingResultCard({
   whyDetail?: string[];
   recommendationExplanation?: RecommendationExplanation;
   onPersonalise: () => void;
+  onSelectRoute: () => void;
 }) {
   const [whyOpen, setWhyOpen] = useState(false);
+  const [feesOpen, setFeesOpen] = useState(false);
   const [routeOpen, setRouteOpen] = useState(false);
   const advisor = useOptionalLandingAdvisor();
   const offering = item.offering;
   const isDigital = offering.providerId === 'digital_dollar';
   const recommended = item.isRecommended;
-  const traits = scanTraits(offering);
-  const breakdown = [item.pricing.feeLabel, item.pricing.fxLabel].filter(Boolean).join(' · ');
+  const rankLabel = String(item.rank).padStart(2, '0');
   const website = LANDING_PROVIDER_WEBSITES[offering.providerId];
 
   return (
     <article
-      className={`rounded-xl border bg-card px-3 py-2.5 sm:px-3.5 ${
-        recommended ? 'border-primary/35 shadow-soft' : 'border-border/70'
+      className={`rounded-xl border px-3 py-3 sm:px-4 ${
+        recommended
+          ? 'border-primary/25 bg-accent/40 shadow-soft'
+          : 'border-border/70 bg-card'
       }`}
     >
-      <div className="flex items-start gap-2.5">
-        <LandingProviderMark providerId={offering.providerId} size="sm" />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            {recommended ? (
-              <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
-                {recommendationBadge(priority)}
-              </span>
-            ) : null}
-            <IndicativeHint pricing={item.pricing} />
-          </div>
-          <div className="mt-0.5 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+      <div className="grid gap-3 sm:grid-cols-[2.25rem_minmax(0,1.4fr)_minmax(7rem,0.7fr)_minmax(7rem,0.7fr)_minmax(0,1.6fr)_auto] sm:items-start">
+        <p
+          className={`pt-0.5 text-[13px] font-semibold tabular-nums ${
+            recommended ? 'text-foreground' : 'text-ink-soft'
+          }`}
+        >
+          {rankLabel}
+        </p>
+
+        <div className="min-w-0">
+          <div className="flex items-start gap-2">
+            <LandingProviderMark providerId={offering.providerId} size="sm" />
             <div className="min-w-0">
+              {recommended ? (
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-primary">
+                  {recommendationBadge(priority)}
+                </p>
+              ) : null}
               <h4 className="text-[14px] font-semibold leading-tight tracking-tight">
                 {offering.providerName}
               </h4>
               <p className="text-[12px] leading-snug text-ink-soft">{offering.productName}</p>
             </div>
-            <div className="text-right">
-              <div className="text-[14px] font-semibold leading-tight">{item.pricing.totalLabel}</div>
-              {breakdown ? <div className="text-[11px] text-ink-soft">{breakdown}</div> : null}
-            </div>
           </div>
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wider text-ink-soft">Total cost</p>
+          <p className="text-[14px] font-semibold tabular-nums leading-tight">
+            {item.pricing.totalLabel}
+          </p>
+          <IndicativeHint pricing={item.pricing} />
+          <button
+            type="button"
+            onClick={() => setFeesOpen((open) => !open)}
+            className="mt-1 block text-[12px] font-medium text-primary"
+          >
+            {feesOpen ? 'Hide fee breakdown' : 'View fee breakdown →'}
+          </button>
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wider text-ink-soft">Arrival</p>
+          <p className="text-[13px] font-medium leading-snug">{offering.arrivalLabel}</p>
+        </div>
+
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wider text-ink-soft">Why this rank</p>
+          <p className="mt-0.5 text-[12px] leading-snug text-ink-soft">{item.whyRank}</p>
+          {recommended ? (
+            <button
+              type="button"
+              onClick={() => setWhyOpen((open) => !open)}
+              className="mt-1 text-[12px] font-medium text-primary"
+            >
+              {whyOpen ? 'Hide detail' : 'See why →'}
+            </button>
+          ) : null}
+          {isDigital ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" className="mt-1 block text-[12px] font-medium text-primary">
+                  What is this?
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-72 p-3 text-[12px] leading-relaxed text-ink-soft">
+                {DIGITAL_DOLLAR_EXPLAINER}
+              </PopoverContent>
+            </Popover>
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 sm:flex-col sm:items-stretch">
+          <button
+            type="button"
+            onClick={onSelectRoute}
+            className="rounded-lg bg-foreground px-3 py-1.5 text-[12px] font-medium text-background"
+          >
+            Select
+          </button>
+          <button
+            type="button"
+            onClick={() => setRouteOpen(true)}
+            className="rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium hover:bg-accent"
+          >
+            View route
+          </button>
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-[12px] text-ink-soft sm:justify-center">
+            <input
+              type="checkbox"
+              checked={selected}
+              disabled={selectDisabled}
+              onChange={onToggleSelect}
+              aria-label={`Compare ${offering.providerName}`}
+              className="rounded border-border"
+            />
+            Compare
+          </label>
         </div>
       </div>
 
-      <dl className="mt-2 grid grid-cols-4 gap-1 text-[11px]">
-        <ScanStat label="Cost" value={item.pricing.totalLabel} />
-        <ScanStat label="Arrival" value={offering.arrivalLabel} />
-        <ScanStat label="Setup" value={item.setupScan} />
-        <ScanStat label="Recipient" value={item.recipientScan} />
-      </dl>
+      {feesOpen ? (
+        <dl className="mt-3 grid gap-2 border-t border-border/60 pt-3 text-[12px] sm:grid-cols-3">
+          <div>
+            <dt className="text-[10px] uppercase tracking-wider text-ink-soft">Provider fee</dt>
+            <dd className="tabular-nums font-medium">{item.pricing.feeLabel ?? 'Included in the total'}</dd>
+          </div>
+          <div>
+            <dt className="text-[10px] uppercase tracking-wider text-ink-soft">FX / conversion</dt>
+            <dd className="font-medium">{item.pricing.fxLabel ?? offering.fxLabel}</dd>
+          </div>
+          <div>
+            <dt className="text-[10px] uppercase tracking-wider text-ink-soft">Recipient</dt>
+            <dd className="font-medium">{item.recipientScan}</dd>
+          </div>
+        </dl>
+      ) : null}
 
-      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-        <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium text-accent-foreground">
-          {item.bestFor}
-        </span>
-        {recommended
-          ? traits.map((trait) => (
-              <span key={trait} className="text-[10px] font-medium uppercase tracking-wider text-ink-soft">
-                {trait}
-              </span>
-            ))
-          : null}
-        {isDigital ? (
-          <Popover>
-            <PopoverTrigger asChild>
-              <button type="button" className="text-[11px] font-medium text-primary">
-                What is this?
-              </button>
-            </PopoverTrigger>
-            <PopoverContent align="start" className="w-72 p-3 text-[12px] leading-relaxed text-ink-soft">
-              {DIGITAL_DOLLAR_EXPLAINER}
-            </PopoverContent>
-          </Popover>
-        ) : null}
-      </div>
-
-      {recommended ? (
-        <div className="mt-1.5 text-[12px] leading-snug">
-          <span className="font-medium">Why #1</span>{' '}
-          <span className="text-ink-soft">{recommendedWhyLine(priority)}</span>{' '}
-          <button
-            type="button"
-            onClick={() => setWhyOpen((open) => !open)}
-            className="font-medium text-primary"
-          >
-            See why →
-          </button>
-          {whyOpen && whyDetail?.length ? (
-            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[12px] text-ink-soft">
+      {recommended && whyOpen ? (
+        <div className="mt-3 border-t border-border/60 pt-3 text-[12px] leading-snug">
+          {whyDetail?.length ? (
+            <ul className="list-disc space-y-0.5 pl-4 text-ink-soft">
               {whyDetail.map((line) => (
                 <li key={line}>{line}</li>
               ))}
@@ -170,7 +223,7 @@ export function LandingResultCard({
           {recommendationExplanation ? (
             <LandingRecommendationExplanation explanation={recommendationExplanation} />
           ) : null}
-          <p className="mt-1 text-[11px] text-ink-soft">
+          <p className="mt-2 text-[12px] text-ink-soft">
             Ranking could change with your negotiated FX, existing rails or supplier terms.{' '}
             <Link
               href={COMMERCIAL_OS_ROUTES.assessment}
@@ -182,27 +235,6 @@ export function LandingResultCard({
           </p>
         </div>
       ) : null}
-
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => setRouteOpen(true)}
-          className="rounded-lg border border-border px-2.5 py-1 text-[12px] font-medium hover:bg-accent"
-        >
-          View route
-        </button>
-        <label className="inline-flex cursor-pointer items-center gap-1.5 text-[12px] text-ink-soft">
-          <input
-            type="checkbox"
-            checked={selected}
-            disabled={selectDisabled}
-            onChange={onToggleSelect}
-            aria-label={`Compare ${offering.providerName}`}
-            className="rounded border-border"
-          />
-          Compare
-        </label>
-      </div>
 
       <Dialog
         open={routeOpen}
@@ -222,8 +254,7 @@ export function LandingResultCard({
           <dl className="grid grid-cols-2 gap-2 text-[13px]">
             <div>
               <dt className="text-[11px] uppercase tracking-wider text-ink-soft">Estimated cost</dt>
-              <dd className="font-medium">{item.pricing.totalLabel}</dd>
-              {breakdown ? <dd className="text-[12px] text-ink-soft">{breakdown}</dd> : null}
+              <dd className="font-medium tabular-nums">{item.pricing.totalLabel}</dd>
             </div>
             <div>
               <dt className="text-[11px] uppercase tracking-wider text-ink-soft">Estimated arrival</dt>
@@ -238,41 +269,32 @@ export function LandingResultCard({
           </div>
           <DetailList title="Caveats" items={offering.potentialIssues} />
           <p className="text-[12px] text-ink-soft">{INDICATIVE_ESTIMATE_COPY}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setRouteOpen(false);
+              onSelectRoute();
+            }}
+            className="inline-flex items-center justify-center rounded-xl bg-foreground px-4 py-2 text-[13px] font-medium text-background"
+          >
+            Select {offering.providerName} to review
+          </button>
           {website ? (
             <a
               href={website}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center rounded-xl bg-foreground px-4 py-2 text-[13px] font-medium text-background"
+              className="text-[12px] font-medium text-ink-soft hover:text-foreground"
             >
-              Continue with {offering.providerName} →
+              Open {offering.providerName} separately →
             </a>
-          ) : (
-            <Link
-              href={COMMERCIAL_OS_ROUTES.assessment}
-              onClick={onPersonalise}
-              className="inline-flex items-center justify-center rounded-xl bg-foreground px-4 py-2 text-[13px] font-medium text-background"
-            >
-              Continue with {offering.providerName} →
-            </Link>
-          )}
+          ) : null}
           <p className="text-[11px] text-ink-soft">
-            Provvy helps you choose the route. It does not send this payment.
+            Selecting a route opens a review. Provvy does not send this payment until you authorise it.
           </p>
         </DialogContent>
       </Dialog>
     </article>
-  );
-}
-
-function ScanStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[10px] uppercase tracking-wider text-ink-soft">{label}</dt>
-      <dd className="truncate font-medium text-foreground" title={value}>
-        {value}
-      </dd>
-    </div>
   );
 }
 

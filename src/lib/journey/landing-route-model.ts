@@ -29,6 +29,7 @@ export const LANDING_TRANSACTION_TYPES = [
 ] as const;
 
 export const LANDING_PRIORITIES = [
+  { id: 'best_fit', label: "Provvy's pick" },
   { id: 'lowest_cost', label: 'Lowest total cost' },
   { id: 'fastest', label: 'Fastest' },
   { id: 'simplest', label: 'Simplest' },
@@ -110,7 +111,7 @@ export const DEFAULT_LANDING_SEARCH: LandingSearchQuery = {
   amount: 10000,
   currency: 'AUD',
   transactionType: 'supplier_payment',
-  priority: 'lowest_cost',
+  priority: 'best_fit',
 };
 
 export function isLandingCountryCode(value: string): value is LandingCountryCode {

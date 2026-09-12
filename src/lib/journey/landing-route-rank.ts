@@ -9,6 +9,14 @@ import { isDomestic, type LandingPriorityId, type LandingRouteId, type LandingSe
  * second ranker. Scoring tables stay until a later phase changes them deliberately.
  */
 const PRIORITY_SCORES: Record<LandingPriorityId, Record<LandingRouteId, number>> = {
+  best_fit: {
+    domestic_bank: 88,
+    international_bank: 84,
+    card_checkout: 42,
+    local_currency_settlement: 76,
+    stablecoin_settlement: 50,
+    direct_debit: 68,
+  },
   lowest_cost: {
     domestic_bank: 96,
     international_bank: 78,

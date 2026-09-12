@@ -1,4 +1,8 @@
-import type { LandingRouteId, LandingTransactionTypeId } from '@/lib/journey/landing-route-model';
+import type {
+  LandingPriorityId,
+  LandingRouteId,
+  LandingTransactionTypeId,
+} from '@/lib/journey/landing-route-model';
 
 export const LANDING_PROVIDER_CATALOG_UPDATED = '2026-09-01';
 
@@ -86,7 +90,7 @@ export type LandingProviderOffering = {
   requirements: string[];
   howItWorks: string[];
   potentialIssues: string[];
-  priorityAdj: { lowest_cost: number; fastest: number; simplest: number };
+  priorityAdj: Record<LandingPriorityId, number>;
   live: false;
   source: 'static_catalog';
 };
@@ -131,7 +135,7 @@ export const LANDING_PROVIDER_OFFERINGS: LandingProviderOffering[] = [
       'Recipient must accept a local bank deposit.',
       'Large first transfers can trigger extra checks.',
     ],
-    priorityAdj: { lowest_cost: 16, fastest: 6, simplest: 10 },
+    priorityAdj: { best_fit: 14, lowest_cost: 16, fastest: 6, simplest: 10 },
     live: false,
     source: 'static_catalog',
   },
@@ -174,7 +178,7 @@ export const LANDING_PROVIDER_OFFERINGS: LandingProviderOffering[] = [
       'Business onboarding is required.',
       'Same-day arrival is corridor-dependent.',
     ],
-    priorityAdj: { lowest_cost: 12, fastest: 8, simplest: 4 },
+    priorityAdj: { best_fit: 22, lowest_cost: 12, fastest: 8, simplest: 4 },
     live: false,
     source: 'static_catalog',
   },
@@ -210,7 +214,7 @@ export const LANDING_PROVIDER_OFFERINGS: LandingProviderOffering[] = [
       'Funds arrive in the recipient bank account.',
     ],
     potentialIssues: ['Better suited to larger amounts.', 'Not a consumer checkout link.'],
-    priorityAdj: { lowest_cost: 8, fastest: 2, simplest: 4 },
+    priorityAdj: { best_fit: 12, lowest_cost: 8, fastest: 2, simplest: 4 },
     live: false,
     source: 'static_catalog',
   },
@@ -250,7 +254,7 @@ export const LANDING_PROVIDER_OFFERINGS: LandingProviderOffering[] = [
       'FX markup is often the real cost.',
       'Intermediary banks can add time and fees.',
     ],
-    priorityAdj: { lowest_cost: 0, fastest: -8, simplest: 16 },
+    priorityAdj: { best_fit: 6, lowest_cost: 0, fastest: -8, simplest: 16 },
     live: false,
     source: 'static_catalog',
   },
@@ -286,7 +290,7 @@ export const LANDING_PROVIDER_OFFERINGS: LandingProviderOffering[] = [
       'The supplier is paid on a local rail.',
     ],
     potentialIssues: ['You need the recipient’s real local account details.'],
-    priorityAdj: { lowest_cost: 6, fastest: 4, simplest: -2 },
+    priorityAdj: { best_fit: 8, lowest_cost: 6, fastest: 4, simplest: -2 },
     live: false,
     source: 'static_catalog',
   },
@@ -322,7 +326,7 @@ export const LANDING_PROVIDER_OFFERINGS: LandingProviderOffering[] = [
       'The recipient receives destination currency.',
     ],
     potentialIssues: ['Local payout coverage varies by corridor.'],
-    priorityAdj: { lowest_cost: 4, fastest: 6, simplest: -4 },
+    priorityAdj: { best_fit: 12, lowest_cost: 4, fastest: 6, simplest: -4 },
     live: false,
     source: 'static_catalog',
   },
@@ -365,7 +369,7 @@ export const LANDING_PROVIDER_OFFERINGS: LandingProviderOffering[] = [
       'Not useful if the supplier cannot receive digital dollars.',
       'Accounting, compliance and conversion still sit around the transfer.',
     ],
-    priorityAdj: { lowest_cost: 2, fastest: 18, simplest: -22 },
+    priorityAdj: { best_fit: -6, lowest_cost: 2, fastest: 18, simplest: -22 },
     live: false,
     source: 'static_catalog',
   },
@@ -405,7 +409,7 @@ export const LANDING_PROVIDER_OFFERINGS: LandingProviderOffering[] = [
       'Acceptance cost is usually higher than bank or FX payouts.',
       'Better for collections than for paying a supplier.',
     ],
-    priorityAdj: { lowest_cost: -18, fastest: 14, simplest: 12 },
+    priorityAdj: { best_fit: -16, lowest_cost: -18, fastest: 14, simplest: 12 },
     live: false,
     source: 'static_catalog',
   },
@@ -441,7 +445,7 @@ export const LANDING_PROVIDER_OFFERINGS: LandingProviderOffering[] = [
       'Funds sit in PayPal until withdrawn.',
     ],
     potentialIssues: ['Usually expensive for a A$10k-class payment.', 'Not a bank payout rail.'],
-    priorityAdj: { lowest_cost: -26, fastest: 8, simplest: 8 },
+    priorityAdj: { best_fit: -22, lowest_cost: -26, fastest: 8, simplest: 8 },
     live: false,
     source: 'static_catalog',
   },
@@ -477,7 +481,7 @@ export const LANDING_PROVIDER_OFFERINGS: LandingProviderOffering[] = [
       'The recipient’s bank credits their account.',
     ],
     potentialIssues: ['Not available across borders.', 'Not the fastest if you need instant collection.'],
-    priorityAdj: { lowest_cost: 10, fastest: 0, simplest: 12 },
+    priorityAdj: { best_fit: 12, lowest_cost: 10, fastest: 0, simplest: 12 },
     live: false,
     source: 'static_catalog',
   },
@@ -513,7 +517,7 @@ export const LANDING_PROVIDER_OFFERINGS: LandingProviderOffering[] = [
       'Funds settle after the debit clears.',
     ],
     potentialIssues: ['Weak for a first-time or disputed invoice.', 'Takes days, not minutes.'],
-    priorityAdj: { lowest_cost: 6, fastest: -4, simplest: 0 },
+    priorityAdj: { best_fit: 6, lowest_cost: 6, fastest: -4, simplest: 0 },
     live: false,
     source: 'static_catalog',
   },

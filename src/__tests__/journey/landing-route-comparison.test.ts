@@ -21,9 +21,9 @@ describe('compareLandingRoutes', () => {
 
     expect(result.offerings.length).toBeGreaterThan(5);
     expect(result.offerings.filter((item) => item.isRecommended)).toHaveLength(1);
-    expect(result.recommendedOffering.offering.providerId).toBe('wise');
+    expect(result.recommendedOffering.offering.providerId).toBe('airwallex');
     expect(result.genericBest.id).toBe('international_bank');
-    expect(result.headline).toContain('Wise');
+    expect(result.headline).toContain('Airwallex');
     expect(result.disclaimer).toBe(LANDING_COMPARISON_DISCLAIMER);
     expect(result.disclaimer).toMatch(/not live quotes/i);
     result.offerings.forEach((item) => {
@@ -43,13 +43,14 @@ describe('compareLandingRoutes', () => {
     expect(result.contextLine).toMatch(/10,000/);
     expect(result.contextLine).toContain('Supplier payment');
     expect(result.contextLine).toContain('Australia → Indonesia');
-    expect(result.contextLine).toContain('Lowest total cost');
+    expect(result.contextLine).toContain("Provvy's pick");
   });
 
   it('explains the ranking from supplied inputs rather than unknown business facts', () => {
     const result = compareLandingRoutes(DEFAULT_LANDING_SEARCH);
-    expect(result.recommendedWhy).toMatch(/lowest total cost/i);
-    expect(result.recommendedWhy).toMatch(/Wise/);
+    expect(result.recommendedWhy).toMatch(/strongest overall fit/i);
+    expect(result.recommendedWhy).toMatch(/not automatically the cheapest/i);
+    expect(result.recommendedWhy).toMatch(/Airwallex/);
     expect(result.whatCouldChange.join(' ')).toMatch(/negotiated FX rates/i);
     expect(result.confidence.explanation).toMatch(/does not yet know/i);
     expect(JSON.stringify(result.confidence)).not.toMatch(/%/);
@@ -83,11 +84,20 @@ describe('compareLandingRoutes', () => {
     expect(result.contextLine).not.toContain('→');
   });
 
+  it('does not treat the cheapest route as Provvy’s pick by default', () => {
+    const pick = compareLandingRoutes(DEFAULT_LANDING_SEARCH);
+    const cheapest = compareLandingRoutes({ ...DEFAULT_LANDING_SEARCH, priority: 'lowest_cost' });
+
+    expect(pick.recommendedOffering.offering.providerId).toBe('airwallex');
+    expect(cheapest.recommendedOffering.offering.providerId).toBe('wise');
+    expect(pick.recommendedOffering.id).not.toBe(cheapest.recommendedOffering.id);
+  });
+
   it('changes the recommended provider when the visitor optimises for speed', () => {
-    const cost = compareLandingRoutes(DEFAULT_LANDING_SEARCH);
+    const pick = compareLandingRoutes(DEFAULT_LANDING_SEARCH);
     const fast = compareLandingRoutes({ ...DEFAULT_LANDING_SEARCH, priority: 'fastest' });
 
-    expect(cost.recommendedOffering.offering.providerId).toBe('wise');
+    expect(pick.recommendedOffering.offering.providerId).toBe('airwallex');
     expect(fast.recommendedOffering.offering.providerId).toBe('digital_dollar');
     expect(fast.recommendedOffering.offering.productName).toMatch(/digital-dollar/i);
   });

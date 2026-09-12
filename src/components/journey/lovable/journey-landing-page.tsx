@@ -30,7 +30,6 @@ import { LandingPaymentIntelligence } from '@/components/journey/lovable/landing
 import { LandingPaymentIntelligenceSubscribe } from '@/components/journey/lovable/landing-payment-intelligence-subscribe';
 import { LandingPublicToPersonal } from '@/components/journey/lovable/landing-public-to-personal';
 import { LandingRailWatchlist } from '@/components/journey/lovable/landing-rail-watchlist';
-import { LandingWatchProvvyThink } from '@/components/journey/lovable/landing-watch-provvy-think';
 
 const LANDING_NAV = [
   { label: 'Explore', href: '#compare' },
@@ -41,15 +40,17 @@ const LANDING_NAV = [
   { label: 'Provvy Labs', href: '/labs' },
 ] as const;
 
+const PRIMARY_WORKFLOWS = ['revenue-sharing', 'supplier-payments', 'commercial-operations'] as const;
+const SUPPORTING_WORKFLOWS = [
+  'autonomous-reconciliation',
+  'payment-collection',
+  'cashflow-forecasting',
+] as const;
+
 const LANDING_WORKFLOWS = WORKFLOW_LIBRARY.filter((entry) =>
-  [
-    'autonomous-reconciliation',
-    'payment-collection',
-    'cashflow-forecasting',
-    'revenue-sharing',
-    'supplier-payments',
-    'commercial-operations',
-  ].includes(entry.slug)
+  [...PRIMARY_WORKFLOWS, ...SUPPORTING_WORKFLOWS].includes(
+    entry.slug as (typeof PRIMARY_WORKFLOWS)[number] | (typeof SUPPORTING_WORKFLOWS)[number]
+  )
 );
 
 const PRODUCT_LAYERS = [
@@ -80,11 +81,10 @@ export function JourneyLandingPage() {
       <div className="relative">
         <Nav dark={dark} onToggleDark={toggle} />
         <Hero />
-        <LandingRailWatchlist />
-        <LandingWatchProvvyThink />
+        <PaymentIntelligence />
         <LandingPublicToPersonal />
-        <WorkflowLibrary />
         <ContextReveal />
+        <WorkflowLibrary />
         <Pricing />
         <Labs />
         <Footer />
@@ -195,27 +195,59 @@ function Hero() {
         style={{ background: 'var(--gradient-hero)' }}
       />
       <div className="relative mx-auto max-w-5xl text-center animate-fade-up">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-soft">
-          Provvy payment intelligence
-        </p>
-        <h1 className="mt-5 text-balance text-[1.85rem] font-semibold tracking-[-0.03em] sm:mt-6 sm:text-4xl md:text-5xl">
-          <span className="text-gradient">Payment infrastructure changes every day.</span>
+        <h1 className="text-balance text-[1.85rem] font-semibold tracking-[-0.03em] sm:text-4xl md:text-5xl">
+          <span className="text-gradient">The Skyscanner for payments.</span>
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-balance text-[15px] text-ink-soft sm:mt-6 sm:text-base">
-          Provvy helps you understand what changed — and what it means for your business.
+          Compare payment routes, understand the trade-offs and get a recommendation built around
+          your business.
         </p>
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href="#landing-search-heading"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-foreground px-4 py-2.5 text-[14px] font-medium text-background"
+          >
+            Compare routes <ArrowRight className="h-4 w-4" />
+          </a>
+          <a
+            href="#how-it-works"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-4 py-2.5 text-[14px] font-medium text-foreground hover:bg-accent"
+          >
+            See how it works
+          </a>
+        </div>
       </div>
 
-      <div className="relative mx-auto mt-10 max-w-6xl animate-fade-up sm:mt-14">
-        <LandingPaymentIntelligence />
-      </div>
-
-      <div className="relative mx-auto mt-12 max-w-5xl animate-fade-up sm:mt-16">
+      <div className="relative mx-auto mt-10 max-w-5xl animate-fade-up sm:mt-12">
         <LandingPaymentSearch />
       </div>
+    </section>
+  );
+}
 
-      <div className="relative mx-auto mt-10 max-w-5xl animate-fade-up sm:mt-14">
-        <LandingPaymentIntelligenceSubscribe />
+function PaymentIntelligence() {
+  return (
+    <section className="px-6 pb-10 sm:pb-12">
+      <div className="mx-auto max-w-6xl">
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="text-[12px] uppercase tracking-[0.2em] text-ink-soft">Payment intelligence</p>
+          <h2 className="mt-3 text-balance text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">
+            Payment infrastructure changes. Provvy keeps watch.
+          </h2>
+          <p className="mx-auto mt-4 max-w-2xl text-[15px] text-ink-soft">
+            Rails, providers and regulation move. Provvy interprets what those changes mean for the
+            payment you are trying to make — evidence for the comparison above, not a second product.
+          </p>
+        </div>
+        <div className="mt-8">
+          <LandingPaymentIntelligence />
+        </div>
+        <div className="mt-6">
+          <LandingRailWatchlist />
+        </div>
+        <div className="mx-auto mt-6 max-w-xl">
+          <LandingPaymentIntelligenceSubscribe />
+        </div>
       </div>
     </section>
   );
@@ -235,9 +267,9 @@ function ContextReveal() {
             <span className="text-gradient">Provvy coordinates what&apos;s happening now.</span>
           </h2>
           <p className="mx-auto mt-6 max-w-2xl text-[16px] text-ink-soft">
-            Stripe can provide a rail. Xero can record the entry. Provvy sits above that
-            infrastructure: it uses your commercial context to recommend what should happen
-            next, then coordinates the work you approve.
+            Stripe can provide a rail. Xero can record the entry. Provvy sits above the
+            infrastructure you already use: it recommends what should happen, then coordinates the
+            work you approve. You do not have to replace your stack.
           </p>
         </div>
         <div className="mt-12 grid gap-3 md:grid-cols-3">
@@ -268,49 +300,79 @@ function WorkflowLibrary() {
             Provvy coordinates what follows.
           </h2>
           <p className="mt-4 text-[15px] text-ink-soft">
-            Collecting, paying, sharing revenue, reconciling — the work around the payment, once
-            you have authorised the path. Preview the workflows; deploy the ones that are ready
-            in your workspace.
+            Payment intelligence decides what should happen. Once you authorise the route, Provvy
+            coordinates the work that follows — splits, supplier payouts, agreements and the
+            supporting operations around them.
           </p>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {LANDING_WORKFLOWS.map((workflow) => {
-            const Icon = workflow.icon;
-            return (
-              <div
-                key={workflow.slug}
-                className="group flex flex-col rounded-2xl border border-border/60 bg-card p-6 shadow-soft transition-all hover:-translate-y-1 hover:border-primary/30 hover:shadow-glow"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-accent text-primary transition-colors group-hover:bg-gradient-purple group-hover:text-primary-foreground">
-                    <Icon className="h-4 w-4" />
-                  </div>
-                  <div className="text-[15px] font-semibold tracking-tight">{workflow.name}</div>
-                </div>
-                <div className="mt-5 flex-1 text-[14px] leading-relaxed text-ink-soft">
-                  <div className="text-[11px] uppercase tracking-wider text-foreground/60">
-                    What follows
-                  </div>
-                  <div className="mt-1.5 text-foreground/90">{workflow.outcome}</div>
-                </div>
-                <div className="mt-5 flex items-center justify-between border-t border-border/60 pt-4">
-                  <div className="flex items-center gap-1.5 text-[12px] text-ink-soft">
-                    <Clock className="h-3.5 w-3.5 text-primary" />
-                    {workflow.saved}
-                  </div>
-                  <Link
-                    href={COMMERCIAL_OS_ROUTES.publicWorkflowDetail(workflow.slug)}
-                    className="inline-flex items-center gap-1 text-[13px] font-medium text-primary"
-                  >
-                    Preview Workflow <ArrowUpRight className="h-3.5 w-3.5" />
-                  </Link>
-                </div>
-              </div>
-            );
-          })}
+        <WorkflowGrid
+          title="Core coordination"
+          slugs={PRIMARY_WORKFLOWS}
+          workflows={LANDING_WORKFLOWS}
+        />
+        <div className="mt-8">
+          <WorkflowGrid
+            title="Supporting operations"
+            slugs={SUPPORTING_WORKFLOWS}
+            workflows={LANDING_WORKFLOWS}
+          />
         </div>
       </div>
     </section>
+  );
+}
+
+function WorkflowGrid({
+  title,
+  slugs,
+  workflows,
+}: {
+  title: string;
+  slugs: readonly string[];
+  workflows: typeof LANDING_WORKFLOWS;
+}) {
+  return (
+    <div>
+      <p className="mb-3 text-[12px] font-semibold uppercase tracking-wider text-ink-soft">{title}</p>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {slugs.map((slug) => {
+          const workflow = workflows.find((entry) => entry.slug === slug);
+          if (!workflow) return null;
+          const Icon = workflow.icon;
+          return (
+            <div
+              key={workflow.slug}
+              className="group flex flex-col rounded-2xl border border-border/60 bg-card p-6 shadow-soft transition-all hover:-translate-y-1 hover:border-primary/30 hover:shadow-glow"
+            >
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 place-items-center rounded-xl bg-accent text-primary transition-colors group-hover:bg-gradient-purple group-hover:text-primary-foreground">
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div className="text-[15px] font-semibold tracking-tight">{workflow.name}</div>
+              </div>
+              <div className="mt-5 flex-1 text-[14px] leading-relaxed text-ink-soft">
+                <div className="text-[11px] uppercase tracking-wider text-foreground/60">
+                  What follows
+                </div>
+                <div className="mt-1.5 text-foreground/90">{workflow.outcome}</div>
+              </div>
+              <div className="mt-5 flex items-center justify-between border-t border-border/60 pt-4">
+                <div className="flex items-center gap-1.5 text-[12px] text-ink-soft">
+                  <Clock className="h-3.5 w-3.5 text-primary" />
+                  {workflow.saved}
+                </div>
+                <Link
+                  href={COMMERCIAL_OS_ROUTES.publicWorkflowDetail(workflow.slug)}
+                  className="inline-flex items-center gap-1 text-[13px] font-medium text-primary"
+                >
+                  Preview Workflow <ArrowUpRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -417,7 +479,7 @@ const FOOTER_LINKS: Record<string, string> = {
   Explore: '#compare',
   'How it works': '#how-it-works',
   Workflows: '#workflow-library',
-  Recommendations: '#ai-advisor',
+  Recommendations: '#how-it-works',
   Pricing: '#pricing',
   'Provvy Labs': '/labs',
   Contact: CALENDLY_CONSULTATION_URL,

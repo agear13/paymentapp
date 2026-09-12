@@ -108,7 +108,7 @@ describe('LandingAdvisor', () => {
     expect(screen.getByText(/Based on your current criteria/i)).toBeInTheDocument();
     expect(screen.getByLabelText('Current payment criteria')).toHaveTextContent('Australia → Indonesia');
     expect(screen.getByLabelText('Current payment criteria')).toHaveTextContent('Supplier payment');
-    expect(screen.getByLabelText('Current payment criteria')).toHaveTextContent('Lowest total cost');
+    expect(screen.getByLabelText('Current payment criteria')).toHaveTextContent("Provvy's pick");
     expect(
       within(advisor).getByText(/You're comparing a .* supplier payment from Australia to Indonesia/i)
     ).toBeInTheDocument();
@@ -133,7 +133,7 @@ describe('LandingAdvisor', () => {
     fireEvent.click(within(advisor).getByRole('button', { name: 'Why is this #1?' }));
     expect(screen.getByText(/Typical estimated total:/i)).toBeInTheDocument();
     expect(screen.getByText(/Typical arrival:/i)).toBeInTheDocument();
-    expect(screen.getByText(/not live quotes/i)).toBeInTheDocument();
+    expect(within(advisor).getByText(/not live quotes/i)).toBeInTheDocument();
 
     fireEvent.click(within(advisor).getByRole('button', { name: "What's faster?" }));
     expect(screen.getByText(/Recommendation changed/i)).toBeInTheDocument();
