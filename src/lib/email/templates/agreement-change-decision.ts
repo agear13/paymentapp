@@ -1,3 +1,6 @@
+import { buildMerchantBrandingEmailMarkup } from '@/lib/branding/merchant-branding-email';
+import { merchantInitials } from '@/lib/branding/resolve-merchant-branding';
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -6,17 +9,27 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
+function brandingMarkup(organizationName: string, logoUrl?: string | null): string {
+  return buildMerchantBrandingEmailMarkup({
+    merchantName: organizationName,
+    logoUrl: logoUrl ?? null,
+    initials: merchantInitials(organizationName),
+  });
+}
+
 export function buildAgreementUpdatedEmail(params: {
   participantName: string;
   organizationName: string;
   agreementTitle: string;
   workspaceUrl: string;
+  logoUrl?: string | null;
 }): { subject: string; html: string; text: string } {
   const name = params.participantName.trim() || 'there';
   const org = params.organizationName.trim() || 'your organiser';
   const title = params.agreementTitle.trim() || 'affiliate agreement';
   const url = params.workspaceUrl.trim();
   const subject = `Your ${title} has been updated. Please review and sign the new version.`;
+  const logo = brandingMarkup(org, params.logoUrl);
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -27,6 +40,7 @@ export function buildAgreementUpdatedEmail(params: {
 </head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;margin:0;padding:24px;">
   <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:32px;">
+    ${logo}
     <p style="font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#64748b;margin:0 0 12px;">Agreement update</p>
     <h1 style="font-size:20px;color:#0f172a;margin:0 0 12px;">Hi ${escapeHtml(name)}, please review the new version</h1>
     <p style="font-size:15px;color:#475569;line-height:1.6;">
@@ -59,6 +73,7 @@ export function buildAgreementChangeRejectedEmail(params: {
   agreementTitle: string;
   reviewNote?: string | null;
   workspaceUrl?: string | null;
+  logoUrl?: string | null;
 }): { subject: string; html: string; text: string } {
   const name = params.participantName.trim() || 'there';
   const org = params.organizationName.trim() || 'the organiser';
@@ -66,6 +81,7 @@ export function buildAgreementChangeRejectedEmail(params: {
   const note = params.reviewNote?.trim();
   const url = params.workspaceUrl?.trim();
   const subject = 'Your suggested change was not approved.';
+  const logo = brandingMarkup(org, params.logoUrl);
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -76,6 +92,7 @@ export function buildAgreementChangeRejectedEmail(params: {
 </head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;margin:0;padding:24px;">
   <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:32px;">
+    ${logo}
     <h1 style="font-size:20px;color:#0f172a;margin:0 0 12px;">Hi ${escapeHtml(name)}</h1>
     <p style="font-size:15px;color:#475569;line-height:1.6;">
       ${escapeHtml(org)} reviewed your suggested change to <strong>${escapeHtml(title)}</strong>.
@@ -105,6 +122,7 @@ export function buildAgreementChangeClarificationEmail(params: {
   agreementTitle: string;
   reviewNote: string;
   workspaceUrl: string;
+  logoUrl?: string | null;
 }): { subject: string; html: string; text: string } {
   const name = params.participantName.trim() || 'there';
   const org = params.organizationName.trim() || 'the organiser';
@@ -112,6 +130,7 @@ export function buildAgreementChangeClarificationEmail(params: {
   const note = params.reviewNote.trim();
   const url = params.workspaceUrl.trim();
   const subject = `${org} asked for clarification on your suggested change`;
+  const logo = brandingMarkup(org, params.logoUrl);
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -122,6 +141,7 @@ export function buildAgreementChangeClarificationEmail(params: {
 </head>
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;margin:0;padding:24px;">
   <div style="max-width:560px;margin:0 auto;background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:32px;">
+    ${logo}
     <h1 style="font-size:20px;color:#0f172a;margin:0 0 12px;">Hi ${escapeHtml(name)}</h1>
     <p style="font-size:15px;color:#475569;line-height:1.6;">
       ${escapeHtml(org)} asked for more information about your suggested change to <strong>${escapeHtml(title)}</strong>.

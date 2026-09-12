@@ -80,6 +80,17 @@ const TEMPLATES: Partial<Record<AgreementWorkflowNotificationKind, CommercialNot
         ? `/workspace/workflows/referral-management?participant=${encodeURIComponent(ctx.participantId)}`
         : `/workspace/workflows/referral-management`,
   },
+  agreement_change_rejected: {
+    title: (ctx) => `Suggested change from ${ctx.participantName} was not approved`,
+    message: (ctx) =>
+      `${ctx.participantName} was told their suggested change was not approved. The current agreement is unchanged.`,
+    consequence: () => 'No contractual values were updated.',
+    action: 'View agreement',
+    actionPath: (ctx) =>
+      ctx.participantId
+        ? `/workspace/workflows/referral-management?participant=${encodeURIComponent(ctx.participantId)}`
+        : `/workspace/workflows/referral-management`,
+  },
   agreement_approved: {
     title: (ctx) => `${ctx.participantName} approved the agreement`,
     message: (ctx) =>

@@ -39,7 +39,7 @@ export function AgreementChangeRequestReview({
     setSubmittingId(requestId);
     try {
       const res = await csrfAwareFetch(
-        `/api/workflows/${workflowId}/referrals/promoters/${participantId}/change-requests/${requestId}`,
+        `/api/workflows/${workflowId}/agreement/participants/${participantId}/change-requests/${requestId}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

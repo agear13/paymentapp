@@ -16,6 +16,8 @@ import {
 } from '@/lib/agreements/agreement-presentation';
 import { operationalRoleLabel } from '@/lib/projects/participants-for-project';
 import { canParticipantApproveAgreement } from '@/lib/operations/contracts/canonical-agreement-lifecycle';
+import { applyParticipantAgreementViewed } from '@/lib/operations/lifecycle/participant-lifecycle';
+import { buildParticipantCoordinationView } from '@/lib/workflows/agreement-intelligence/participant-coordination';
 import {
   candidateToPromoterInput,
   mapExtractedRole,
@@ -221,6 +223,27 @@ describe('Weso affiliate production journey — Rachel Smith', () => {
     ]);
     expect(attention[0]?.kind).toBe('change_request');
     expect(attention[0]?.label).toMatch(/awaiting review/i);
+
+    const coordination = buildParticipantCoordinationView(submitted.participant, {
+      catalogItems: [],
+      operatorApprovalRequired: true,
+    });
+    expect(coordination.nextActionKind).toBe('review_change_request');
+    expect(coordination.nextActionLabel).toBe('1 agreement change awaiting review');
+    expect(coordination.pendingChangeRequests).toHaveLength(1);
+  });
+
+  it('persists VIEWED when the affiliate opens a shared agreement', () => {
+    const shared = {
+      ...participantFromConfirmedCandidate(),
+      agreementSharedAt: '2026-09-09T00:00:00.000Z',
+      agreementLifecycle: 'SHARED' as const,
+    };
+    const viewed = applyParticipantAgreementViewed(shared);
+    expect(viewed.agreementViewedAt).toBeTruthy();
+    expect(viewed.inviteStatus).toBe('Opened');
+    expect(viewed.agreementLifecycle).toBe('VIEWED');
+    expect(viewed.approvalStatus).toBe(shared.approvalStatus);
   });
 
   it('approves the name correction by issuing a new unsigned version and preserving v1', () => {

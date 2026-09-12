@@ -23,6 +23,7 @@ import {
 import { deriveReferralCommerceFromCompensationProfile } from '@/lib/referrals/derive-referral-commerce-from-profile';
 import { isProjectWorkspaceParticipant } from '@/lib/projects/participant-entitlement';
 import { canParticipantApproveAgreement } from '@/lib/operations/contracts/canonical-agreement-lifecycle';
+import { applyParticipantAgreementViewed } from '@/lib/operations/lifecycle/participant-lifecycle';
 import { referralTrace } from '@/lib/referrals/referral-trace';
 import {
   shouldIssueAttributionForParticipant,
@@ -632,8 +633,10 @@ export async function markParticipantInviteOpened(token: string): Promise<void> 
     where: { invite_token: token },
   });
   if (!row) return;
-  const cur = row.participant_payload as unknown as DemoParticipant;
-  const next: DemoParticipant = { ...cur, inviteStatus: 'Opened' };
+  const cur = participantRowToDemo(row);
+  if (cur.approvalStatus === 'Approved') return;
+  if (cur.agreementViewedAt && cur.inviteStatus === 'Opened') return;
+  const next = applyParticipantAgreementViewed(cur);
   await prisma.deal_network_pilot_participants.update({
     where: { id: row.id },
     data: {

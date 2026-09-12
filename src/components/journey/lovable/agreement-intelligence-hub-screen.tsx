@@ -38,6 +38,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { AgreementIntelligenceParticipantDetail } from '@/components/journey/lovable/agreement-intelligence-participant-detail';
+import { AgreementChangeRequestReview } from '@/components/agreements/agreement-change-request-review';
 import { ParticipantCoordinationSummary } from '@/components/journey/lovable/agreement-intelligence-participant-status';
 import type { ParticipantCoordinationAction } from '@/lib/workflows/agreement-intelligence/participant-coordination';
 
@@ -398,16 +399,29 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
               )}
 
               {selectedParticipant ? (
-                <AgreementIntelligenceParticipantDetail
-                  participant={selectedParticipant}
-                  activity={operational.activity}
-                  coordinationBlocked={coordinationBlocked}
-                  busy={coordinating}
-                  onBack={() => selectParticipant(null)}
-                  onAction={runCoordination}
-                  onIdentityUpdated={() => void refresh()}
-                  onAddReplacement={() => selectParticipant(null)}
-                />
+                <div className="space-y-4">
+                  {installed?.id && selectedParticipant.pendingChangeRequests?.length ? (
+                    <AgreementChangeRequestReview
+                      workflowId={installed.id}
+                      participantId={selectedParticipant.id!}
+                      participantName={selectedParticipant.name}
+                      agreementTitle={`${selectedParticipant.name} agreement`}
+                      requests={selectedParticipant.pendingChangeRequests}
+                      busy={coordinating}
+                      onReviewed={() => void refresh()}
+                    />
+                  ) : null}
+                  <AgreementIntelligenceParticipantDetail
+                    participant={selectedParticipant}
+                    activity={operational.activity}
+                    coordinationBlocked={coordinationBlocked}
+                    busy={coordinating}
+                    onBack={() => selectParticipant(null)}
+                    onAction={runCoordination}
+                    onIdentityUpdated={() => void refresh()}
+                    onAddReplacement={() => selectParticipant(null)}
+                  />
+                </div>
               ) : (
                 <>
               {operational.needsAttention.length > 0 && (

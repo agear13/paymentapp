@@ -35,7 +35,10 @@ import {
   referralManagementDealId,
 } from '@/lib/workflows/referral-management/constants';
 import { ensureReferralManagementDeal } from '@/lib/workflows/referral-management/ensure-program-deal.server';
-import { pendingAgreementChangeRequests } from '@/lib/agreements/agreement-change-request';
+import {
+  pendingAgreementChangeRequests,
+  serializePendingChangeRequests,
+} from '@/lib/agreements/agreement-change-request';
 import { buildReferralAttentionItems } from '@/lib/workflows/referral-management/attention';
 
 function money(amount: number, currency = 'AUD'): string {
@@ -78,18 +81,7 @@ function mapPromoter(
       view.payoutSetupStatus === 'submitted' ||
       view.payoutSetupStatus === 'flagged' ||
       pendingAgreementChangeRequests(participant).length > 0,
-    pendingChangeRequests: pendingAgreementChangeRequests(participant).map((request) => ({
-      id: request.id,
-      fieldLabel: request.fieldLabel,
-      previousValue: request.previousValue,
-      suggestedValue: request.suggestedValue,
-      reason: request.reason,
-      classification: request.classification,
-      createdAt: request.createdAt,
-      agreementVersionNumber: request.agreementVersionNumber,
-      status: request.status,
-      reviewNote: request.reviewNote ?? null,
-    })),
+    pendingChangeRequests: serializePendingChangeRequests(participant),
     attentionReason: view.nextActionLabel,
     manageUrl: workflowParticipantHref(participant.id, REFERRAL_MANAGEMENT_SLUG),
     ...view,

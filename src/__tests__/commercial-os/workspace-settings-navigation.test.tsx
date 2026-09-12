@@ -22,6 +22,10 @@ describe('WorkspaceSettingsScreen navigation', () => {
       'href',
       '/workspace/settings/account'
     );
+    expect(screen.getByRole('link', { name: 'Business details' })).toHaveAttribute(
+      'href',
+      '/workspace/settings/business'
+    );
     expect(screen.getAllByText('Coming soon').length).toBeGreaterThan(0);
   });
 });

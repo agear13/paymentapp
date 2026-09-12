@@ -76,6 +76,7 @@ export const COMMERCIAL_OS_ROUTES = {
   historicalAccountingSync: '/workspace/connected/xero/historical-sync',
   advisor: '/workspace/advisor',
   settings: '/workspace/settings',
+  businessDetails: '/workspace/settings/business',
   planBilling: '/workspace/settings/plan',
   accountProfile: '/workspace/settings/account',
   accountPreferences: '/workspace/settings/preferences',

@@ -15,6 +15,7 @@ import type { ParticipantWorkspaceOnboarding } from '@/lib/participant-portal/pa
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import type { DemoParticipant } from '@/components/deal-network-demo/invite-participant-modal';
 import type { ScopedServiceCommissionRow } from '@/lib/projects/participant-compensation-copy';
+import type { ResolvedAgreementPresentation } from '@/lib/agreements/agreement-presentation';
 
 type InvitePayload = {
   deal: RecentDeal;
@@ -22,6 +23,7 @@ type InvitePayload = {
   dealParticipants?: DemoParticipant[];
   scopedServiceRows?: ScopedServiceCommissionRow[];
   workspaceSource?: 'project' | 'pilot';
+  presentation?: ResolvedAgreementPresentation;
 };
 
 type WorkspaceBootstrap = {
@@ -269,6 +271,7 @@ export function ParticipantWorkspaceGate({
                 initialApproved={invitePayload.participant.approvalStatus === 'Approved'}
                 initialReferralIssuance={null}
                 initialScopedServiceRows={invitePayload.scopedServiceRows ?? []}
+                initialPresentation={invitePayload.presentation}
                 mode={previewMode ? 'preview' : 'approval'}
                 onApproved={handleStepComplete}
               />

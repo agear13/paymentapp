@@ -437,3 +437,33 @@ export function cancelPendingChangeRequests(
 export function summarizePendingChangeRequests(participant: DemoParticipant): AgreementChangeRequest[] {
   return pendingAgreementChangeRequests(participant);
 }
+
+export type SerializedAgreementChangeRequest = {
+  id: string;
+  fieldLabel: string;
+  previousValue: string;
+  suggestedValue: string;
+  reason: string;
+  classification: AgreementChangeClassification;
+  createdAt: string;
+  agreementVersionNumber: number;
+  status: string;
+  reviewNote?: string | null;
+};
+
+export function serializePendingChangeRequests(
+  participant: DemoParticipant
+): SerializedAgreementChangeRequest[] {
+  return pendingAgreementChangeRequests(participant).map((request) => ({
+    id: request.id,
+    fieldLabel: request.fieldLabel,
+    previousValue: request.previousValue,
+    suggestedValue: request.suggestedValue,
+    reason: request.reason,
+    classification: request.classification,
+    createdAt: request.createdAt,
+    agreementVersionNumber: request.agreementVersionNumber,
+    status: request.status,
+    reviewNote: request.reviewNote ?? null,
+  }));
+}

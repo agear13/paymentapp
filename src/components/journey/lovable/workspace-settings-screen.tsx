@@ -38,7 +38,7 @@ const GROUPS: SettingGroup[] = [
     icon: Building2,
     title: 'Workspace',
     items: [
-      { label: 'Business details', href: `${COMMERCIAL_OS_ROUTES.settings}/business` },
+      { label: 'Business details', href: COMMERCIAL_OS_ROUTES.businessDetails },
       { label: 'Payments & Settlement', href: COMMERCIAL_OS_ROUTES.payments },
       { label: 'Team members', href: `${COMMERCIAL_OS_ROUTES.settings}/team` },
       { label: 'Roles & permissions', href: `${COMMERCIAL_OS_ROUTES.settings}/team` },

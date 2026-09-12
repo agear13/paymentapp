@@ -9,7 +9,11 @@ import {
   formatEarningSourceDestination,
   isExternalEarningSourceParticipant,
 } from '@/lib/workflows/referral-management/earning-source';
-import { pendingAgreementChangeRequests } from '@/lib/agreements/agreement-change-request';
+import {
+  pendingAgreementChangeRequests,
+  serializePendingChangeRequests,
+  type SerializedAgreementChangeRequest,
+} from '@/lib/agreements/agreement-change-request';
 import type {
   WorkflowCoordinationAgreementStatus,
   WorkflowCoordinationCompensationKind,
@@ -57,6 +61,7 @@ export type ParticipantCoordinationView = {
     gst: string | null;
     submittedAt: string | null;
   } | null;
+  pendingChangeRequests: SerializedAgreementChangeRequest[];
 };
 
 function isFlaggedOnboarding(participant: DemoParticipant): boolean {
@@ -355,6 +360,7 @@ export function buildParticipantCoordinationView(
             gst: gstLabel(participant),
             submittedAt: participant.supplierOnboarding?.submission?.submittedAt ?? null,
           },
+    pendingChangeRequests: serializePendingChangeRequests(participant),
   };
 }
 

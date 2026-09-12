@@ -547,10 +547,10 @@ export function MerchantSettingsForm({
           </div>
           ) : (
           <div className="rounded-xl border border-border bg-secondary/30 px-4 py-3 text-[12.5px] text-ink-soft">
-            Update how your organization appears on invoices and payment pages. Changes here do
-            not affect payment provider account IDs — use{' '}
+            Update how your organization appears on invoices, payment pages, and affiliate
+            agreements. Changes here do not affect payment provider account IDs — use{' '}
             <span className="font-medium text-foreground">Save branding</span> below when you are
-            done.
+            done. Already-issued agreements keep the logo they were sent with.
           </div>
           )}
 

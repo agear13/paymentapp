@@ -144,13 +144,15 @@ function mapCompensatedParticipant(
   const workflow = deriveParticipantOperationalWorkflow(participant);
   const lifecycleAction = deriveParticipantLifecycleAction(participant);
   const onboardingStatus = effectiveOnboardingStatus(participant);
-  const needsAttention =
-    lifecycleAction.urgency === 'attention' || lifecycleAction.urgency === 'action_required';
   const setupLabel = participantSetupStatusLabel(participant, operatorApprovalRequired);
   const coordination = buildParticipantCoordinationView(participant, {
     catalogItems,
     operatorApprovalRequired,
   });
+  const needsAttention =
+    lifecycleAction.urgency === 'attention' ||
+    lifecycleAction.urgency === 'action_required' ||
+    coordination.pendingChangeRequests.length > 0;
 
   return {
     id: participant.id,
@@ -165,7 +167,9 @@ function mapCompensatedParticipant(
     approvalStatus: participant.approvalStatus ?? null,
     onboardingStatus,
     needsAttention,
-    attentionReason: needsAttention ? lifecycleAction.description : null,
+    attentionReason: needsAttention
+      ? coordination.nextActionLabel || lifecycleAction.description
+      : null,
     manageUrl: workflowParticipantHref(participant.id),
     ...coordination,
   };

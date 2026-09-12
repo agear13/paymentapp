@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import {
   dealRowToRecentDeal,
   markParticipantInviteOpened,
@@ -30,11 +30,12 @@ import {
 import { resolveAgreementPresentation } from '@/lib/agreements/agreement-presentation';
 import { loadOrganizationAgreementBranding } from '@/lib/agreements/organization-agreement-branding.server';
 import { pendingAgreementChangeRequests } from '@/lib/agreements/agreement-change-request';
+import { resolveCanonicalPublicOrigin } from '@/lib/runtime/customer-facing-url';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(
-  _request: Request,
+  request: NextRequest,
   context: { params: Promise<{ token: string }> }
 ) {
   const { token: raw } = await context.params;
@@ -192,7 +193,10 @@ export async function GET(
     }
 
     const branding = organizationId
-      ? await loadOrganizationAgreementBranding(organizationId)
+      ? await loadOrganizationAgreementBranding(
+          organizationId,
+          resolveCanonicalPublicOrigin(request)
+        )
       : null;
     const presentation = resolveAgreementPresentation(participant, branding, {
       projectName: deal.dealName,

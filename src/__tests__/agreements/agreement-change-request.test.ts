@@ -2,6 +2,7 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import {
   applyApprovedChangeToParticipant,
   classificationForField,
+  markChangeRequest,
   pendingAgreementChangeRequests,
   submitAgreementChangeRequest,
 } from '@/lib/agreements/agreement-change-request';
@@ -249,6 +250,37 @@ describe('affiliate suggested agreement changes', () => {
     expect(external.participant.audienceDiscountPct).toBe(10);
     const applied = applyApprovedChangeToParticipant(external.participant, external.request);
     expect(applied.audienceDiscountPct).toBe(15);
+  });
+
+  it('records reviewer, timestamp, and resulting version on approval', () => {
+    const submitted = submitAgreementChangeRequest(participant(), {
+      fieldKey: 'legal_name',
+      suggestedValue: 'Rachel Smith',
+      reason: 'Spelling',
+      requestId: 'chg-audit-review',
+    });
+    expect(submitted.ok).toBe(true);
+    if (!submitted.ok) return;
+    const issued = issueSupersedingAgreementVersion({
+      participant: resetAgreementForNewVersion(
+        applyApprovedChangeToParticipant(submitted.participant, submitted.request)
+      ),
+      branding,
+      sourceChangeRequestId: submitted.request.id,
+    });
+    const marked = markChangeRequest(issued.participant, submitted.request.id, {
+      status: 'approved',
+      reviewedBy: 'danielle-user',
+      reviewedAt: '2026-09-10T00:00:00.000Z',
+      resultingAgreementVersionId: issued.next.versionId,
+    });
+    expect(marked.request).toMatchObject({
+      id: 'chg-audit-review',
+      status: 'approved',
+      reviewedBy: 'danielle-user',
+      reviewedAt: '2026-09-10T00:00:00.000Z',
+      resultingAgreementVersionId: issued.next.versionId,
+    });
   });
 
   it('rejects a suggestion that does not change the current value', () => {

@@ -159,7 +159,19 @@ export async function reviewParticipantAgreementChange(input: {
       organizationName: branding.legalName || branding.organizationName,
       agreementTitle: presentation.title,
       reviewNote: input.reviewNote,
+      logoUrl: branding.logoUrl,
     });
+    if (organizationId) {
+      void dispatchCommercialNotification({
+        organizationId,
+        eventKind: 'agreement_change_rejected',
+        projectId: persisted.dealId ?? ctx.row.deal_id,
+        participantId: persisted.id,
+        participantName: persisted.name,
+        idempotencySuffix: pending.id,
+        actionUrl: `/workspace/workflows/referral-management?participant=${encodeURIComponent(persisted.id)}`,
+      });
+    }
     return { participant: persisted, request: marked.request };
   }
 
@@ -187,6 +199,7 @@ export async function reviewParticipantAgreementChange(input: {
       organizationName: branding.legalName || branding.organizationName,
       agreementTitle: presentation.title,
       reviewNote: note,
+      logoUrl: branding.logoUrl,
     });
     return { participant: persisted, request: marked.request };
   }
@@ -230,6 +243,7 @@ export async function reviewParticipantAgreementChange(input: {
     organizationName: branding.legalName || branding.organizationName,
     agreementTitle: issued.next.title || defaultAgreementTitle(branding.legalName),
     workspaceUrl,
+    logoUrl: branding.logoUrl,
   });
 
   if (organizationId) {
@@ -260,6 +274,7 @@ async function notifyParticipantDecision(input: {
   agreementTitle: string;
   reviewNote?: string | null;
   workspaceUrl?: string;
+  logoUrl?: string | null;
 }) {
   const to = input.participant.email?.trim();
   if (!to) return;
@@ -275,6 +290,7 @@ async function notifyParticipantDecision(input: {
           organizationName: input.organizationName,
           agreementTitle: input.agreementTitle,
           workspaceUrl,
+          logoUrl: input.logoUrl,
         })
       : input.kind === 'clarification'
         ? buildAgreementChangeClarificationEmail({
@@ -283,6 +299,7 @@ async function notifyParticipantDecision(input: {
             agreementTitle: input.agreementTitle,
             reviewNote: input.reviewNote ?? '',
             workspaceUrl,
+            logoUrl: input.logoUrl,
           })
         : buildAgreementChangeRejectedEmail({
             participantName: input.participant.name,
@@ -290,6 +307,7 @@ async function notifyParticipantDecision(input: {
             agreementTitle: input.agreementTitle,
             reviewNote: input.reviewNote,
             workspaceUrl,
+            logoUrl: input.logoUrl,
           });
   await sendEmail({
     to,
