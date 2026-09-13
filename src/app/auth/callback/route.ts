@@ -6,6 +6,7 @@ import { recordAuthAuditEvent } from '@/lib/audit/auth-audit.server';
 import { isEmailVerified } from '@/lib/auth/email-verification';
 import { recordSuccessfulLogin } from '@/lib/auth/login-tracking.server';
 import { loggers } from '@/lib/logger';
+import { sendLifecycleEmail } from '@/lib/email/lifecycle/lifecycle-service';
 import { hasPkceCodeVerifierCookie } from '@/lib/auth/auth-cookie-storage';
 import {
   isParticipantInvitationReturn,
@@ -81,6 +82,22 @@ async function recordVerifiedLogin(input: {
     });
   }
   if (!verified) return false;
+
+  if (input.type === 'signup' || input.type === 'email') {
+    try {
+      await sendLifecycleEmail({
+        campaign: 'activation',
+        userId: input.user.id,
+        email: input.user.email ?? '',
+      });
+    } catch (error) {
+      loggers.auth.warn('activation_email_failed', {
+        userId: input.user.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  
 
   try {
     await recordSuccessfulLogin({

@@ -36,7 +36,15 @@ export function WorkspaceAdvisorPanel({
     const store = getWorkspaceAdvisorSeenStore();
     const seen = store.hasSeen();
     setFirstVisit(!seen);
-    if (!seen) store.markSeen();
+    if (!seen) {
+      store.markSeen();
+      void fetch('/api/workspace/advisor/activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'viewed_advisor' }),
+        credentials: 'include',
+      }).catch(() => {});
+    }
   }, []);
 
   useEffect(() => {

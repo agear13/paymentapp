@@ -33,6 +33,17 @@ jest.mock('@/lib/participants/participant-workspace-attribution.server', () => (
   readSourceParticipantHint: jest.fn().mockReturnValue({ kind: 'absent' }),
 }));
 
+const mockTriggerWelcome = jest.fn().mockResolvedValue({ success: true, status: 'sent' });
+const mockEmitWorkspaceCreatedEvent = jest.fn().mockResolvedValue({ emitted: true });
+
+jest.mock('@/lib/email/lifecycle/lifecycle-service', () => ({
+  triggerWelcomeOnBootstrap: (...args: unknown[]) => mockTriggerWelcome(...args),
+}));
+
+jest.mock('@/lib/email/lifecycle/resend-events', () => ({
+  emitWorkspaceCreatedEvent: (...args: unknown[]) => mockEmitWorkspaceCreatedEvent(...args),
+}));
+
 const mockCreate = jest.fn();
 const mockUserOrgCreate = jest.fn();
 const mockSettingsCreate = jest.fn();
@@ -94,6 +105,20 @@ describe('POST /api/onboarding/bootstrap-workspace trial assignment', () => {
 
     expect(response.status).toBe(201);
     expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockTriggerWelcome).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'user-1',
+        organizationId: 'org-new',
+        email: 'operator@company.com',
+        workspaceName: 'Acme',
+      })
+    );
+    expect(mockEmitWorkspaceCreatedEvent).toHaveBeenCalledWith({
+      email: 'operator@company.com',
+      userId: 'user-1',
+      organizationId: 'org-new',
+      workspaceName: 'Acme',
+    });
     const data = mockCreate.mock.calls[0][0].data as {
       subscription_plan: string;
       subscription_status: string;
@@ -137,6 +162,8 @@ describe('POST /api/onboarding/bootstrap-workspace trial assignment', () => {
     expect(prisma.merchant_settings.updateMany).not.toHaveBeenCalled();
     expect(saveOperatorOnboardingState).not.toHaveBeenCalled();
     expect(runOperationalInitializationConvergence).not.toHaveBeenCalled();
+    expect(mockTriggerWelcome).not.toHaveBeenCalled();
+    expect(mockEmitWorkspaceCreatedEvent).not.toHaveBeenCalled();
   });
 
   it('uses the shared journey trial payload helper', () => {

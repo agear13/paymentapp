@@ -21,6 +21,14 @@ jest.mock('@/lib/operations/onboarding/run-operational-initialization-convergenc
 
 const mockAttach = jest.fn();
 
+jest.mock('@/lib/email/lifecycle/lifecycle-service', () => ({
+  triggerWelcomeOnBootstrap: jest.fn().mockResolvedValue({ success: true, status: 'sent' }),
+}));
+
+jest.mock('@/lib/email/lifecycle/resend-events', () => ({
+  emitWorkspaceCreatedEvent: jest.fn().mockResolvedValue({ emitted: true }),
+}));
+
 jest.mock('@/lib/participants/participant-workspace-attribution.server', () => {
   const actual = jest.requireActual(
     '@/lib/participants/participant-workspace-attribution.server'

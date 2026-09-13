@@ -44,6 +44,17 @@ jest.mock('@/lib/deal-network-demo/pilot-snapshot.server', () => ({
   getPilotSnapshotForUser: (...args: unknown[]) => mockPilotSnapshot(...args),
 }));
 
+const mockTriggerWelcome = jest.fn().mockResolvedValue({ success: true, status: 'sent' });
+const mockEmitWorkspaceCreatedEvent = jest.fn().mockResolvedValue({ emitted: true });
+
+jest.mock('@/lib/email/lifecycle/lifecycle-service', () => ({
+  triggerWelcomeOnBootstrap: (...args: unknown[]) => mockTriggerWelcome(...args),
+}));
+
+jest.mock('@/lib/email/lifecycle/resend-events', () => ({
+  emitWorkspaceCreatedEvent: (...args: unknown[]) => mockEmitWorkspaceCreatedEvent(...args),
+}));
+
 const mockOrgCreate = jest.fn();
 const mockOrgUpdate = jest.fn();
 const mockUserOrgCreate = jest.fn();
@@ -110,6 +121,8 @@ function expectReuseDidNotMutateWorkspace() {
   expect(mockPilotSnapshot).not.toHaveBeenCalled();
   expect(mockParticipantUpdate).not.toHaveBeenCalled();
   expect(mockTransitionCreate).not.toHaveBeenCalled();
+  expect(mockTriggerWelcome).not.toHaveBeenCalled();
+  expect(mockEmitWorkspaceCreatedEvent).not.toHaveBeenCalled();
 }
 
 describe('POST /api/onboarding/bootstrap-workspace reuse hardening', () => {
@@ -266,6 +279,22 @@ describe('POST /api/onboarding/bootstrap-workspace reuse hardening', () => {
       hint: { kind: 'hint', value: 'p-invite-1' },
     });
     expect(mockSettingsUpdateMany).not.toHaveBeenCalled();
+    expect(mockTriggerWelcome).toHaveBeenCalledWith({
+      userId: 'user-1',
+      organizationId: 'org-new',
+      email: 'alex@example.com',
+      workspaceName: 'Studio North',
+      userName: null,
+    });
+    expect(mockEmitWorkspaceCreatedEvent).toHaveBeenCalledWith({
+      email: 'alex@example.com',
+      userId: 'user-1',
+      organizationId: 'org-new',
+      workspaceName: 'Studio North',
+    });
+    expect(mockTriggerWelcome.mock.invocationCallOrder[0]).toBeLessThan(
+      mockEmitWorkspaceCreatedEvent.mock.invocationCallOrder[0]
+    );
   });
 });
 

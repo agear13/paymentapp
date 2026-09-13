@@ -63,6 +63,12 @@ jest.mock('@/lib/logger', () => ({
   },
 }));
 
+const mockSendLifecycleEmail = jest.fn();
+
+jest.mock('@/lib/email/lifecycle/lifecycle-service', () => ({
+  sendLifecycleEmail: (...args: unknown[]) => mockSendLifecycleEmail(...args),
+}));
+
 import { GET as authCallback } from '@/app/auth/callback/route';
 
 const VERIFIED_USER = {
@@ -133,6 +139,7 @@ describe('auth callback merchant signup', () => {
       error: null,
     });
     mockGetUser.mockResolvedValue({ data: { user: VERIFIED_USER }, error: null });
+    mockSendLifecycleEmail.mockResolvedValue({ success: true, status: 'sent' });
   });
 
   it('sends a newly verified merchant to Commercial OS provisioning when redirectedFrom is missing', async () => {
@@ -145,6 +152,11 @@ describe('auth callback merchant signup', () => {
       `https://www.provvypay.com${COMMERCIAL_OS_ROUTES.journeyPostAuth}`
     );
     expect(response.headers.get('location')).not.toContain('/onboarding');
+    expect(mockSendLifecycleEmail).toHaveBeenCalledWith({
+      campaign: 'activation',
+      userId: VERIFIED_USER.id,
+      email: VERIFIED_USER.email,
+    });
   });
 
   it('honours an explicit journey redirectedFrom after verification', async () => {
@@ -184,6 +196,24 @@ describe('auth callback merchant signup', () => {
     expect(response.headers.get('location')).toContain(
       encodeURIComponent(COMMERCIAL_OS_ROUTES.journeyPostAuth)
     );
+  });
+
+  it('still routes new merchants to provisioning when activation email fails', async () => {
+    mockSendLifecycleEmail.mockRejectedValue(new Error('resend unavailable'));
+
+    const response = await authCallback(
+      callbackRequest({
+        code: 'signup-code',
+        type: 'signup',
+        redirectedFrom: COMMERCIAL_OS_ROUTES.journeyPostAuth,
+      })
+    );
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe(
+      `https://www.provvypay.com${COMMERCIAL_OS_ROUTES.journeyPostAuth}`
+    );
+    expect(mockRecordSuccessfulLogin).toHaveBeenCalled();
   });
 
   it('still routes new merchants to provisioning when login tracking fails', async () => {

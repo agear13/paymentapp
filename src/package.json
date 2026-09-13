@@ -19,6 +19,7 @@
     "typecheck:repo": "tsc --noEmit",
     "check:duplicate-imports": "node scripts/scan-duplicate-imports.mjs",
     "check:circular-deps": "node scripts/scan-circular-dependencies.mjs",
+    "lifecycle:catchup-dry-run": "tsx scripts/lifecycle-catchup-dry-run.ts",
     "verify:operational-root-causes": "tsx scripts/verify-operational-root-causes.ts",
     "verify:runtime-ui-fixes": "tsx scripts/runtime-verify-ui-fixes.ts",
     "verify:runtime-ui-fixes:e2e": "playwright test e2e/runtime-ui-fixes-harness.spec.ts",

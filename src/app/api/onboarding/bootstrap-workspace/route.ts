@@ -13,6 +13,8 @@ import {
   readSourceParticipantHint,
 } from '@/lib/participants/participant-workspace-attribution.server';
 import { log } from '@/lib/logger';
+import { triggerWelcomeOnBootstrap } from '@/lib/email/lifecycle/lifecycle-service';
+import { emitWorkspaceCreatedEvent } from '@/lib/email/lifecycle/resend-events';
 
 const schema = z.object({
   workspaceName: z.string().min(2).max(255),
@@ -133,6 +135,28 @@ export async function POST(request: NextRequest) {
     organizationId: result.organization.id,
     triggerSource: 'bootstrap-workspace',
   });
+
+  if (user.email) {
+    void triggerWelcomeOnBootstrap({
+      userId: user.id,
+      organizationId: result.organization.id,
+      email: user.email,
+      workspaceName: body.workspaceName.trim(),
+      userName: (user.user_metadata?.full_name as string | undefined) ?? null,
+    });
+    void emitWorkspaceCreatedEvent({
+      email: user.email,
+      userId: user.id,
+      organizationId: result.organization.id,
+      workspaceName: body.workspaceName.trim(),
+    }).catch((error) => {
+      log.warn('workspace.created event invocation failed open', {
+        userId: user.id,
+        organizationId: result.organization.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
 
   return apiResponse(
     {

@@ -259,6 +259,7 @@ model organizations {
   sourced_participants               deal_network_pilot_participants[]  @relation("ParticipantSourceOrganization")
   converted_participants             deal_network_pilot_participants[]  @relation("ParticipantConvertedOrganization")
   origin_source_payment_links        payment_links[]                    @relation("PaymentLinkOriginSourceOrganization")
+  lifecycle_email_sends              lifecycle_email_sends[]
 }
 
 /// Immutable operational onboarding / bootstrap / graph initialization transitions.
@@ -681,6 +682,27 @@ model email_logs {
   @@index([status, created_at(sort: Desc)])
   @@index([to_email])
   @@index([notification_id])
+}
+
+model lifecycle_email_sends {
+  id                  String         @id @default(uuid()) @db.Uuid
+  user_id             String         @db.VarChar(255)
+  organization_id     String?        @db.Uuid
+  email               String         @db.VarChar(255)
+  campaign_key        String         @db.VarChar(64)
+  status              String         @db.VarChar(32)
+  sent_at             DateTime?      @db.Timestamptz(6)
+  created_at          DateTime       @default(now()) @db.Timestamptz(6)
+  provider_message_id String?        @db.VarChar(255)
+  error_message       String?
+  metadata            Json?
+  organizations       organizations? @relation(fields: [organization_id], references: [id], onDelete: SetNull)
+
+  @@unique([user_id, campaign_key])
+  @@index([email, campaign_key])
+  @@index([organization_id])
+  @@index([status, created_at(sort: Desc)])
+  @@index([campaign_key, status])
 }
 
 model notification_preferences {
