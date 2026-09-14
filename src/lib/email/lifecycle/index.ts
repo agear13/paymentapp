@@ -4,4 +4,5 @@ export * from './server-advisor-signal';
 export * from './lifecycle-service';
 export * from './resend-events';
 export * from './catchup-dry-run';
+export * from './activation-recovery-dry-run';
 export * from './templates';

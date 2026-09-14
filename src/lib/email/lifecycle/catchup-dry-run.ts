@@ -76,7 +76,7 @@ function isValidEmail(email: string): boolean {
   return Boolean(email && email.includes('@'));
 }
 
-function isVerifiedUser(user: UserCandidate): boolean {
+export function isVerifiedUser(user: UserCandidate): boolean {
   return Boolean(
     user.emailConfirmedAt ||
       (user.appMetadata?.provider && user.appMetadata.provider !== 'email')
@@ -94,7 +94,7 @@ function emptyExclusionBreakdown(): Record<string, number> {
   };
 }
 
-async function defaultListUsers(): Promise<UserCandidate[]> {
+export async function listAuthUserCandidates(): Promise<UserCandidate[]> {
   try {
     const admin = createAdminClient();
     const { data, error } = await admin.auth.admin.listUsers({ perPage: 1000 });
@@ -182,7 +182,7 @@ async function defaultHasPriorSend(
 export async function evaluateCatchupAudience(
   deps: CatchupDryRunDeps = {}
 ): Promise<CatchupAudienceReport> {
-  const listUsers = deps.listUsersFn ?? defaultListUsers;
+  const listUsers = deps.listUsersFn ?? listAuthUserCandidates;
   const getUserWorkspaces = deps.getUserWorkspacesFn ?? defaultGetUserWorkspaces;
   const hasPriorSend = deps.hasPriorSendFn ?? defaultHasPriorSend;
   const isExcluded = deps.isExcludedEmailFn ?? isCatchupExcludedEmail;

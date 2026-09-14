@@ -12,6 +12,7 @@ import { hasMeaningfulAdvisorUsage } from '@/lib/email/lifecycle/server-advisor-
 import {
   buildWelcomeEmail,
   buildActivationEmail,
+  buildActivationRecoveryEmail,
   buildExistingUserCatchupEmail,
   buildAiAdvisorEmail,
   buildConsultationEmail,
@@ -214,8 +215,30 @@ export async function checkLifecycleEligibility(
   }
 
   // This final gate protects direct/stale/bypassed catch-up callers before any dispatch work.
-  if (campaign === 'existing_user_catchup' && isCatchupExcludedEmail(email)) {
+  if (
+    (campaign === 'existing_user_catchup' || campaign === 'activation_recovery') &&
+    isCatchupExcludedEmail(email)
+  ) {
     return { eligible: false, reason: 'excluded_email' };
+  }
+
+  if (campaign === 'activation_recovery') {
+    if (!deps.isUserVerifiedFn) {
+      return { eligible: false, reason: 'missing_verification_check' };
+    }
+
+    const isVerified = await deps.isUserVerifiedFn(userId, email);
+    if (isVerified) {
+      return { eligible: false, reason: 'verified_email' };
+    }
+
+    const findSend = deps.findSendRecordFn ?? defaultFindSendRecord;
+    const alreadySent = await findSend(userId, campaign);
+    if (alreadySent) {
+      return { eligible: false, reason: 'already_sent' };
+    }
+
+    return { eligible: true };
   }
 
     // 1. Check verified status if verification checker provided
@@ -314,6 +337,8 @@ export function renderLifecycleTemplate(
       return buildWelcomeEmail({ userName, workspaceName, contactConfig });
     case 'activation':
       return buildActivationEmail({userName, contactConfig });
+    case 'activation_recovery':
+      return buildActivationRecoveryEmail({ userName, contactConfig });
     case 'existing_user_catchup':
       return buildExistingUserCatchupEmail({ userName, workspaceName, contactConfig });
     case 'ai_advisor':

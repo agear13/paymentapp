@@ -12,6 +12,7 @@ import { buildWelcomeEmail } from '@/lib/email/lifecycle/templates/welcome-templ
 import { buildCommunityInviteEmail } from '@/lib/email/lifecycle/templates/community-template';
 import { buildExistingUserCatchupEmail } from '@/lib/email/lifecycle/templates/existing-user-catchup-template';
 import { buildActivationEmail } from '@/lib/email/lifecycle/activation-template';
+import { buildActivationRecoveryEmail } from '@/lib/email/lifecycle/templates/activation-recovery-template';
 import { buildAiAdvisorEmail } from '@/lib/email/lifecycle/templates/ai-advisor-template';
 import { buildConsultationEmail } from '@/lib/email/lifecycle/templates/consultation-template';
 
@@ -167,6 +168,7 @@ describe('lifecycle emails cannot render loopback or support@', () => {
       buildWelcomeEmail(),
       buildExistingUserCatchupEmail(),
       buildActivationEmail(),
+      buildActivationRecoveryEmail(),
       buildAiAdvisorEmail(),
       buildConsultationEmail(),
     ];
