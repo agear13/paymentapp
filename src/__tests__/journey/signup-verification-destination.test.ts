@@ -69,6 +69,16 @@ jest.mock('@/lib/email/lifecycle/lifecycle-service', () => ({
   sendLifecycleEmail: (...args: unknown[]) => mockSendLifecycleEmail(...args),
 }));
 
+const mockConvertMarketingSubscribers = jest.fn().mockResolvedValue({
+  convertedCount: 0,
+  convertedEventEmitted: false,
+});
+
+jest.mock('@/lib/marketing/marketing-subscriber-conversion.server', () => ({
+  convertMarketingSubscribersForUser: (...args: unknown[]) =>
+    mockConvertMarketingSubscribers(...args),
+}));
+
 import { GET as authCallback } from '@/app/auth/callback/route';
 
 const VERIFIED_USER = {
@@ -154,6 +164,10 @@ describe('auth callback merchant signup', () => {
     expect(response.headers.get('location')).not.toContain('/onboarding');
     expect(mockSendLifecycleEmail).toHaveBeenCalledWith({
       campaign: 'activation',
+      userId: VERIFIED_USER.id,
+      email: VERIFIED_USER.email,
+    });
+    expect(mockConvertMarketingSubscribers).toHaveBeenCalledWith({
       userId: VERIFIED_USER.id,
       email: VERIFIED_USER.email,
     });

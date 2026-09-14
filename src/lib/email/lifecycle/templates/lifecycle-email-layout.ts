@@ -19,6 +19,11 @@ export type LifecycleEmailLayoutProps = {
   }[];
   showContactBlock?: boolean;
   contactConfig?: LifecycleContactConfig;
+  /** Overrides default workspace lifecycle footer copy when set. */
+  footerNotice?: string;
+  /** Overrides default mailto preferences link when set (e.g. signed unsubscribe URL). */
+  emailPreferencesUrl?: string;
+  emailPreferencesLabel?: string;
 };
 
 const FONT =
@@ -137,6 +142,14 @@ export function renderLifecycleEmailLayout(props: LifecycleEmailLayoutProps): {
   }
 
   const safePrivacy = escapeHtml(config.privacyUrl);
+  const footerNotice =
+    props.footerNotice ??
+    'You are receiving this product lifecycle email because you created a verified workspace on Provvy.';
+  const safeFooterNotice = escapeHtml(footerNotice);
+  const preferencesHref = props.emailPreferencesUrl
+    ? escapeHtml(props.emailPreferencesUrl)
+    : `mailto:${escapeHtml(config.supportEmail)}`;
+  const preferencesLabel = escapeHtml(props.emailPreferencesLabel ?? 'Email Preferences');
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -187,11 +200,11 @@ export function renderLifecycleEmailLayout(props: LifecycleEmailLayoutProps): {
                 <tr>
                   <td style="padding:20px 24px 28px;border-top:1px solid #3d3554;word-break:break-word;overflow-wrap:break-word;">
                     <p style="margin:0 0 8px;font-family:${FONT};font-size:12px;line-height:1.55;color:#8b8499;">
-                      You are receiving this product lifecycle email because you created a verified workspace on Provvy.
+                      ${safeFooterNotice}
                     </p>
                     <p style="margin:0;font-family:${FONT};font-size:12px;line-height:1.55;color:#8b8499;">
                       <a href="${safePrivacy}" style="color:#c4b5fd;text-decoration:underline;">Privacy Policy</a> &bull;
-                      <a href="mailto:${escapeHtml(config.supportEmail)}" style="color:#c4b5fd;text-decoration:underline;">Email Preferences</a>
+                      <a href="${preferencesHref}" style="color:#c4b5fd;text-decoration:underline;">${preferencesLabel}</a>
                     </p>
                   </td>
                 </tr>
@@ -220,9 +233,9 @@ export function renderLifecycleEmailLayout(props: LifecycleEmailLayoutProps): {
     secondaryCtasText,
     contactText,
     '---',
-    'You are receiving this product lifecycle email because you created a verified workspace on Provvy.',
+    footerNotice,
     `Privacy Policy: ${config.privacyUrl}`,
-    `Support: ${config.supportEmail}`,
+    `${props.emailPreferencesLabel ?? 'Email Preferences'}: ${props.emailPreferencesUrl ?? config.supportEmail}`,
   ]
     .filter((line) => line !== undefined)
     .join('\n');

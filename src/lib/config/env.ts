@@ -69,6 +69,10 @@ const envSchema = z.object({
   RESEND_FROM_EMAIL: z.string().optional(),
   /** Resend webhooks use Svix; set signing secret from Resend dashboard to verify requests */
   RESEND_WEBHOOK_SECRET: z.string().optional(),
+  /** Optional Resend Segment ID for website marketing subscribers */
+  RESEND_MARKETING_SEGMENT_ID: z.string().optional(),
+  /** HMAC secret for signed marketing unsubscribe links (min 32 chars in production) */
+  MARKETING_UNSUBSCRIBE_SECRET: z.string().optional(),
   /** Calendly or other demo booking URL for Agreement Analyzer nurture CTAs */
   AGREEMENT_ANALYZER_DEMO_URL: z.string().url().optional(),
   /** Calendly webhook signing key from webhook subscription creation */
@@ -189,6 +193,8 @@ function buildTimePlaceholderRecord(): Record<string, string | undefined> {
     EMAIL_FROM: process.env.EMAIL_FROM,
     RESEND_FROM_EMAIL: process.env.RESEND_FROM_EMAIL,
     RESEND_WEBHOOK_SECRET: process.env.RESEND_WEBHOOK_SECRET,
+    RESEND_MARKETING_SEGMENT_ID: process.env.RESEND_MARKETING_SEGMENT_ID,
+    MARKETING_UNSUBSCRIBE_SECRET: process.env.MARKETING_UNSUBSCRIBE_SECRET,
     AGREEMENT_ANALYZER_DEMO_URL: process.env.AGREEMENT_ANALYZER_DEMO_URL,
     CALENDLY_WEBHOOK_SIGNING_KEY: process.env.CALENDLY_WEBHOOK_SIGNING_KEY,
     ENABLE_HEDERA_PAYMENTS: process.env.ENABLE_HEDERA_PAYMENTS || 'true',
@@ -380,6 +386,7 @@ export const config = {
     apiKey: env.RESEND_API_KEY,
     from: env.EMAIL_FROM ?? env.RESEND_FROM_EMAIL,
     webhookSecret: env.RESEND_WEBHOOK_SECRET,
+    marketingSegmentId: env.RESEND_MARKETING_SEGMENT_ID,
     isConfigured: !!env.RESEND_API_KEY,
     webhooksVerified: !!env.RESEND_WEBHOOK_SECRET,
   },

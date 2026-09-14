@@ -7,6 +7,7 @@ import { isEmailVerified } from '@/lib/auth/email-verification';
 import { recordSuccessfulLogin } from '@/lib/auth/login-tracking.server';
 import { loggers } from '@/lib/logger';
 import { sendLifecycleEmail } from '@/lib/email/lifecycle/lifecycle-service';
+import { convertMarketingSubscribersForUser } from '@/lib/marketing/marketing-subscriber-conversion.server';
 import { hasPkceCodeVerifierCookie } from '@/lib/auth/auth-cookie-storage';
 import {
   isParticipantInvitationReturn,
@@ -94,6 +95,18 @@ async function recordVerifiedLogin(input: {
       loggers.auth.warn('activation_email_failed', {
         userId: input.user.id,
         error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    if (input.user.email) {
+      void convertMarketingSubscribersForUser({
+        userId: input.user.id,
+        email: input.user.email,
+      }).catch((error) => {
+        loggers.auth.warn('marketing_subscriber_conversion_failed', {
+          userId: input.user.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
     }
   }
