@@ -17,12 +17,15 @@ describe('new-user onboarding path', () => {
     expect(source).not.toContain('autonomous reconciliation');
     expect(source).not.toContain('HubSpot');
     expect(source).not.toContain('1–5');
-    expect(source).toContain('Help us understand your current setup');
+    expect(source).toContain('Let Provvy understand how you work.');
+    expect(source).toContain('AssessmentProvvyIdentity');
   });
 
   test('Intent no longer promises a designed or deployed workflow', () => {
     const source = read('components/journey/lovable/assessment-objective-screen.tsx');
-    expect(source).toContain('What do you want to get done first?');
+    expect(source).toContain('figure out where Provvy can help first');
+    expect(source).toContain('AssessmentProvvyIdentity');
+    expect(read('components/journey/lovable/assessment-provvy-identity.tsx')).toContain('ProvvyOrb');
     expect(source).not.toContain('design the right commercial workflow');
     expect(source).not.toContain('Let Provvy AI figure out where to start');
   });
@@ -49,10 +52,10 @@ describe('new-user onboarding path', () => {
     const create = read('components/journey/lovable/workspace-create-screen.tsx');
     const provision = read('components/journey/lovable/workspace-provisioning-screen.tsx');
 
-    expect(create).toContain('Start with 30 days of Provvy Professional');
-    expect(create).toContain('You can create invoices now');
-    expect(create).toContain('Add payment methods when you');
-    expect(create).toContain('Contextual');
+    expect(create).toContain('Your Provvy workspace is ready.');
+    expect(create).toContain('30 days of Provvy Professional included');
+    expect(create).toContain('create invoices and use available capabilities now');
+    expect(create).toContain('personalised intelligence');
     expect(create).toContain('Plan &amp; Billing');
     expect(create).not.toContain('payment links are ready to explore');
     expect(create).not.toContain('usage remaining');
@@ -63,9 +66,9 @@ describe('new-user onboarding path', () => {
 
     expect(provision).toContain('Creating your workspace');
     expect(provision).toContain('Setting up your Professional trial');
-    expect(provision).toContain('You can create invoices now');
-    expect(provision).toContain('Add payment methods when you are ready');
-    expect(provision).toContain('Contextual AI guidance');
+    expect(provision).toContain('Building your Provvy workspace');
+    expect(provision).toContain('using what you told me');
+    expect(provision).toContain('ProvvyOrb');
     expect(provision).toContain('Plan &amp; Billing');
     expect(provision).not.toContain('payment links are ready to explore');
     expect(provision).not.toContain('usage remaining');

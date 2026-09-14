@@ -28,6 +28,12 @@ describe('workspace advisor screen', () => {
     expect(source).not.toContain('analysing your connected systems');
     expect(source).not.toContain('Forecast next 30 days');
     expect(source).not.toContain('Which customers are slowest');
+    expect(source).toContain('PAYMENT_ADVISOR_DEMO_INTENTS');
+    expect(source).toContain('/api/advisor/ask');
+    expect(source).toContain('Payment rail intelligence');
+    expect(source).toContain('WorkspaceAdvisorChatPanel');
+    expect(source).toContain('isAdvisorChatEnabledClient');
+    expect(source).toContain('FLAGSHIP_ADVISOR_PAYMENT');
   });
 
   test('does not invent business facts when onboarding context is empty', () => {
@@ -50,7 +56,7 @@ describe('workspace advisor screen', () => {
   test('Workspace Start no longer implies a conversational Advisor', () => {
     const panel = read('components/journey/lovable/workspace-advisor-panel.tsx');
 
-    expect(panel).toContain('See what Provvy knows');
+    expect(panel).toContain('Open Provvy Advisor');
     expect(panel).not.toContain('Ask Provvy AI');
     expect(panel).toContain('buildWorkspaceAdvisorIntro');
   });

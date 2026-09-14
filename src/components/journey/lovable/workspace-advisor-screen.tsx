@@ -2,7 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowRight, Loader2, Sparkles } from 'lucide-react';
+import { isAdvisorChatEnabledClient } from '@/lib/advisor/advisor-chat-config';
+import { FLAGSHIP_ADVISOR_PAYMENT } from '@/lib/advisor/payment-advisor';
+import { PAYMENT_ADVISOR_DEMO_INTENTS } from '@/lib/advisor/payment-advisor-intents';
+import { WorkspaceAdvisorChatPanel } from '@/components/journey/lovable/workspace-advisor-chat-panel';
 import { createClient } from '@/lib/supabase/client';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
@@ -29,6 +33,7 @@ const SYSTEMS_SUPPORT =
   'Connecting systems is optional. The more you connect, the more context Provvy has later.';
 
 export function WorkspaceAdvisorScreen() {
+  const advisorChatEnabled = isAdvisorChatEnabledClient();
   const readiness = useCommercialReadinessOptional();
   const { workflows } = useDeployedWorkflows();
   const timeline = useCommercialTimeline();
@@ -37,6 +42,9 @@ export function WorkspaceAdvisorScreen() {
     objective: null,
     business: null,
   });
+  const [advisorAnswer, setAdvisorAnswer] = useState<string | null>(null);
+  const [advisorLoading, setAdvisorLoading] = useState(false);
+  const [advisorError, setAdvisorError] = useState<string | null>(null);
 
   useEffect(() => {
     const local = restoreJourneyAssessment();
@@ -104,6 +112,53 @@ export function WorkspaceAdvisorScreen() {
     timelineLoaded: !timeline.loading && !timeline.error,
     hasCommercialActivity: timeline.hasCommercialActivity,
   });
+
+  async function askPaymentAdvisor(intent: (typeof PAYMENT_ADVISOR_DEMO_INTENTS)[number]['id']) {
+    setAdvisorLoading(true);
+    setAdvisorError(null);
+    setAdvisorAnswer(null);
+
+    try {
+      const response = await fetch('/api/advisor/ask', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intent,
+          payment: {
+            origin: FLAGSHIP_ADVISOR_PAYMENT.origin,
+            destination: FLAGSHIP_ADVISOR_PAYMENT.destination,
+            amount: FLAGSHIP_ADVISOR_PAYMENT.amount,
+            sourceCurrency: FLAGSHIP_ADVISOR_PAYMENT.sourceCurrency,
+            destinationCurrency: FLAGSHIP_ADVISOR_PAYMENT.destinationCurrency,
+            priority: FLAGSHIP_ADVISOR_PAYMENT.priority,
+            transactionType: FLAGSHIP_ADVISOR_PAYMENT.transactionType,
+          },
+        }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        answer?: string;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        setAdvisorError(payload.error ?? 'Unable to reach Provvy payment intelligence.');
+        return;
+      }
+
+      if (payload.ok === false) {
+        setAdvisorError(payload.error ?? 'Provvy could not match that question.');
+        return;
+      }
+
+      setAdvisorAnswer(payload.answer ?? 'No answer returned.');
+    } catch {
+      setAdvisorError('Unable to reach Provvy payment intelligence.');
+    } finally {
+      setAdvisorLoading(false);
+    }
+  }
 
   return (
     <div className="animate-fade-up mx-auto max-w-3xl space-y-8 pb-16">
@@ -181,6 +236,47 @@ export function WorkspaceAdvisorScreen() {
           </div>
         ) : null}
       </section>
+
+      {advisorChatEnabled ? (
+        <WorkspaceAdvisorChatPanel />
+      ) : (
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-card sm:p-6">
+          <div className="text-[11px] font-medium uppercase tracking-wider text-accent-foreground">
+            Payment rail intelligence
+          </div>
+          <p className="mt-1 text-[12px] text-ink-soft">
+            Flagship demo: Australia → Indonesia, A$100,000 supplier payment — answers come from
+            deterministic payment intelligence, not a generic chatbot.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {PAYMENT_ADVISOR_DEMO_INTENTS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                disabled={advisorLoading}
+                onClick={() => void askPaymentAdvisor(item.id)}
+                className="rounded-full border border-border bg-background px-3 py-1.5 text-[12px] font-medium text-foreground hover:border-primary/40 hover:bg-accent disabled:opacity-60"
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          {advisorLoading ? (
+            <p className="mt-4 inline-flex items-center gap-2 text-[13px] text-ink-soft">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Checking payment intelligence…
+            </p>
+          ) : null}
+          {advisorError ? (
+            <p className="mt-4 text-[13px] leading-relaxed text-destructive">{advisorError}</p>
+          ) : null}
+          {advisorAnswer ? (
+            <pre className="mt-4 whitespace-pre-wrap rounded-xl border border-border bg-muted/40 p-4 text-[13px] leading-relaxed text-foreground">
+              {advisorAnswer}
+            </pre>
+          ) : null}
+        </section>
+      )}
 
       <section className="rounded-2xl border border-border bg-card p-5 shadow-card sm:p-6">
         <div className="text-[11px] font-medium uppercase tracking-wider text-accent-foreground">

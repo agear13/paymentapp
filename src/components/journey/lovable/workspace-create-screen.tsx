@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Loader2, Mail, Sparkles, Workflow } from 'lucide-react';
+import { AssessmentProvvyIdentity } from '@/components/journey/lovable/assessment-provvy-identity';
+import { ArrowLeft, ArrowRight, Check, Loader2, Mail, Workflow } from 'lucide-react';
 import {
   COMMERCIAL_OS_ROUTES,
   journeyAuthCallbackUrl,
@@ -343,26 +344,23 @@ export function WorkspaceCreateScreen() {
               <ArrowLeft className="h-3.5 w-3.5" /> Back
             </Link>
           )}
+          <AssessmentProvvyIdentity className="mb-6" />
           <div className="mb-4 inline-flex items-center gap-2 rounded-full glass px-3 py-1.5 text-[12px] text-ink-soft shadow-soft">
-            <Sparkles className="h-3 w-3 text-primary" />
-            30-day Professional trial
+            30 days of Professional included
           </div>
           <h1 className="text-balance text-4xl font-semibold tracking-[-0.03em] sm:text-5xl">
-            Start with 30 days of Provvy Professional
+            Your Provvy workspace is ready.
           </h1>
           <p className="mt-4 max-w-lg text-lg text-ink-soft">
-            You have 30 days of Provvy Professional and can start using available Professional
-            capabilities immediately. You can create invoices now. Add payment methods when you
-            are ready so customers can pay. Contextual AI guidance will introduce branding,
-            payment methods, workflows and other capabilities when they are relevant — you do not
-            need to configure everything now.
+            You&apos;ve got 30 days of Provvy Professional included. Start working now — you can
+            connect systems and customise your workspace whenever you&apos;re ready.
           </p>
 
           <div className="mt-8 space-y-2.5">
             {[
-              'Start working immediately — create invoices now and add payment methods when you are ready',
-              'Contextual AI introduces branding, payment methods and workflows when useful',
-              "Invite your team when you're ready",
+              'Start working immediately — create invoices and use available capabilities now',
+              'Provvy will introduce relevant payment methods, workflows and recommendations as it learns how you work',
+              "Connect your systems whenever you're ready for more personalised intelligence",
             ].map((line) => (
               <div key={line} className="flex items-center gap-2.5 text-[13.5px] text-foreground">
                 <div className="grid h-4 w-4 place-items-center rounded-full bg-primary/10 text-primary">

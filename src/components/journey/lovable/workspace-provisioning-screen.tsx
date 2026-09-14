@@ -3,7 +3,8 @@
 import '@/components/journey/lovable/lovable-journey.css';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { Check, Loader2, Sparkles } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
+import { ProvvyOrb } from '@/components/jarvis/provvy-orb';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { createClient } from '@/lib/supabase/client';
 import { completeJourneyOnboarding } from '@/lib/journey/complete-journey-onboarding.client';
@@ -109,13 +110,18 @@ export function WorkspaceProvisioningScreen() {
   return (
     <section className="relative flex min-h-[calc(100vh-160px)] items-center px-6 py-16 animate-fade-up">
       <div className="mx-auto w-full max-w-3xl text-center">
-        <div className="relative mx-auto grid h-24 w-24 place-items-center">
-          <div className="absolute inset-0 animate-pulse-glow rounded-full bg-gradient-purple opacity-40 blur-2xl" />
-          <div
-            className={`relative grid h-20 w-20 place-items-center rounded-3xl bg-gradient-purple text-primary-foreground shadow-glow ${done ? '' : 'animate-float'}`}
-          >
-            {done ? <Check className="h-8 w-8" /> : <Sparkles className="h-8 w-8" />}
-          </div>
+        <div className="relative mx-auto flex h-24 w-24 items-center justify-center">
+          {done ? (
+            <div className="grid h-16 w-16 place-items-center rounded-3xl bg-gradient-purple text-primary-foreground shadow-glow">
+              <Check className="h-7 w-7" />
+            </div>
+          ) : (
+            <ProvvyOrb
+              state={error ? 'idle' : 'thinking'}
+              size="sm"
+              className="landing-advisor-orb mx-auto"
+            />
+          )}
         </div>
 
         <h1 className="mt-8 text-balance text-3xl font-semibold tracking-[-0.03em] sm:text-4xl md:text-5xl">
@@ -123,14 +129,14 @@ export function WorkspaceProvisioningScreen() {
             ? 'Setup needs another try'
             : done
               ? 'Your workspace is ready'
-              : 'Setting up your workspace'}
+              : 'Building your Provvy workspace…'}
         </h1>
         <p className="mt-4 text-lg text-ink-soft">
           {error
             ? error
             : done
               ? 'Opening your workspace…'
-              : 'You have 30 days of Provvy Professional. You can create invoices now. Add payment methods when you are ready so customers can pay. Contextual AI guidance will introduce branding, payment methods, workflows and other capabilities when they are useful.'}
+              : "I'm using what you told me to set up the tools and recommendations most relevant to your business."}
         </p>
 
         <div className="mx-auto mt-10 max-w-md">

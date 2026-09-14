@@ -28,9 +28,9 @@ describe('workspace start and trial copy truthfulness', () => {
     expect(start).toContain('?create=1');
     expect(start).toContain('Operating dashboard');
     expect(start).not.toMatch(/title: 'Commercial Workspace'/);
-    expect(create).toContain('You can create invoices now');
-    expect(create).toContain('Add payment methods when you');
-    expect(provision).toContain('You can create invoices now');
+    expect(create).toContain('create invoices and use available capabilities now');
+    expect(create).toContain('connect systems and customise your workspace whenever you');
+    expect(provision).toContain('Building your Provvy workspace');
   });
 
   test('does not imply mandatory configuration or existing active workflows', () => {
@@ -39,7 +39,8 @@ describe('workspace start and trial copy truthfulness', () => {
     expect(start).not.toContain('Configuration complete');
     expect(start).not.toContain('reconcile automatically');
     expect(start).not.toContain('active workflows');
-    expect(start).toContain('Your workspace is ready');
+    expect(start).toContain('workspaceBuiltHeadline');
+    expect(start).toContain('workspaceObjectivePriorityLine');
     expect(start).toContain('Connect accounting when you are ready');
   });
 

@@ -121,6 +121,11 @@ const envSchema = z.object({
   ENABLE_GUIDED_SETUP: z.string().optional().default('false'),
   /** Client-visible guided setup flag — set alongside ENABLE_GUIDED_SETUP for UI. */
   NEXT_PUBLIC_ENABLE_GUIDED_SETUP: z.string().optional().default('false'),
+  /** Conversational workspace Advisor chat (client + server gate). */
+  NEXT_PUBLIC_ADVISOR_CHAT_ENABLED: z.string().optional().default('false'),
+  ADVISOR_CHAT_ENABLED: z.string().optional().default('false'),
+  /** OpenAI model for workspace Advisor chat orchestration. */
+  ADVISOR_CHAT_MODEL: z.string().optional(),
   /** Internal Test-as-participant portal context. Hard-disabled when NODE_ENV=production. */
   ENABLE_PARTICIPANT_TEST_CONTEXT: z.string().optional().default('false'),
   /** Alchemy API key for EVM RPC + Notify */
@@ -204,6 +209,9 @@ function buildTimePlaceholderRecord(): Record<string, string | undefined> {
     ENABLE_WISE_PAYMENTS: process.env.ENABLE_WISE_PAYMENTS || 'false',
     ENABLE_GUIDED_SETUP: process.env.ENABLE_GUIDED_SETUP || 'false',
     NEXT_PUBLIC_ENABLE_GUIDED_SETUP: process.env.NEXT_PUBLIC_ENABLE_GUIDED_SETUP || 'false',
+    NEXT_PUBLIC_ADVISOR_CHAT_ENABLED: process.env.NEXT_PUBLIC_ADVISOR_CHAT_ENABLED || 'false',
+    ADVISOR_CHAT_ENABLED: process.env.ADVISOR_CHAT_ENABLED || 'false',
+    ADVISOR_CHAT_MODEL: process.env.ADVISOR_CHAT_MODEL,
     ENABLE_PARTICIPANT_TEST_CONTEXT: process.env.ENABLE_PARTICIPANT_TEST_CONTEXT || 'false',
     NEXT_PUBLIC_SHOW_WISE_DEMO: process.env.NEXT_PUBLIC_SHOW_WISE_DEMO || 'true',
     BETA_LOCKDOWN_MODE: process.env.BETA_LOCKDOWN_MODE || 'true',
@@ -427,6 +435,9 @@ export const config = {
     guidedSetup:
       ['true', '1'].includes((env.ENABLE_GUIDED_SETUP || '').toLowerCase()) ||
       ['true', '1'].includes((env.NEXT_PUBLIC_ENABLE_GUIDED_SETUP || '').toLowerCase()),
+    advisorChat:
+      ['true', '1'].includes((env.ADVISOR_CHAT_ENABLED || '').toLowerCase()) ||
+      ['true', '1'].includes((env.NEXT_PUBLIC_ADVISOR_CHAT_ENABLED || '').toLowerCase()),
   },
   
   // Admin (B5 C4: resolved from ADMIN_EMAIL_ALLOWLIST + deprecated ADMIN_EMAILS)

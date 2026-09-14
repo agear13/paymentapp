@@ -221,6 +221,84 @@ export function deriveAdvisorSecondaryCta(input: {
   return null;
 }
 
+export function workspaceBuiltHeadline(): string {
+  return "I've built your workspace around what you told me.";
+}
+
+export function workspaceBuiltSupporting(): string {
+  return "Based on your goals and how your business works, I've started you with the tools that are most relevant.";
+}
+
+export function workspaceObjectivePriorityLine(
+  snapshot: JourneyAssessmentSnapshot
+): string | null {
+  const objective = snapshot.objective?.trim();
+  if (!objective) return null;
+
+  switch (objective) {
+    case 'reconcile':
+      return "I've prioritised reconciliation because you told me that's where you'd like to start.";
+    case 'reduce-admin':
+      return "I've prioritised reducing admin because you told me that's where you'd like to start.";
+    case 'paid-faster':
+      return "I've prioritised payment and collections because you told me getting paid faster is your priority.";
+    case 'forecast':
+      return "I've prioritised cashflow visibility because you told me forecasting matters most.";
+    case 'revenue-share':
+      return "I've prioritised revenue sharing because that's where you'd like to start.";
+    case 'reporting':
+      return "I've prioritised reporting because you told me understanding operations matters most.";
+    case 'other':
+    default:
+      return null;
+  }
+}
+
+export type WorkspaceFirstStep = {
+  body: string;
+  ctaLabel: string;
+  destination: string;
+};
+
+function conversationalFirstStepBody(
+  objective: string | undefined,
+  recommendation: WorkspaceRecommendation
+): string | null {
+  if (
+    (objective === 'reconcile' || objective === 'reduce-admin') &&
+    recommendation.kind === 'accounting'
+  ) {
+    return "Connect your accounting system first. That will give me the context I need to help automate reconciliation and surface exceptions.";
+  }
+  if (objective === 'paid-faster' && recommendation.kind === 'payment_rail') {
+    return "Start by connecting your invoicing or accounting system. That will let me see what's outstanding and identify where cash is getting stuck.";
+  }
+  return null;
+}
+
+export function deriveWorkspaceFirstStep(input: {
+  snapshot: JourneyAssessmentSnapshot;
+  recommendation: WorkspaceRecommendation | null;
+}): WorkspaceFirstStep {
+  const { snapshot, recommendation } = input;
+  const objective = snapshot.objective?.trim();
+
+  if (!recommendation) {
+    return {
+      body: "Connect a business system to give me more context. I'll then recommend the best next step for your business.",
+      ctaLabel: 'Connect your business →',
+      destination: COMMERCIAL_OS_ROUTES.connected,
+    };
+  }
+
+  return {
+    body:
+      conversationalFirstStepBody(objective, recommendation) ?? recommendation.description,
+    ctaLabel: `${recommendation.actionLabel} →`,
+    destination: recommendation.destination,
+  };
+}
+
 export function buildWorkspaceAdvisorIntro(input: {
   snapshot: JourneyAssessmentSnapshot;
   workspace: WorkspaceAdvisorWorkspaceState;

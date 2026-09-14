@@ -15,8 +15,8 @@ import {
   Plus,
   ReceiptText,
   RefreshCw,
-  Sparkles,
 } from 'lucide-react';
+import { AssessmentProvvyIdentity } from '@/components/journey/lovable/assessment-provvy-identity';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { useEntitlements } from '@/hooks/use-entitlements';
 import { buildInstalledWorkspaceActions } from '@/lib/journey/installed-workflow-workspace-actions';
@@ -32,7 +32,13 @@ import {
   restoreJourneyAssessment,
   type JourneyAssessmentSnapshot,
 } from '@/lib/journey/journey-assessment-storage.client';
-import { snapshotFromOnboardingPayload } from '@/lib/journey/workspace-advisor-intro';
+import {
+  deriveWorkspaceFirstStep,
+  snapshotFromOnboardingPayload,
+  workspaceBuiltHeadline,
+  workspaceBuiltSupporting,
+  workspaceObjectivePriorityLine,
+} from '@/lib/journey/workspace-advisor-intro';
 import {
   buildWorkspaceRecommendationState,
   deriveWorkspaceRecommendation,
@@ -152,19 +158,32 @@ export function WorkspaceStartScreen() {
     [workflows]
   );
 
+  const workspaceState = useMemo(
+    () =>
+      buildWorkspaceRecommendationState({
+        xeroConnected: readiness?.connection.connected === true,
+        deployedWorkflowSlugs,
+        readinessKnown: Boolean(readiness && !readiness.loading),
+        merchantRails: readiness?.merchantRails,
+      }),
+    [readiness, deployedWorkflowSlugs]
+  );
+
   const recommendation = useMemo(
     () =>
       deriveWorkspaceRecommendation({
         snapshot,
-        workspace: buildWorkspaceRecommendationState({
-          xeroConnected: readiness?.connection.connected === true,
-          deployedWorkflowSlugs,
-          readinessKnown: Boolean(readiness && !readiness.loading),
-          merchantRails: readiness?.merchantRails,
-        }),
+        workspace: workspaceState,
       }),
-    [snapshot, readiness, deployedWorkflowSlugs]
+    [snapshot, workspaceState]
   );
+
+  const firstStep = useMemo(
+    () => deriveWorkspaceFirstStep({ snapshot, recommendation }),
+    [snapshot, recommendation]
+  );
+
+  const priorityLine = useMemo(() => workspaceObjectivePriorityLine(snapshot), [snapshot]);
 
   const installedWorkflowCards = useMemo(
     () => buildInstalledWorkspaceActions(workflows),
@@ -185,17 +204,19 @@ export function WorkspaceStartScreen() {
     <section className="relative px-6 pt-14 pb-24 animate-fade-up">
       <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-[1fr_380px]">
         <div>
-          <div className="inline-flex items-center gap-2 rounded-full glass px-3 py-1.5 text-[12px] text-ink-soft shadow-soft">
-            <Check className="h-3.5 w-3.5 text-primary" />
-            Your workspace is ready
-          </div>
-          <h1 className="mt-4 text-balance text-4xl font-semibold tracking-[-0.03em] sm:text-5xl">
-            Where would you like to start?
-          </h1>
-          <p className="mt-3 max-w-xl text-lg text-ink-soft">
-            Create or manage invoices whenever you are ready. Connecting accounting, payment rails or
-            other systems is optional.
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-soft">
+            YOUR PROVVY WORKSPACE
           </p>
+          <AssessmentProvvyIdentity className="mt-4" />
+          <h1 className="mt-4 text-balance text-4xl font-semibold tracking-[-0.03em] sm:text-5xl">
+            {workspaceBuiltHeadline()}
+          </h1>
+          <p className="mt-3 max-w-xl text-lg text-ink-soft">{workspaceBuiltSupporting()}</p>
+          {priorityLine ? (
+            <p className="mt-3 max-w-xl text-[15px] font-medium leading-snug text-foreground">
+              {priorityLine}
+            </p>
+          ) : null}
           <p className="mt-3 text-[13px] text-ink-soft">
             {activeProfessionalTrial ? 'You are on an active Professional trial. ' : null}
             <Link href={COMMERCIAL_OS_ROUTES.planBilling} className="font-medium text-primary hover:underline">
@@ -204,10 +225,24 @@ export function WorkspaceStartScreen() {
             is where you can check your current plan, trial status and upgrade options.
           </p>
 
+          <div className="mt-8 rounded-2xl border border-primary/20 bg-card p-5 shadow-card">
+            <AssessmentProvvyIdentity supportingLine="Here's what I'd do first." />
+            <p className="mt-3 text-[13px] leading-relaxed text-ink-soft">{firstStep.body}</p>
+            <Link
+              href={firstStep.destination}
+              onClick={() => setSelected('provvy-first-step')}
+              className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-foreground px-4 py-2.5 text-[13px] font-medium text-background transition-transform hover:scale-[1.01]"
+            >
+              {firstStep.ctaLabel}
+            </Link>
+          </div>
+
           <div className="mt-10">
-            <h2 className="text-[13px] font-semibold tracking-tight text-foreground">Start working</h2>
+            <h2 className="text-[13px] font-semibold tracking-tight text-foreground">
+              Here&apos;s what you can work on
+            </h2>
             <p className="mt-1 text-[13px] text-ink-soft">
-              Core workflows you can begin immediately.
+              Capabilities available in your workspace — start wherever makes sense.
             </p>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {CARDS.map((c, i) => {
@@ -279,48 +314,30 @@ export function WorkspaceStartScreen() {
             </div>
           </div>
 
-          {recommendation ? (
-            <div className="mt-10">
-              <h2 className="text-[13px] font-semibold tracking-tight text-foreground">
-                Recommended for you
-              </h2>
-              <p className="mt-1 text-[13px] text-ink-soft">
-                Optional — based on what you told us during setup.
-              </p>
-              <button
-                type="button"
-                onClick={() =>
-                  launch({ id: `recommendation-${recommendation.kind}`, to: recommendation.destination })
-                }
-                aria-label={recommendation.title}
-                className="group relative mt-4 w-full overflow-hidden rounded-2xl border border-primary/30 bg-card p-5 text-left shadow-card transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-glow focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-purple text-primary-foreground shadow-glow">
-                    <Sparkles className="h-4 w-4" />
-                  </div>
-                  <span className="inline-flex items-center rounded-full border border-primary/30 bg-accent px-2 py-0.5 text-[11px] font-medium text-accent-foreground">
-                    Optional
-                  </span>
-                </div>
-                <div className="mt-4 text-[15px] font-semibold tracking-tight text-foreground">
-                  {recommendation.title}
-                </div>
-                <div className="mt-1 text-[13px] text-ink-soft">{recommendation.description}</div>
-                <div className="mt-4 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-primary opacity-80 transition-opacity group-hover:opacity-100">
-                  {selected === `recommendation-${recommendation.kind}`
-                    ? 'Opening'
-                    : recommendation.actionLabel}
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </div>
-              </button>
-            </div>
-          ) : null}
+          <div className="mt-10 rounded-2xl border border-border bg-card/60 p-5">
+            <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
+              Want to add more to your workspace?
+            </h2>
+            <p className="mt-2 text-[13px] text-ink-soft">
+              Explore workflows Provvy can add as you need them.
+            </p>
+            <p className="mt-2 text-[13px] text-ink-soft">
+              I&apos;ll recommend workflows based on what I learn about your business.
+            </p>
+            <Link
+              href={COMMERCIAL_OS_ROUTES.workflows}
+              className="mt-4 inline-flex items-center gap-1.5 text-[13px] font-medium text-primary hover:underline"
+            >
+              Explore Workflow Library
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
         </div>
 
         <WorkspaceAdvisorPanel
           snapshot={snapshot}
           deployedWorkflowSlugs={deployedWorkflowSlugs}
+          hidePrimaryRecommendation
         />
       </div>
     </section>

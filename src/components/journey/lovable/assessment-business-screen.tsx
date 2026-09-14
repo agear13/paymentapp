@@ -7,6 +7,7 @@ import {
 } from '@/lib/journey/journey-assessment-storage.client';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
+import { AssessmentProvvyIdentity } from '@/components/journey/lovable/assessment-provvy-identity';
 import { ArrowRight, ArrowLeft } from 'lucide-react';
 
 const INDUSTRIES = [
@@ -50,12 +51,13 @@ export function AssessmentBusinessScreen() {
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Back
         </Link>
+        <AssessmentProvvyIdentity className="mb-6" />
         <h1 className="text-balance text-4xl font-semibold tracking-[-0.03em] sm:text-5xl">
-          Help us understand your current setup
+          Let Provvy understand how you work.
         </h1>
         <p className="mt-3 max-w-xl text-lg text-ink-soft">
-          Optional. Skip anything that doesn&apos;t apply — you don&apos;t need accounting software
-          or connected systems to continue.
+          These details help me make better recommendations. Skip anything that doesn&apos;t apply
+          — you can connect systems later.
         </p>
 
         <div className="mt-10 space-y-8">

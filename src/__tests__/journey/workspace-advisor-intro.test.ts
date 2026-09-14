@@ -13,10 +13,14 @@ import {
   collectAdvisorFindings,
   deriveAdvisorActivityNote,
   deriveAdvisorSecondaryCta,
+  deriveWorkspaceFirstStep,
   recommendedWorkflowSlug,
   snapshotFromOnboardingPayload,
+  workspaceBuiltHeadline,
+  workspaceObjectivePriorityLine,
   workspaceStartCardIdForObjective,
 } from '@/lib/journey/workspace-advisor-intro';
+import { deriveWorkspaceRecommendation } from '@/lib/journey/workspace-recommendation';
 import {
   createLocalWorkspaceAdvisorSeenStore,
   WORKSPACE_ADVISOR_SEEN_STORAGE_KEY,
@@ -70,6 +74,33 @@ describe('workspace advisor intro', () => {
     expect(advisorDisplayName({ fullName: 'Lee Chen', email: 'lee@example.com' })).toBe('Lee');
     expect(advisorDisplayName({ fullName: null, email: 'mina@example.com' })).toBe('mina');
     expect(advisorDisplayName({ fullName: null, email: null })).toBeNull();
+  });
+
+  test('builds workspace payoff copy from real objective data only', () => {
+    expect(workspaceBuiltHeadline()).toBe("I've built your workspace around what you told me.");
+    expect(
+      workspaceObjectivePriorityLine({ objective: 'reconcile', business: null })
+    ).toMatch(/prioritised reconciliation/i);
+    expect(
+      workspaceObjectivePriorityLine({ objective: 'paid-faster', business: null })
+    ).toMatch(/getting paid faster/i);
+    expect(workspaceObjectivePriorityLine({ objective: null, business: null })).toBeNull();
+
+    const snapshot = {
+      objective: 'reconcile',
+      business: { accounting: 'Xero', challenge: 'Manual reconciliation' },
+    };
+    const recommendation = deriveWorkspaceRecommendation({
+      snapshot,
+      workspace: emptyWorkspace,
+    });
+    const firstStep = deriveWorkspaceFirstStep({ snapshot, recommendation });
+    expect(firstStep.body).toMatch(/Connect your accounting system first/i);
+    expect(firstStep.destination).toBe(COMMERCIAL_OS_ROUTES.connected);
+
+    const fallback = deriveWorkspaceFirstStep({ snapshot: { objective: null, business: null }, recommendation: null });
+    expect(fallback.body).toMatch(/Connect a business system/i);
+    expect(fallback.ctaLabel).toBe('Connect your business →');
   });
 
   test('paid-faster keeps setup findings and recommends payment rails as optional guidance', () => {
@@ -234,23 +265,30 @@ describe('Advisor secondary CTA', () => {
 });
 
 describe('workspace start screen advisor panel', () => {
-  test('keeps universal start-working cards and treats recommendations as optional', () => {
+  test('leads with Provvy narrative, first recommendation, then workspace actions', () => {
     const source = fs.readFileSync(
       path.join(process.cwd(), 'components/journey/lovable/workspace-start-screen.tsx'),
       'utf8'
     );
 
     const cardsRenderAt = source.indexOf('{CARDS.map');
-    const recommendationAt = source.indexOf('{recommendation ?');
+    const firstStepAt = source.indexOf('firstStep.body');
 
     expect(source).toContain('WorkspaceAdvisorPanel');
-    expect(source).toContain('Start working');
-    expect(source).toContain('Recommended for you');
+    expect(source).toContain('YOUR PROVVY WORKSPACE');
+    expect(source).toContain('workspaceBuiltHeadline');
+    expect(source).toContain('deriveWorkspaceFirstStep');
+    expect(source).toContain("Here's what I'd do first.");
+    expect(source).toContain('what you can work on');
+    expect(source).toContain('Explore Workflow Library');
+    expect(source).toContain('AssessmentProvvyIdentity');
     expect(source).toContain('Create Invoice');
     expect(source).toContain('Manage Invoices');
     expect(source).toContain('planBilling');
+    expect(source).toContain('hidePrimaryRecommendation');
     expect(cardsRenderAt).toBeGreaterThan(-1);
-    expect(recommendationAt).toBeGreaterThan(cardsRenderAt);
+    expect(firstStepAt).toBeGreaterThan(-1);
+    expect(firstStepAt).toBeLessThan(cardsRenderAt);
     expect(source).toContain('buildWorkspaceRecommendationState');
     expect(source).not.toContain('workspaceStartCardIdForObjective');
     expect(source).not.toContain('recommendedWorkflowSlug');
@@ -258,6 +296,7 @@ describe('workspace start screen advisor panel', () => {
     expect(source).not.toContain('Expected impact');
     expect(source).not.toContain("business.industry || 'Professional services'");
     expect(source).not.toMatch(/['"]Live['"]/);
+    expect(source).not.toContain('Where would you like to start?');
   });
 
   test('payment rails page exposes a providers section id for the guidance hash', () => {

@@ -12,6 +12,7 @@ import {
   Sparkles,
   Check,
 } from 'lucide-react';
+import { AssessmentProvvyIdentity } from '@/components/journey/lovable/assessment-provvy-identity';
 import { persistJourneyObjective } from '@/lib/journey/journey-assessment-storage.client';
 
 
@@ -38,18 +39,16 @@ export function AssessmentObjectiveScreen() {
   return (
     <section className="relative px-6 pt-16 pb-24 animate-fade-up">
       <div className="mx-auto max-w-5xl">
-        <div className="mx-auto mb-3 inline-flex items-center gap-2 rounded-full glass px-3 py-1.5 text-[12px] text-ink-soft shadow-soft">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
-          </span>
-          A few questions
-        </div>
+        <AssessmentProvvyIdentity
+          className="mb-6"
+          supportingLine="I'll use this to understand what matters most to your business."
+        />
         <h1 className="text-balance text-4xl font-semibold tracking-[-0.03em] sm:text-5xl md:text-6xl">
-          What do you want to get done first?
+          Let&apos;s figure out where Provvy can help first.
         </h1>
         <p className="mt-4 max-w-2xl text-lg text-ink-soft">
-          This helps Provvy suggest a useful next step. You can start working either way.
+          Tell me what you&apos;re trying to improve. I&apos;ll use this to build the right workspace
+          and recommend what to connect.
         </p>
 
         <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

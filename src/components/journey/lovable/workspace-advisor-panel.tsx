@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+import { AssessmentProvvyIdentity } from '@/components/journey/lovable/assessment-provvy-identity';
 import { createClient } from '@/lib/supabase/client';
+import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
 import {
   advisorDisplayName,
@@ -14,9 +16,9 @@ import { getWorkspaceAdvisorSeenStore } from '@/lib/journey/workspace-advisor-se
 import type { JourneyAssessmentSnapshot } from '@/lib/journey/journey-assessment-storage.client';
 
 const INTRO_BODY =
-  "I've used what you told us during setup to understand your business. You can start working now — recommendations here are optional.";
+  "I've used what you told me during setup to shape this workspace. You can start working now — recommendations are optional.";
 
-const RETURN_BODY = "Here's an optional next step, based on what you told us during setup.";
+const RETURN_BODY = "Here's what I know from your setup so far.";
 
 const SYSTEMS_SUPPORT =
   'Connecting systems is optional. The more you connect, the more context Provvy has later.';
@@ -24,9 +26,11 @@ const SYSTEMS_SUPPORT =
 export function WorkspaceAdvisorPanel({
   snapshot,
   deployedWorkflowSlugs = [],
+  hidePrimaryRecommendation = false,
 }: {
   snapshot: JourneyAssessmentSnapshot;
   deployedWorkflowSlugs?: string[];
+  hidePrimaryRecommendation?: boolean;
 }) {
   const readiness = useCommercialReadinessOptional();
   const [displayName, setDisplayName] = useState<string | null>(null);
@@ -79,17 +83,7 @@ export function WorkspaceAdvisorPanel({
   return (
     <aside className="lg:sticky lg:top-28 lg:self-start">
       <div className="rounded-2xl border border-primary/20 bg-card p-5 shadow-card">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-purple text-primary-foreground shadow-glow">
-              <Sparkles className="h-4 w-4" />
-            </div>
-            <div>
-              <div className="text-[14px] font-semibold tracking-tight">Provvy AI Advisor</div>
-              <div className="text-[11px] text-ink-soft">{intro.statusLabel}</div>
-            </div>
-          </div>
-        </div>
+        <AssessmentProvvyIdentity />
 
         {firstVisit === null ? (
           <div className="mt-5 h-24 animate-pulse rounded-xl bg-secondary/60" />
@@ -117,7 +111,7 @@ export function WorkspaceAdvisorPanel({
               </div>
             ) : null}
 
-            {intro.recommendation ? (
+            {!hidePrimaryRecommendation && intro.recommendation ? (
               <div className="rounded-2xl border border-primary/20 bg-accent p-4">
                 <div className="text-[11px] font-medium uppercase tracking-wider text-accent-foreground">
                   Recommended next step
@@ -156,10 +150,22 @@ export function WorkspaceAdvisorPanel({
             ) : null}
 
             <Link
+              href={`${COMMERCIAL_OS_ROUTES.accountPreferences}?focus=provvy-advisor`}
+              className="group block rounded-lg py-0.5 transition-colors hover:text-foreground"
+            >
+              <span className="text-[12px] font-medium text-ink-soft group-hover:text-foreground">
+                Make Provvy yours
+              </span>
+              <span className="mt-0.5 block text-[11px] leading-snug text-ink-soft/90">
+                Personalise Provvy with a name, personality and preferences.
+              </span>
+            </Link>
+
+            <Link
               href={intro.advisorHref}
               className="inline-flex items-center gap-1 text-[12.5px] font-medium text-primary hover:underline"
             >
-              See what Provvy knows
+              Open Provvy Advisor
               <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
