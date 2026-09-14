@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { X } from 'lucide-react';
+import { ProvvyOrb } from '@/components/jarvis/provvy-orb';
 import { useOptionalLandingAdvisor } from '@/components/journey/lovable/landing-advisor-context';
 import { useOptionalLandingIntelligence } from '@/components/journey/lovable/landing-intelligence-context';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
@@ -24,22 +25,15 @@ function isDesktop() {
   return window.matchMedia('(min-width: 768px)').matches;
 }
 
-function AdvisorMark() {
+function AdvisorOrb({ className = '' }: { className?: string }) {
   return (
-    <span
-      className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-gradient-purple text-[10px] font-semibold text-primary-foreground"
-      aria-hidden="true"
-    >
-      P
-    </span>
+    <div className={`relative shrink-0 ${className}`.trim()}>
+      <ProvvyOrb state="idle" size="xs" className="landing-advisor-orb" />
+    </div>
   );
 }
 
 const PRIMARY_ACTIONS = new Set<AdvisorActionId>(['personalise']);
-const LOW_EMPHASIS_ACTIONS = new Set<AdvisorActionId>([
-  'see-how-provvy-works',
-  'get-payment-intelligence',
-]);
 
 export function LandingAdvisor() {
   const advisor = useOptionalLandingAdvisor();
@@ -112,11 +106,6 @@ export function LandingAdvisor() {
       case 'keep-exploring':
         collapse(true);
         return;
-      case 'see-how-provvy-works':
-        setActiveAction((current) =>
-          current === 'see-how-provvy-works' ? null : 'see-how-provvy-works'
-        );
-        return;
       case 'show-developments':
       case 'show-affected-routes': {
         const highlighted = findIntelligenceItem(highlightedIntelligenceId);
@@ -152,12 +141,6 @@ export function LandingAdvisor() {
         setActiveAction(null);
         advisor.changePriority('lowest_cost');
         return;
-      case 'get-payment-intelligence':
-        document.getElementById('payment-intelligence-inbox')?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start',
-        });
-        return;
       case 'personalise':
         markAdvisorIntroSeen();
         return;
@@ -183,14 +166,9 @@ export function LandingAdvisor() {
   };
 
   const primaryActions = presentation.actions.filter((action) => PRIMARY_ACTIONS.has(action.id));
-  const lowEmphasisActions = presentation.actions.filter((action) =>
-    LOW_EMPHASIS_ACTIONS.has(action.id)
-  );
-  const routeActions = presentation.actions.filter(
-    (action) => !PRIMARY_ACTIONS.has(action.id) && !LOW_EMPHASIS_ACTIONS.has(action.id)
-  );
+  const routeActions = presentation.actions.filter((action) => !PRIMARY_ACTIONS.has(action.id));
 
-  const renderAction = (action: AdvisorAction, kind: 'primary' | 'quiet' | 'route') => {
+  const renderAction = (action: AdvisorAction, kind: 'primary' | 'route') => {
     if (action.id === 'personalise') {
       return (
         <Link
@@ -212,15 +190,11 @@ export function LandingAdvisor() {
           key={action.id}
           href={action.href}
           onClick={() => handleAction(action)}
-          className={
-            kind === 'quiet'
-              ? 'text-[12px] font-medium text-ink-soft underline-offset-2 hover:text-foreground hover:underline'
-              : `rounded-lg border px-2.5 py-1.5 text-[12px] font-medium hover:bg-accent ${
-                  activeAction === action.id
-                    ? 'border-primary/40 bg-accent text-foreground'
-                    : 'border-border bg-background'
-                }`
-          }
+          className={`rounded-lg border px-2.5 py-1.5 text-[12px] font-medium hover:bg-accent ${
+            activeAction === action.id
+              ? 'border-primary/40 bg-accent text-foreground'
+              : 'border-border bg-background'
+          }`}
         >
           {action.label} →
         </a>
@@ -231,15 +205,11 @@ export function LandingAdvisor() {
         key={action.id}
         type="button"
         onClick={() => handleAction(action)}
-        className={
-          kind === 'quiet'
-            ? 'text-[12px] font-medium text-ink-soft underline-offset-2 hover:text-foreground hover:underline'
-            : `rounded-lg border px-2.5 py-1.5 text-[12px] font-medium hover:bg-accent ${
-                activeAction === action.id
-                  ? 'border-primary/40 bg-accent text-foreground'
-                  : 'border-border bg-background'
-              }`
-        }
+        className={`rounded-lg border px-2.5 py-1.5 text-[12px] font-medium hover:bg-accent ${
+          activeAction === action.id
+            ? 'border-primary/40 bg-accent text-foreground'
+            : 'border-border bg-background'
+        }`}
       >
         {action.label}
       </button>
@@ -253,8 +223,8 @@ export function LandingAdvisor() {
       className="pointer-events-auto flex max-h-[min(28rem,50vh)] flex-col overflow-hidden rounded-2xl border border-primary/20 bg-card/95 shadow-soft backdrop-blur-md max-md:rounded-b-none md:max-h-[min(32rem,calc(100vh-8rem))]"
     >
       <div className="flex items-start justify-between gap-2 border-b border-border/60 px-3.5 py-3">
-        <div className="flex items-start gap-2">
-          <AdvisorMark />
+        <div className="flex items-start gap-2.5">
+          <AdvisorOrb className="mt-0.5" />
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-ink-soft">
               {presentation.eyebrow}
@@ -292,14 +262,28 @@ export function LandingAdvisor() {
             {presentation.conclusion}
           </p>
         ) : null}
+        {presentation.pickLine ? (
+          <p
+            className={`text-[13px] font-semibold leading-snug text-foreground ${presentation.conclusion ? 'mt-2' : ''}`}
+          >
+            {presentation.pickLine}
+          </p>
+        ) : null}
         {presentation.lines.length ? (
           <div
-            className={`space-y-2 text-[12px] leading-snug text-ink-soft ${presentation.conclusion ? 'mt-2' : ''}`}
+            className={`space-y-2 text-[12px] leading-snug text-ink-soft ${
+              presentation.conclusion || presentation.pickLine ? 'mt-2' : ''
+            }`}
           >
             {presentation.lines.map((line) => (
               <p key={line}>{line}</p>
             ))}
           </div>
+        ) : null}
+        {presentation.contextHighlight ? (
+          <p className="mt-3 rounded-xl border border-primary/15 bg-primary/5 px-2.5 py-2 text-[12px] leading-snug text-foreground/90">
+            {presentation.contextHighlight}
+          </p>
         ) : null}
         {presentation.explainer ? (
           <div className="mt-2 rounded-xl bg-background px-2.5 py-2">
@@ -316,18 +300,33 @@ export function LandingAdvisor() {
           </div>
         ) : null}
         {primaryActions.length ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {primaryActions.map((action) => renderAction(action, 'primary'))}
-          </div>
-        ) : null}
-        {lowEmphasisActions.length ? (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {lowEmphasisActions.map((action) => renderAction(action, 'quiet'))}
+          <div className="mt-3 flex flex-col gap-1.5">
+            <div className="flex flex-wrap gap-2">
+              {primaryActions.map((action) => renderAction(action, 'primary'))}
+            </div>
+            {presentation.ctaSupport ? (
+              <p className="text-[11px] leading-snug text-ink-soft">{presentation.ctaSupport}</p>
+            ) : null}
           </div>
         ) : null}
         {routeActions.length ? (
           <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border/50 pt-3">
             {routeActions.map((action) => renderAction(action, 'route'))}
+          </div>
+        ) : null}
+        {presentation.showMakeYours ? (
+          <div className="mt-3 border-t border-border/40 pt-3">
+            <Link
+              href={`${COMMERCIAL_OS_ROUTES.accountPreferences}?focus=provvy-advisor`}
+              className="group block rounded-lg px-0.5 py-0.5 transition-colors hover:text-foreground"
+            >
+              <span className="text-[12px] font-medium text-ink-soft group-hover:text-foreground">
+                Make Provvy yours
+              </span>
+              <span className="mt-0.5 block text-[11px] leading-snug text-ink-soft/90">
+                Personalise Provvy with a name, personality and preferences.
+              </span>
+            </Link>
           </div>
         ) : null}
       </div>
@@ -355,7 +354,7 @@ export function LandingAdvisor() {
           className="pointer-events-auto absolute bottom-24 right-3 flex items-center gap-2 rounded-full border border-primary/20 bg-card/95 py-1.5 pl-1.5 pr-3 shadow-soft backdrop-blur-md md:bottom-6 md:right-4 md:top-auto"
           aria-label="Open Provvy Advisor"
         >
-          <AdvisorMark />
+          <AdvisorOrb />
           <span className="text-[12px] font-medium">Provvy Advisor</span>
         </button>
       )}

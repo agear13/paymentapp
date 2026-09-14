@@ -1,7 +1,7 @@
 import {
-  ADVISOR_PERSONALISE_SUPPORT,
-  ADVISOR_SUBSCRIBE_LINES,
-  ADVISOR_VISION_LINES,
+  ADVISOR_INITIAL_CONTEXT_HIGHLIGHT,
+  ADVISOR_INITIAL_CTA_SUPPORT,
+  ADVISOR_TRANSACTION_CONTEXT_HIGHLIGHT,
   EMPTY_ADVISOR_CONTEXT,
   advisorExcludeDigitalDollarFilters,
   advisorFilterNote,
@@ -23,18 +23,24 @@ describe('presentAdvisor', () => {
     expect(presentation.status).toBe('Watching payment infrastructure');
     expect(presentation.conclusion).toBe("Hi, I'm Provvy.");
     expect(presentation.lines.join(' ')).toMatch(
-      /Tell me what you're trying to pay below and I'll show you the routes available/
+      /Tell me what you're trying to pay and I'll compare the available payment routes/
     );
     expect(presentation.lines.join(' ')).toMatch(
-      /The more I know about your business, the smarter my recommendations become/
+      /I consider cost, speed and payment infrastructure when making my recommendation/
     );
-    expect(presentation.actions.map((action) => action.id)).toEqual(['see-how-provvy-works']);
+    expect(presentation.contextHighlight).toBe(ADVISOR_INITIAL_CONTEXT_HIGHLIGHT);
+    expect(presentation.ctaSupport).toBe(ADVISOR_INITIAL_CTA_SUPPORT);
+    expect(presentation.actions.map((action) => action.id)).toEqual(['personalise']);
+    expect(presentation.actions[0]?.label).toBe('Get personalised recommendations');
+    expect(presentation.showMakeYours).toBe(true);
     expect(presentation.lines.join(' ')).not.toMatch(/lighter or darker/i);
     expect(presentation.lines.join(' ')).not.toMatch(/live quote/i);
     expect(JSON.stringify(presentation)).not.toMatch(/cash balance/i);
     expect(JSON.stringify(presentation)).not.toMatch(/\bChat\b/);
     expect(JSON.stringify(presentation)).not.toMatch(/textarea|Ask me anything/i);
     expect(JSON.stringify(presentation)).not.toMatch(/payment provider|another payment rail/i);
+    expect(JSON.stringify(presentation)).not.toMatch(/See how Provvy works/i);
+    expect(JSON.stringify(presentation)).not.toMatch(/extra pair of hands/i);
   });
 
   it('keeps the introduction until the visitor compares a payment', () => {
@@ -47,22 +53,15 @@ describe('presentAdvisor', () => {
       })
     );
     expect(presentation.conclusion).toBe("Hi, I'm Provvy.");
-    expect(presentation.lines.join(' ')).toMatch(/Tell me what you're trying to pay below/i);
-    expect(presentation.lines.join(' ')).toMatch(/smarter my recommendations become/i);
-    expect(presentation.actions.map((action) => action.id)).toEqual(['see-how-provvy-works']);
+    expect(presentation.lines.join(' ')).toMatch(/compare the available payment routes/i);
+    expect(presentation.contextHighlight).toBe(ADVISOR_INITIAL_CONTEXT_HIGHLIGHT);
+    expect(presentation.actions.map((action) => action.id)).toEqual(['personalise']);
     expect(JSON.stringify(presentation)).not.toMatch(/live quote|minutes ago/i);
-  });
-
-  it('reveals the longer-term role without overpromising live data', () => {
-    const presentation = presentAdvisor(context({ stage: 'welcome' }), 'see-how-provvy-works');
-    expect(presentation.lines.join(' ')).toContain(ADVISOR_VISION_LINES[0]);
-    expect(presentation.lines.join(' ')).toMatch(/extra pair of hands/i);
-    expect(JSON.stringify(presentation)).not.toMatch(/I can see your|live FX/i);
   });
 
   it('skips theme choice when a preference already exists', () => {
     const presentation = presentAdvisor(context({ stage: 'search', showThemeChoice: false }));
-    expect(presentation.actions.map((action) => action.id)).toEqual(['see-how-provvy-works']);
+    expect(presentation.actions.map((action) => action.id)).toEqual(['personalise']);
     expect(presentation.lines.join(' ')).not.toMatch(/lighter or darker/i);
   });
 
@@ -89,27 +88,20 @@ describe('presentAdvisor', () => {
     expect(presentation.conclusion).toMatch(
       /You're comparing a .* supplier payment from Australia to Indonesia/
     );
+    expect(presentation.pickLine).toBe('My pick: Wise');
     expect(presentation.lines.join(' ')).toMatch(
-      /These results are based on the transaction details you've given me/
+      /Wise currently offers the lowest indicative total cost for this payment/
     );
-    expect(presentation.lines).toContain(ADVISOR_PERSONALISE_SUPPORT);
-    expect(presentation.lines).toEqual(expect.arrayContaining([...ADVISOR_SUBSCRIBE_LINES]));
+    expect(presentation.contextHighlight).toBe(ADVISOR_TRANSACTION_CONTEXT_HIGHLIGHT);
     expect(presentation.actions[0]).toEqual({
       id: 'personalise',
       label: 'Connect your business',
     });
-    expect(presentation.actions[1]).toEqual({
-      id: 'see-how-provvy-works',
-      label: 'See how Provvy works',
-    });
-    expect(presentation.actions[2]).toEqual({
-      id: 'get-payment-intelligence',
-      label: 'Get Payment Intelligence',
-      href: '#payment-intelligence-inbox',
-    });
     expect(presentation.actions.map((action) => action.label)).toEqual(
       expect.arrayContaining(['Why is this #1?', "What's faster?", "What's simpler?"])
     );
+    expect(presentation.actions.map((action) => action.id)).not.toContain('see-how-provvy-works');
+    expect(presentation.actions.map((action) => action.id)).not.toContain('get-payment-intelligence');
     expect(JSON.stringify(presentation)).not.toMatch(/live FX/i);
     expect(JSON.stringify(presentation)).not.toMatch(/your Wise account/i);
   });
@@ -157,7 +149,7 @@ describe('presentAdvisor', () => {
       }),
       'why-first'
     );
-    expect(presentation.conclusion).toMatch(/Wise is the strongest starting point/i);
+    expect(presentation.pickLine).toBe('My pick: Wise');
     const text = presentation.lines.join(' ');
     expect(text).toMatch(/lowest total cost is the current priority/i);
     expect(text).toMatch(/supplier payment/i);
@@ -190,7 +182,6 @@ describe('presentAdvisor', () => {
     expect(presentation.actions.map((action) => action.label)).toEqual(
       expect.arrayContaining([
         'Connect your business',
-        'See how Provvy works',
         'Why is this fastest?',
         'What is digital-dollar?',
         "What's simpler?",
@@ -225,7 +216,7 @@ describe('presentAdvisor', () => {
     expect(presentation.lines.join(' ')).toMatch(
       /Your existing bank is now the strongest starting point because simplicity is your priority/
     );
-    expect(presentation.conclusion).not.toMatch(/Westpac|NAB|ANZ|CommBank|your bank is CommBank/i);
+    expect(presentation.conclusion ?? '').not.toMatch(/Westpac|NAB|ANZ|CommBank|your bank is CommBank/i);
     expect(
       presentAdvisor(
         context({

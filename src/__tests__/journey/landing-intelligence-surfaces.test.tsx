@@ -84,10 +84,10 @@ describe('payment intelligence cross-surface interactions', () => {
       within(screen.getByLabelText('Provvy Advisor')).getByRole('link', { name: /connect your business/i })
     ).toBeInTheDocument();
     expect(
-      within(screen.getByLabelText('Provvy Advisor')).getByRole('link', {
+      within(screen.getByLabelText('Provvy Advisor')).queryByRole('link', {
         name: /get payment intelligence/i,
       })
-    ).toHaveAttribute('href', '#payment-intelligence-inbox');
+    ).not.toBeInTheDocument();
   });
 
   it('keeps pulse corridor and search corridor aligned', () => {

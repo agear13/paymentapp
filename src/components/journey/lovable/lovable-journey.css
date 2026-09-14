@@ -189,3 +189,16 @@ html.dark .lovable-journey option,
 .lovable-journey .animate-fade-up { animation: lovable-fade-up 0.6s ease-out both; }
 .lovable-journey .animate-float { animation: lovable-float-slow 6s ease-in-out infinite; }
 .lovable-journey .animate-pulse-glow { animation: lovable-pulse-glow 4s ease-in-out infinite; }
+
+/* Compact Provvy orb in the landing Advisor panel */
+.lovable-journey .landing-advisor-orb {
+  --orb-intensity: 0.36;
+  --orb-pulse: 5.6s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lovable-journey .landing-advisor-orb .provvy-orb__bloom,
+  .lovable-journey .landing-advisor-orb .provvy-orb__core {
+    animation: none;
+  }
+}

@@ -74,11 +74,14 @@ export type AdvisorPresentation = {
   status: string;
   criteria: string[];
   conclusion: string | null;
+  pickLine: string | null;
   lines: string[];
+  contextHighlight: string | null;
+  ctaSupport: string | null;
   developments: { headline: string; impact: string }[];
   actions: AdvisorAction[];
   explainer: { title: string; body: string; action?: AdvisorAction } | null;
-  personaliseSupport: string | null;
+  showMakeYours: boolean;
 };
 
 export const EMPTY_ADVISOR_CONTEXT: AdvisorContext = {
@@ -112,15 +115,26 @@ export const EMPTY_ADVISOR_CONTEXT: AdvisorContext = {
 export const DIGITAL_DOLLAR_ADVISOR_EXPLAINER =
   'Digital-dollar transfer uses a digital currency rail to move value between compatible wallets or accounts. It can settle quickly, but both sides need the right setup.';
 
+/** @deprecated Replaced by ADVISOR_TRANSACTION_CONTEXT_HIGHLIGHT in the Advisor rework. */
 export const ADVISOR_PERSONALISE_SUPPORT =
-  'Connect your business and I can make this recommendation using more of your actual context.';
+  'Want a recommendation based on your actual business? Connect your business systems and I can consider your payment history, providers and business context.';
 
+export const ADVISOR_INITIAL_CONTEXT_HIGHLIGHT =
+  'The more I know about your business, the more I can tailor my recommendations to your actual payment activity.';
+
+export const ADVISOR_INITIAL_CTA_SUPPORT =
+  'Connect your business systems to give me more context.';
+
+export const ADVISOR_TRANSACTION_CONTEXT_HIGHLIGHT = ADVISOR_PERSONALISE_SUPPORT;
+
+/** @deprecated Removed from Advisor presentation — kept for test migration only. */
 export const ADVISOR_VISION_LINES = [
   "I'm not just here to answer questions.",
   'As I understand more of your business, I can help you spot opportunities, make decisions and coordinate work across payments and finance.',
   'Think of me as an extra pair of hands for your commercial operations.',
 ] as const;
 
+/** @deprecated Removed from Advisor presentation. */
 export const ADVISOR_SUBSCRIBE_LINES = [
   'Not ready to connect your business?',
   'Get the payment intelligence Provvy is watching in your inbox.',
@@ -290,6 +304,50 @@ function resultConclusion(context: AdvisorContext): string {
   return `${named} is the strongest starting point for this payment based on what you've entered.`;
 }
 
+function pickLine(context: AdvisorContext): string | null {
+  if (!context.recommendedProvider && context.recommendedProviderId !== 'bank') return null;
+  const named =
+    context.recommendedProviderId === 'bank'
+      ? 'Your bank'
+      : (context.recommendedProvider ?? 'This route');
+  return `My pick: ${named}`;
+}
+
+function pickSummary(context: AdvisorContext): string {
+  const provider = displayProvider(context);
+  const named = context.recommendedProvider ?? 'This route';
+
+  if (context.priorityChanged) {
+    return resultConclusion(context);
+  }
+
+  switch (context.priority) {
+    case 'fastest':
+      return `${named} currently offers the fastest indicative arrival for this payment.`;
+    case 'lowest_cost':
+      return `${named} currently offers the lowest indicative total cost for this payment.`;
+    case 'simplest':
+      return `${provider.charAt(0).toUpperCase()}${provider.slice(1)} currently offers the simplest setup for this payment.`;
+    case 'best_fit':
+    default:
+      return `${named} currently offers the best balance of cost and arrival time for this payment.`;
+  }
+}
+
+function transactionMetrics(context: AdvisorContext): string[] {
+  const lines: string[] = [];
+  if (context.indicativeCostLabel) {
+    lines.push(`Typical estimated total: ${context.indicativeCostLabel}.`);
+  }
+  if (context.arrivalLabel) {
+    lines.push(`Typical arrival: ${context.arrivalLabel}.`);
+  }
+  if (context.setupLabel) {
+    lines.push(`Typical setup: ${context.setupLabel}.`);
+  }
+  return lines;
+}
+
 function whyThisFirst(context: AdvisorContext): string[] {
   const provider =
     context.recommendedProviderId === 'bank'
@@ -377,23 +435,22 @@ export function presentAdvisor(
   action?: AdvisorActionId | null
 ): AdvisorPresentation {
   if (context.stage === 'welcome' || context.stage === 'search') {
-    const lines = [
-      "Tell me what you're trying to pay below and I'll show you the routes available.",
-      'The more I know about your business, the smarter my recommendations become.',
-    ];
-    if (action === 'see-how-provvy-works') {
-      lines.push(...ADVISOR_VISION_LINES);
-    }
     return {
       eyebrow: ADVISOR_EYEBROW,
       status: advisorStatus(context),
       criteria: [],
       conclusion: "Hi, I'm Provvy.",
-      lines,
+      pickLine: null,
+      lines: [
+        "Tell me what you're trying to pay and I'll compare the available payment routes and recommend the one I'd choose.",
+        'I consider cost, speed and payment infrastructure when making my recommendation.',
+      ],
+      contextHighlight: ADVISOR_INITIAL_CONTEXT_HIGHLIGHT,
+      ctaSupport: ADVISOR_INITIAL_CTA_SUPPORT,
       developments: [],
-      actions: [{ id: 'see-how-provvy-works', label: 'See how Provvy works' }],
+      actions: [{ id: 'personalise', label: 'Get personalised recommendations' }],
       explainer: null,
-      personaliseSupport: null,
+      showMakeYours: true,
     };
   }
 
@@ -409,38 +466,22 @@ export function presentAdvisor(
         }
       : null;
 
-  const lines: string[] = [
-    "These results are based on the transaction details you've given me.",
-    ADVISOR_PERSONALISE_SUPPORT,
-    ...ADVISOR_SUBSCRIBE_LINES,
-  ];
-  if (context.priorityChanged) {
-    lines.unshift(resultConclusion(context));
-  }
+  const lines: string[] = [pickSummary(context), ...transactionMetrics(context)];
   lines.push(...supportingLines(context, action));
-  if (action === 'see-how-provvy-works') {
-    lines.push(...ADVISOR_VISION_LINES);
-  }
 
   return {
     eyebrow: ADVISOR_EYEBROW,
     status: advisorStatus(context),
     criteria: advisorCriteria(context),
-    conclusion: comparisonLead(context) ?? resultConclusion(context),
+    conclusion: comparisonLead(context),
+    pickLine: pickLine(context),
     lines: uniqueLines(lines),
+    contextHighlight: ADVISOR_TRANSACTION_CONTEXT_HIGHLIGHT,
+    ctaSupport: null,
     developments: [],
-    actions: [
-      { id: 'personalise', label: 'Connect your business' },
-      { id: 'see-how-provvy-works', label: 'See how Provvy works' },
-      {
-        id: 'get-payment-intelligence',
-        label: 'Get Payment Intelligence',
-        href: '#payment-intelligence-inbox',
-      },
-      ...routeActions(context),
-    ],
+    actions: [{ id: 'personalise', label: 'Connect your business' }, ...routeActions(context)],
     explainer,
-    personaliseSupport: null,
+    showMakeYours: true,
   };
 }
 

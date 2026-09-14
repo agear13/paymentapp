@@ -116,6 +116,7 @@ describe('Existing User Catch-Up Eligibility & Dry Run', () => {
 });
 
 describe('Lifecycle catch-up eligibility via sendLifecycleEmail', () => {
+  const originalCatchupExclusions = process.env.LIFECYCLE_CATCHUP_EXCLUDED_EMAILS;
   const baseInput: LifecycleTriggerInput = {
     campaign: 'existing_user_catchup',
     userId: 'user-catchup-1',
@@ -124,6 +125,20 @@ describe('Lifecycle catch-up eligibility via sendLifecycleEmail', () => {
     userName: 'Alex',
     workspaceName: 'Acme',
   };
+
+  const eligibleDeps = {
+    isUserVerifiedFn: async () => true,
+    checkWorkspaceExistsFn: async () => ({ exists: true, workspaceName: 'Acme' }),
+    findSendRecordFn: async () => false,
+  };
+
+  afterEach(() => {
+    if (originalCatchupExclusions === undefined) {
+      delete process.env.LIFECYCLE_CATCHUP_EXCLUDED_EMAILS;
+    } else {
+      process.env.LIFECYCLE_CATCHUP_EXCLUDED_EMAILS = originalCatchupExclusions;
+    }
+  });
 
   it('allows a verified user with a workspace and no prior Welcome or catch-up', async () => {
     const result = await checkLifecycleEligibility(baseInput, {
@@ -162,6 +177,59 @@ describe('Lifecycle catch-up eligibility via sendLifecycleEmail', () => {
       }
     );
     expect(result).toEqual({ eligible: false, reason: 'invalid_email' });
+  });
+
+  it('does not dispatch an exactly excluded catch-up recipient', async () => {
+    process.env.LIFECYCLE_CATCHUP_EXCLUDED_EMAILS = 'blocked@example.test';
+    const sendEmailFn = jest.fn();
+
+    const result = await sendLifecycleEmail(
+      { ...baseInput, email: 'blocked@example.test' },
+      { ...eligibleDeps, sendEmailFn }
+    );
+
+    expect(result).toMatchObject({ status: 'suppressed', suppressedReason: 'excluded_email' });
+    expect(sendEmailFn).not.toHaveBeenCalled();
+  });
+
+  it('does not dispatch a catch-up recipient excluded by domain', async () => {
+    process.env.LIFECYCLE_CATCHUP_EXCLUDED_EMAILS = '@provvypay.com';
+    const sendEmailFn = jest.fn();
+
+    const result = await sendLifecycleEmail(
+      { ...baseInput, email: 'team@provvypay.com' },
+      { ...eligibleDeps, sendEmailFn }
+    );
+
+    expect(result).toMatchObject({ status: 'suppressed', suppressedReason: 'excluded_email' });
+    expect(sendEmailFn).not.toHaveBeenCalled();
+  });
+
+  it('suppresses an excluded recipient during the final send recheck after an earlier eligible check', async () => {
+    delete process.env.LIFECYCLE_CATCHUP_EXCLUDED_EMAILS;
+    await expect(checkLifecycleEligibility(baseInput, eligibleDeps)).resolves.toEqual({ eligible: true });
+
+    process.env.LIFECYCLE_CATCHUP_EXCLUDED_EMAILS = 'existing@example.com';
+    const sendEmailFn = jest.fn();
+    const result = await sendLifecycleEmail(baseInput, { ...eligibleDeps, sendEmailFn });
+
+    expect(result).toMatchObject({ status: 'suppressed', suppressedReason: 'excluded_email' });
+    expect(sendEmailFn).not.toHaveBeenCalled();
+  });
+
+  it('continues to dispatch an eligible external catch-up recipient', async () => {
+    process.env.LIFECYCLE_CATCHUP_EXCLUDED_EMAILS = 'blocked@example.test,@provvypay.com';
+    const sendEmailFn = jest.fn().mockResolvedValue({ id: 'message-1', success: true });
+
+    const result = await sendLifecycleEmail(baseInput, {
+      ...eligibleDeps,
+      sendEmailFn,
+      recordSendFn: async () => undefined,
+      logEmailFn: async () => undefined,
+    });
+
+    expect(result).toMatchObject({ status: 'sent', providerMessageId: 'message-1' });
+    expect(sendEmailFn).toHaveBeenCalledTimes(1);
   });
 
   it('suppresses catch-up when Welcome was already sent', async () => {

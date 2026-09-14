@@ -2,6 +2,7 @@ import { JARVIS_ORB_STATES, type JarvisOrbState } from '@/lib/jarvis/jarvis-orb-
 import '@/components/jarvis/provvy-orb.css';
 
 const SIZE_CLASS = {
+  xs: 'h-8 w-8',
   sm: 'h-24 w-24',
   md: 'h-32 w-32',
   lg: 'h-40 w-40',

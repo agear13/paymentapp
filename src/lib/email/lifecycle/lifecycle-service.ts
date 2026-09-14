@@ -53,6 +53,38 @@ export type LifecycleServiceDeps = {
   }) => Promise<void>;
 };
 
+export function parseCatchupExcludedEmails(
+  raw: string | undefined = process.env.LIFECYCLE_CATCHUP_EXCLUDED_EMAILS
+): { emails: Set<string>; domains: Set<string> } {
+  const emails = new Set<string>();
+  const domains = new Set<string>();
+  if (!raw?.trim()) return { emails, domains };
+
+  for (const part of raw.split(',')) {
+    const value = part.trim().toLowerCase();
+    if (!value) continue;
+    if (value.startsWith('@')) {
+      domains.add(value.slice(1));
+      continue;
+    }
+    if (value.includes('@')) {
+      emails.add(value);
+    }
+  }
+  return { emails, domains };
+}
+
+export function isCatchupExcludedEmail(
+  email: string,
+  lists: { emails: Set<string>; domains: Set<string> } = parseCatchupExcludedEmails()
+): boolean {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return false;
+  if (lists.emails.has(normalized)) return true;
+  const domain = normalized.split('@')[1];
+  return Boolean(domain && lists.domains.has(domain));
+}
+
 async function defaultCheckWorkspaceExists(
   organizationId: string,
   userId: string
@@ -179,6 +211,11 @@ export async function checkLifecycleEligibility(
 
   if (!email || !email.includes('@')) {
     return { eligible: false, reason: 'invalid_email' };
+  }
+
+  // This final gate protects direct/stale/bypassed catch-up callers before any dispatch work.
+  if (campaign === 'existing_user_catchup' && isCatchupExcludedEmail(email)) {
+    return { eligible: false, reason: 'excluded_email' };
   }
 
     // 1. Check verified status if verification checker provided

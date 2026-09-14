@@ -10,8 +10,15 @@ import type {
   LifecycleSendResult,
   LifecycleTriggerInput,
 } from '@/lib/email/lifecycle/types';
-import { sendLifecycleEmail, type LifecycleServiceDeps } from '@/lib/email/lifecycle/lifecycle-service';
+import {
+  isCatchupExcludedEmail,
+  parseCatchupExcludedEmails,
+  sendLifecycleEmail,
+  type LifecycleServiceDeps,
+} from '@/lib/email/lifecycle/lifecycle-service';
 import { log } from '@/lib/logger';
+
+export { isCatchupExcludedEmail, parseCatchupExcludedEmails };
 
 export type UserCandidate = {
   id: string;
@@ -63,38 +70,6 @@ function maskEmail(email: string): string {
   const domain = parts[1];
   const maskedName = name.length <= 2 ? `${name[0]}*` : `${name.slice(0, 2)}***${name.slice(-1)}`;
   return `${maskedName}@${domain}`;
-}
-
-export function parseCatchupExcludedEmails(
-  raw: string | undefined = process.env.LIFECYCLE_CATCHUP_EXCLUDED_EMAILS
-): { emails: Set<string>; domains: Set<string> } {
-  const emails = new Set<string>();
-  const domains = new Set<string>();
-  if (!raw?.trim()) return { emails, domains };
-
-  for (const part of raw.split(',')) {
-    const value = part.trim().toLowerCase();
-    if (!value) continue;
-    if (value.startsWith('@')) {
-      domains.add(value.slice(1));
-      continue;
-    }
-    if (value.includes('@')) {
-      emails.add(value);
-    }
-  }
-  return { emails, domains };
-}
-
-export function isCatchupExcludedEmail(
-  email: string,
-  lists: { emails: Set<string>; domains: Set<string> } = parseCatchupExcludedEmails()
-): boolean {
-  const normalized = email.trim().toLowerCase();
-  if (!normalized) return false;
-  if (lists.emails.has(normalized)) return true;
-  const domain = normalized.split('@')[1];
-  return Boolean(domain && lists.domains.has(domain));
 }
 
 function isValidEmail(email: string): boolean {

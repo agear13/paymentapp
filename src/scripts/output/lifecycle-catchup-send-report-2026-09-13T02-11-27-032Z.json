@@ -1,0 +1,34 @@
+{
+  "dryRun": false,
+  "confirmed": true,
+  "limit": 2,
+  "totalExamined": 3,
+  "totalEligible": 2,
+  "totalSelected": 2,
+  "totalSent": 2,
+  "totalSuppressed": 0,
+  "totalFailed": 0,
+  "exclusionBreakdown": {
+    "invalid_email": 0,
+    "excluded_email": 0,
+    "unverified_email": 0,
+    "no_workspace": 1,
+    "welcome_already_sent": 0,
+    "catchup_already_sent": 0
+  },
+  "results": [
+    {
+      "userId": "dcc4d06e-2bcb-414c-97a8-24a3615156ef",
+      "email": "al***3@gmail.com",
+      "organizationId": "1ca5a808-bd5d-42ae-9213-e7a7b74e23d5",
+      "status": "sent"
+    },
+    {
+      "userId": "76a9cc67-0303-4c56-8b2e-b7110a725dcf",
+      "email": "ge***3@gmail.com",
+      "organizationId": "a80f614f-4208-461b-8fee-0fde3b07fc63",
+      "status": "sent"
+    }
+  ],
+  "generatedAt": "2026-09-13T02:11:27.024Z"
+}

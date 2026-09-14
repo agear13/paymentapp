@@ -107,10 +107,13 @@ describe('homepage narrative and control principles', () => {
     expect(advisor).toContain('Based on your current criteria');
     expect(advisor).toContain('Recommendation changed');
     expect(advisor).toContain("Hi, I'm Provvy.");
-    expect(advisor).toContain("Tell me what you're trying to pay below");
-    expect(advisor).toContain('smarter my recommendations become');
+    expect(advisor).toContain("Tell me what you're trying to pay and I'll compare the available payment routes");
+    expect(advisor).toContain('I consider cost, speed and payment infrastructure when making my recommendation');
+    expect(advisor).toContain('Get personalised recommendations');
     expect(advisor).toContain('Connect your business');
-    expect(advisor).toContain('extra pair of hands');
+    expect(advisorUi).toContain('Make Provvy yours');
+    expect(advisorUi).toContain('ProvvyOrb');
+    expect(advisorUi).toContain('landing-advisor-orb');
     expect(advisorUi).toContain('Provvy Advisor');
     expect(advisorUi).toContain('data-advisor-placement');
     expect(advisorUi).not.toContain('createPortal');

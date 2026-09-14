@@ -60,11 +60,22 @@ describe('LandingAdvisor', () => {
     expect(screen.getByText(/Hi, I'm Provvy/i)).toBeInTheDocument();
     expect(screen.getByText(/Watching payment infrastructure/i)).toBeInTheDocument();
     expect(
-      screen.getByText(/Tell me what you're trying to pay below and I'll show you the routes available/i)
+      screen.getByText(/Tell me what you're trying to pay and I'll compare the available payment routes/i)
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/The more I know about your business, the smarter my recommendations become/i)
+      screen.getByText(/I consider cost, speed and payment infrastructure when making my recommendation/i)
     ).toBeInTheDocument();
+    expect(
+      screen.getByText(/The more I know about your business, the more I can tailor my recommendations/i)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /get personalised recommendations/i })).toHaveAttribute(
+      'href',
+      '/journey/assessment'
+    );
+    expect(screen.getByRole('link', { name: /make provvy yours/i })).toHaveAttribute(
+      'href',
+      '/workspace/settings/preferences?focus=provvy-advisor'
+    );
     expect(screen.queryByRole('button', { name: 'Light' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Dark' })).not.toBeInTheDocument();
     expect(advisor.querySelector('input, textarea')).toBeNull();
@@ -112,23 +123,19 @@ describe('LandingAdvisor', () => {
     expect(
       within(advisor).getByText(/You're comparing a .* supplier payment from Australia to Indonesia/i)
     ).toBeInTheDocument();
+    expect(within(advisor).getByText(/My pick:/i)).toBeInTheDocument();
     expect(
-      within(advisor).getByText(/These results are based on the transaction details you've given me/i)
+      within(advisor).getByText(/Want a recommendation based on your actual business/i)
     ).toBeInTheDocument();
     expect(within(advisor).getByRole('link', { name: /connect your business/i })).toHaveAttribute(
       'href',
       '/journey/assessment'
     );
-    expect(within(advisor).getByRole('button', { name: 'See how Provvy works' })).toBeInTheDocument();
-    expect(within(advisor).getByRole('link', { name: /get payment intelligence/i })).toHaveAttribute(
-      'href',
-      '#payment-intelligence-inbox'
-    );
+    expect(within(advisor).queryByRole('button', { name: 'See how Provvy works' })).not.toBeInTheDocument();
+    expect(within(advisor).queryByRole('link', { name: /get payment intelligence/i })).not.toBeInTheDocument();
     expect(within(advisor).getByRole('button', { name: 'Why is this #1?' })).toBeInTheDocument();
+    expect(advisor.querySelector('.landing-advisor-orb')).toBeTruthy();
     expect(advisor.querySelector('input, textarea')).toBeNull();
-
-    fireEvent.click(within(advisor).getByRole('button', { name: 'See how Provvy works' }));
-    expect(within(advisor).getByText(/extra pair of hands/i)).toBeInTheDocument();
 
     fireEvent.click(within(advisor).getByRole('button', { name: 'Why is this #1?' }));
     expect(screen.getByText(/Typical estimated total:/i)).toBeInTheDocument();
