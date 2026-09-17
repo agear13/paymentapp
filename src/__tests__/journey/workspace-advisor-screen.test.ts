@@ -34,6 +34,10 @@ describe('workspace advisor screen', () => {
     expect(source).toContain('WorkspaceAdvisorChatPanel');
     expect(source).toContain('isAdvisorChatEnabledClient');
     expect(source).toContain('FLAGSHIP_ADVISOR_PAYMENT');
+    expect(source).toContain('OnboardingReadinessPanel');
+    expect(source).toContain('EarlyPaymentIncentiveCard');
+    expect(source).not.toContain('five-of-seven.fixture');
+    expect(source).not.toContain('51 824 753 556');
   });
 
   test('does not invent business facts when onboarding context is empty', () => {

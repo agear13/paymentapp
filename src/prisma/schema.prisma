@@ -260,6 +260,7 @@ model organizations {
   converted_participants             deal_network_pilot_participants[]  @relation("ParticipantConvertedOrganization")
   origin_source_payment_links        payment_links[]                    @relation("PaymentLinkOriginSourceOrganization")
   lifecycle_email_sends              lifecycle_email_sends[]
+  commercial_onchain_commitments     commercial_onchain_commitments[]
 }
 
 /// Immutable operational onboarding / bootstrap / graph initialization transitions.
@@ -1936,11 +1937,52 @@ model organization_workflow_agreements {
   updated_at               DateTime                          @updatedAt @db.Timestamptz(6)
   organization_workflows   organization_workflows            @relation(fields: [organization_workflow_id], references: [id], onDelete: Cascade)
   organizations            organizations                     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  onchain_commitments      commercial_onchain_commitments[]
 
   @@index([organization_id])
   @@index([organization_workflow_id, is_current])
   @@index([extraction_status])
   @@index([pilot_deal_id])
+}
+
+/// Org-scoped on-chain representation of a commercial commitment (X Layer).
+/// Distinct from off-chain CommercialCommitmentStage. Does not store agreement text.
+model commercial_onchain_commitments {
+  id                       String                            @id @default(uuid()) @db.Uuid
+  organization_id          String                            @db.Uuid
+  source_agreement_id      String                            @db.Uuid
+  pilot_deal_id            String?                           @db.VarChar(255)
+  display_commitment_id    String                            @db.VarChar(16)
+  onchain_commitment_id    String                            @db.VarChar(66)
+  buyer_label              String                            @db.VarChar(120)
+  supplier_label           String                            @db.VarChar(120)
+  amount_minor_units       BigInt
+  source_currency          String                            @db.VarChar(8)
+  settlement_currency      String                            @db.VarChar(8)
+  due_date                 DateTime?                         @db.Timestamptz(6)
+  purpose                  String                            @db.VarChar(120)
+  terms_hash               String                            @db.VarChar(66)
+  offchain_lifecycle_stage String?                           @db.VarChar(64)
+  onchain_status           String?                           @db.VarChar(32)
+  verification_status      String                            @db.VarChar(32)
+  chain_id                 Int
+  contract_address         String                            @db.VarChar(42)
+  wallet_address           String?                           @db.VarChar(42)
+  transaction_hash         String?                           @unique @db.VarChar(66)
+  block_number             BigInt?
+  explorer_url             String?                           @db.VarChar(512)
+  original_due_label       String?                           @db.VarChar(120)
+  incentive_snapshot       Json?
+  created_at               DateTime                          @default(now()) @db.Timestamptz(6)
+  updated_at               DateTime                          @updatedAt @db.Timestamptz(6)
+  created_by_user_id       String                            @db.VarChar(255)
+  organizations            organizations                     @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  source_agreement         organization_workflow_agreements  @relation(fields: [source_agreement_id], references: [id], onDelete: Restrict)
+
+  @@unique([organization_id, source_agreement_id, chain_id], name: "ux_onchain_commitments_org_agreement_chain")
+  @@index([organization_id])
+  @@index([source_agreement_id])
+  @@index([verification_status])
 }
 
 model user_auth_profiles {

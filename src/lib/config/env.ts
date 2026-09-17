@@ -154,6 +154,13 @@ const envSchema = z.object({
   // Google Analytics 4 web stream (optional; public measurement ID only)
   NEXT_PUBLIC_GA_MEASUREMENT_ID: z.string().optional(),
 
+  NEXT_PUBLIC_XLAYER_COMMITMENTS_ENABLED: z.string().optional().default('false'),
+  NEXT_PUBLIC_XLAYER_CHAIN_ID: z.string().optional().default('1952'),
+  NEXT_PUBLIC_XLAYER_RPC_URL: z.string().optional(),
+  NEXT_PUBLIC_XLAYER_EXPLORER_URL: z.string().optional(),
+  NEXT_PUBLIC_XLAYER_COMMITMENT_REGISTRY_ADDRESS: z.string().optional(),
+  NEXT_PUBLIC_XLAYER_BUILDER_CODE: z.string().optional(),
+
   // Object storage — Cloudflare R2 (optional locally; required for production uploads)
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
@@ -224,6 +231,14 @@ function buildTimePlaceholderRecord(): Record<string, string | undefined> {
     CRON_SECRET: process.env.CRON_SECRET,
     SENTRY_DSN: process.env.SENTRY_DSN,
     NEXT_PUBLIC_GA_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID,
+    NEXT_PUBLIC_XLAYER_COMMITMENTS_ENABLED:
+      process.env.NEXT_PUBLIC_XLAYER_COMMITMENTS_ENABLED || 'false',
+    NEXT_PUBLIC_XLAYER_CHAIN_ID: process.env.NEXT_PUBLIC_XLAYER_CHAIN_ID || '1952',
+    NEXT_PUBLIC_XLAYER_RPC_URL: process.env.NEXT_PUBLIC_XLAYER_RPC_URL,
+    NEXT_PUBLIC_XLAYER_EXPLORER_URL: process.env.NEXT_PUBLIC_XLAYER_EXPLORER_URL,
+    NEXT_PUBLIC_XLAYER_COMMITMENT_REGISTRY_ADDRESS:
+      process.env.NEXT_PUBLIC_XLAYER_COMMITMENT_REGISTRY_ADDRESS,
+    NEXT_PUBLIC_XLAYER_BUILDER_CODE: process.env.NEXT_PUBLIC_XLAYER_BUILDER_CODE,
     R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
     R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
     R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
@@ -438,6 +453,9 @@ export const config = {
     advisorChat:
       ['true', '1'].includes((env.ADVISOR_CHAT_ENABLED || '').toLowerCase()) ||
       ['true', '1'].includes((env.NEXT_PUBLIC_ADVISOR_CHAT_ENABLED || '').toLowerCase()),
+    xlayerCommitments:
+      ['true', '1'].includes((env.NEXT_PUBLIC_XLAYER_COMMITMENTS_ENABLED || '').toLowerCase()) &&
+      !!env.NEXT_PUBLIC_XLAYER_COMMITMENT_REGISTRY_ADDRESS,
   },
   
   // Admin (B5 C4: resolved from ADMIN_EMAIL_ALLOWLIST + deprecated ADMIN_EMAILS)

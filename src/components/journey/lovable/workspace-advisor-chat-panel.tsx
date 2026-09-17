@@ -9,6 +9,8 @@ import type {
   AdvisorOfferingSnapshot,
   PaymentAdvisorResponse,
 } from '@/lib/advisor/payment-advisor-types';
+import { OnboardingReadinessPanel } from '@/components/business-passport/onboarding-readiness-panel';
+import { selectPassportOffering } from '@/lib/business-passport/select-offering';
 
 export const ADVISOR_SUGGESTED_QUESTIONS = [
   'How should I pay my Indonesian supplier A$100,000?',
@@ -34,6 +36,16 @@ function IntelligenceCard({
 }) {
   const recommendation = intelligence.recommendation;
   const monitoring = intelligence.monitoring;
+  const passportOffering = selectPassportOffering({
+    scenarioOffering: intelligence.scenarioComparison?.scenarioOffering
+      ? {
+          offeringId: intelligence.scenarioComparison.scenarioOffering.offeringId,
+          providerId: intelligence.scenarioComparison.scenarioOffering.providerId,
+          providerName: intelligence.scenarioComparison.scenarioOffering.providerName,
+        }
+      : null,
+    alternatives: intelligence.alternatives,
+  });
 
   return (
     <div className="mt-3 space-y-3 rounded-xl border border-border bg-muted/30 p-3 text-[12px]">
@@ -101,6 +113,13 @@ function IntelligenceCard({
             {(monitoring as AdvisorMonitoringSnapshot).freshness.label}
           </p>
         </div>
+      ) : null}
+
+      {passportOffering ? (
+        <OnboardingReadinessPanel
+          offeringId={passportOffering.offeringId}
+          providerName={passportOffering.providerName}
+        />
       ) : null}
 
       <p className="text-[11px] text-ink-soft">{intelligence.dataFreshness.disclaimer}</p>

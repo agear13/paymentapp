@@ -128,6 +128,14 @@ jest.mock('@/components/projects/project-funding-sources-panel', () => ({
   ProjectFundingSourcesPanel: () => <div data-testid="funding-sources-panel" />,
 }));
 
+jest.mock('@/components/commercial-incentive/early-payment-incentive-card', () => ({
+  EarlyPaymentIncentiveCard: () => null,
+}));
+
+jest.mock('@/components/xlayer/onchain-commitment-card', () => ({
+  OnchainCommitmentCard: () => null,
+}));
+
 import {
   fetchWorkspaceParticipants,
   fetchWorkspaceSummary,

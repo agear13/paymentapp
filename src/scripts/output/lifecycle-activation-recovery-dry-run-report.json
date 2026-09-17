@@ -1,0 +1,1766 @@
+{
+  "dryRun": true,
+  "totalExamined": 264,
+  "totalVerified": 165,
+  "totalUnverified": 99,
+  "totalEligible": 99,
+  "totalExcluded": 165,
+  "exclusionBreakdown": {
+    "invalid_email": 0,
+    "excluded_email": 2,
+    "verified_email": 163,
+    "already_sent": 0
+  },
+  "candidates": [
+    {
+      "userId": "f04dd2fa-1f01-45a4-8a3e-efb5d6ab543b",
+      "email": "ha***3@gmail.com",
+      "userCreatedAt": "2026-09-13T22:19:53.377289Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "c1d61bcb-6731-4113-bb4b-b180ac8a82f8",
+      "email": "su***t@wesohq.com",
+      "userCreatedAt": "2026-09-10T01:49:52.557546Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "5c0eb17c-e544-4642-ba32-cac6885bae04",
+      "email": "lu***e@stepin.agency",
+      "userCreatedAt": "2026-09-09T08:31:00.636324Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "f98c7a5d-d8af-4d22-a969-8496aadb3231",
+      "email": "fi***i@yahoo.com",
+      "userCreatedAt": "2026-09-08T07:15:38.548332Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "c5793f2c-d990-42c6-9968-221ffe8ddb4f",
+      "email": "c.***7@gmail.com",
+      "userCreatedAt": "2026-09-08T05:55:51.710964Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "d9cb1d4d-2c2f-4d03-9cf7-fd90e08886a9",
+      "email": "ov***9@gmail.com",
+      "userCreatedAt": "2026-09-08T02:33:45.149515Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "874dddf5-7ecc-4c1b-9c77-eb2a6d1650f6",
+      "email": "pd***5@gmail.com",
+      "userCreatedAt": "2026-09-08T01:35:44.114401Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "dbc92070-ba89-4bd3-9eea-bdcea784bac9",
+      "email": "a.***8@gmail.com",
+      "userCreatedAt": "2026-09-08T00:31:17.970596Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "c1ea8989-d6b5-49e7-a811-053219c865fd",
+      "email": "ar***8@gmail.com",
+      "userCreatedAt": "2026-09-07T23:58:53.767614Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "094fb92c-09ee-4f61-a82e-72eea2466055",
+      "email": "co***y@icloud.com",
+      "userCreatedAt": "2026-09-07T23:01:32.917839Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "e735a958-1a1b-4d63-879c-a934165230de",
+      "email": "ta***4@hotmail.com",
+      "userCreatedAt": "2026-09-07T22:05:24.954062Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "fc09cfb4-6de5-4a91-8aa1-8fafbc962e34",
+      "email": "g4***o@gmail.com",
+      "userCreatedAt": "2026-09-07T21:54:58.108668Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "ed1107f2-9506-444a-a0b8-e1c751080da6",
+      "email": "na***y@aol.com",
+      "userCreatedAt": "2026-09-07T21:38:24.378716Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "2af86ead-bdd8-44b1-be07-60f02a828ea6",
+      "email": "fa***3@gmail.com",
+      "userCreatedAt": "2026-09-07T21:28:25.813959Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "de415ebb-0bee-4dfd-b1e2-200215b2306b",
+      "email": "a.***6@gmail.com",
+      "userCreatedAt": "2026-09-07T20:42:30.847694Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "ed8682d1-9872-4707-ae43-f51ac4ffa126",
+      "email": "nh***o@molleaaparken.dk",
+      "userCreatedAt": "2026-09-07T19:13:01.945019Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "12919833-ad7c-4560-8eae-860dc5ceb45d",
+      "email": "54***3@vtext.com",
+      "userCreatedAt": "2026-09-07T18:03:25.855793Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "36b367cd-b667-4bdf-912b-caef4b1f6837",
+      "email": "gi***a@gmx.de",
+      "userCreatedAt": "2026-09-07T17:57:11.016442Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "d255c7a4-4c1a-495e-8d24-73670c2cb539",
+      "email": "br***y@lakelocal.org",
+      "userCreatedAt": "2026-09-07T16:05:08.983568Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "50c234c5-4cfe-44ea-a25a-c1203e7bc285",
+      "email": "ri***m@ontic.com",
+      "userCreatedAt": "2026-09-07T15:07:11.92513Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "0ee99b7d-b219-4b11-a989-31bf41618ef3",
+      "email": "mi***a@icloud.com",
+      "userCreatedAt": "2026-09-07T14:59:39.392474Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "0a7f17aa-b7ea-4485-9f91-68a410329514",
+      "email": "gr***m@emkcapital.com",
+      "userCreatedAt": "2026-09-07T14:28:24.995867Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "ae4b3c84-11e5-41b5-9f77-08336b39d041",
+      "email": "l.***s@gmail.com",
+      "userCreatedAt": "2026-09-07T13:32:46.467939Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "27b385b9-87ec-4b79-8da8-eed5df04e1c0",
+      "email": "gh***n@hdhc.com",
+      "userCreatedAt": "2026-09-07T12:30:49.885434Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "d58dc3f7-4e14-4259-ab24-a2eb0d355817",
+      "email": "ni***n@gmail.com",
+      "userCreatedAt": "2026-09-07T10:40:24.845429Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "34ab6723-2d89-49c8-bbd2-c6dbae798088",
+      "email": "di***r@gmail.com",
+      "userCreatedAt": "2026-09-07T10:26:38.728464Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "c85e7359-16bb-4270-968d-6d574e42cc42",
+      "email": "ca***1@yahoo.com",
+      "userCreatedAt": "2026-09-07T07:15:01.798571Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "840c7c52-1738-4641-b226-98efe7f5805c",
+      "email": "ro***r@gmail.com",
+      "userCreatedAt": "2026-09-07T01:13:42.193799Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "39ebaa24-680f-49c7-965d-17f2c4cc8e84",
+      "email": "m.***e@gmail.com",
+      "userCreatedAt": "2026-09-06T21:32:26.883364Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "3d15a1ec-68ba-4b8c-96e3-b5eac6ed2171",
+      "email": "we***1@yahoo.com",
+      "userCreatedAt": "2026-09-06T20:30:44.128248Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "36df56d3-2024-461d-8320-5df2728ed789",
+      "email": "ba***l@yahoo.com",
+      "userCreatedAt": "2026-09-06T15:35:55.291894Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "82262d12-c227-4f6d-a05c-0109f2613de1",
+      "email": "w.***2@gmail.com",
+      "userCreatedAt": "2026-09-06T09:58:45.850363Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "57d90a85-6824-4498-94be-c94dce77a39e",
+      "email": "lu***o@hotmail.com",
+      "userCreatedAt": "2026-09-06T09:03:02.282095Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "a4fc12d1-55ed-4663-978d-c9b237d3faa7",
+      "email": "se***a@theriggingbox.com",
+      "userCreatedAt": "2026-09-06T08:02:34.704265Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "522f617b-923d-4544-96b0-c3577f173079",
+      "email": "a.***8@gmail.com",
+      "userCreatedAt": "2026-09-06T05:29:18.24758Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "b7d166c7-a8e9-4010-b737-640cc70938db",
+      "email": "ma***g@gmail.com",
+      "userCreatedAt": "2026-09-06T03:09:30.234415Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "f3e7a932-3370-4b27-a9b5-2295f78e476d",
+      "email": "he***n@hotmail.com",
+      "userCreatedAt": "2026-09-06T02:11:39.786049Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "abfcbbb8-921f-4acd-8577-2b02efae4dd3",
+      "email": "bi***y@msn.com",
+      "userCreatedAt": "2026-09-06T01:16:25.409295Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "dc6bb999-89c2-4104-b20f-2b68962ff1df",
+      "email": "ma***n@steinkamp.de",
+      "userCreatedAt": "2026-09-05T23:36:39.883634Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "19be810f-3855-4a1f-96aa-409d09ecef37",
+      "email": "ct***s@gmail.com",
+      "userCreatedAt": "2026-09-05T22:05:13.924386Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "a450ab28-561c-4df9-a9a1-fde4d7259c85",
+      "email": "ea***f@mac.com",
+      "userCreatedAt": "2026-09-05T20:27:28.672803Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "309253ac-08c4-42ff-b0c9-8da6cbb70a11",
+      "email": "s.***r@gmail.com",
+      "userCreatedAt": "2026-09-05T19:30:58.033545Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "9117a1ec-2293-4a97-864b-77fdf038ce17",
+      "email": "ac***j@bellsouth.net",
+      "userCreatedAt": "2026-09-05T18:25:36.074746Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "00241f72-8148-4864-b402-fca87fd7630b",
+      "email": "sa***r@gmail.com",
+      "userCreatedAt": "2026-09-05T17:29:10.456781Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "048ab8c7-5633-4d94-ba43-f7e6b14bf4be",
+      "email": "fr***e@yahoo.fr",
+      "userCreatedAt": "2026-09-05T17:06:49.151179Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "da4bcb0b-a058-42bb-81f3-da3e2da85cb9",
+      "email": "d_***g@houseofelectrical.com",
+      "userCreatedAt": "2026-09-05T16:10:37.314964Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "8e04ad5a-1398-4145-98ce-35e4c7eb19f5",
+      "email": "dc***n@yahoo.com",
+      "userCreatedAt": "2026-09-05T09:15:00.143411Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "cfaf4000-74c1-43cc-952a-2cc25a081596",
+      "email": "rh***8@yahoo.com",
+      "userCreatedAt": "2026-09-05T05:37:31.523442Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "0e42d783-2042-409d-8ba5-4914f38218bb",
+      "email": "a.***k@vatel.com.tr",
+      "userCreatedAt": "2026-09-05T02:34:50.947195Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "a5b44030-8b6c-4e1e-b124-6c36702fb2a2",
+      "email": "ha***7@hotmail.com",
+      "userCreatedAt": "2026-09-05T01:10:31.824046Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "ce3fc981-48fe-4cff-adaa-b9d18789995c",
+      "email": "s.***6@gmail.com",
+      "userCreatedAt": "2026-09-05T00:42:38.055776Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "5a40e5dc-9092-4bfd-a925-214de144027c",
+      "email": "in***g@msn.com",
+      "userCreatedAt": "2026-09-04T23:35:53.865641Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "62ff942b-3a97-4793-bd29-21ed1387307d",
+      "email": "u.***7@gmail.com",
+      "userCreatedAt": "2026-09-04T21:34:25.034524Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "114c5b0c-e2e2-42b7-84a7-63326d75ea0b",
+      "email": "ca***r@3rivers.net",
+      "userCreatedAt": "2026-09-04T20:28:53.830607Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "36a6989e-9997-405b-bb7c-0b7460421e39",
+      "email": "h.***5@gmail.com",
+      "userCreatedAt": "2026-09-04T19:52:15.00275Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "48941aa0-415e-49ae-8853-2ec7c35385ee",
+      "email": "ja***k@sbkenterprisesinc.com",
+      "userCreatedAt": "2026-09-04T19:19:38.297158Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "1c709950-ab63-451a-914e-624a210bb6de",
+      "email": "s.***o@gmail.com",
+      "userCreatedAt": "2026-09-04T18:06:55.194914Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "7b34f504-9f80-4583-bed5-eb1be6a43838",
+      "email": "da***a@midwestneurobehavioral.com",
+      "userCreatedAt": "2026-09-04T17:10:34.653132Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "614f3479-4e04-4dc5-8815-f2a4b9d0cbb6",
+      "email": "lu***s@creativeliquidcoatings.com",
+      "userCreatedAt": "2026-09-04T16:20:44.960009Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "d87d3141-9920-465d-a5a8-8da972bfadf0",
+      "email": "we***o@go-dux.com",
+      "userCreatedAt": "2026-09-04T16:14:32.891139Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "dc8374ce-49a2-4783-9b2c-b31e4f4f7470",
+      "email": "vc***a@centerlinelogistics.com",
+      "userCreatedAt": "2026-09-04T15:46:45.768076Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "08b0b883-7912-4109-aada-0cabc4346372",
+      "email": "ju***k@msn.com",
+      "userCreatedAt": "2026-09-04T13:18:16.373714Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "6cfa1733-e168-4e46-96ae-e2319cbfecb0",
+      "email": "b.***5@icloud.com",
+      "userCreatedAt": "2026-09-04T11:48:24.109956Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "1e6b4e7f-1a1f-4031-8ec6-c34af110a27b",
+      "email": "ab***s@floorcoveringheadquarters.com",
+      "userCreatedAt": "2026-09-04T10:49:48.562228Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "a18d9307-9485-4e7c-81a2-6dd940b1fc21",
+      "email": "ne***e@fox.com",
+      "userCreatedAt": "2026-09-04T09:55:55.273363Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "ebadd4f9-c911-4c30-9e3d-3f988d14a9a0",
+      "email": "kb***5@gmail.com",
+      "userCreatedAt": "2026-09-04T09:31:35.611545Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "8a522cdb-68a8-49a4-af9a-25e35ac317d8",
+      "email": "j.***3@gmail.com",
+      "userCreatedAt": "2026-09-04T08:19:03.870756Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "8f7a478d-d88d-405b-99b9-dc212d2a1c31",
+      "email": "wg***9@aol.com",
+      "userCreatedAt": "2026-09-04T07:24:12.188389Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "dd5fbc5d-7b01-44ba-b463-1e4285ec9204",
+      "email": "e.***0@gmail.com",
+      "userCreatedAt": "2026-09-04T04:15:57.830648Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "0a4e7c3a-40e9-41dd-8254-3068c0f655d5",
+      "email": "wi***d@yahoo.com",
+      "userCreatedAt": "2026-09-04T03:08:01.474272Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "8841c348-292a-4e06-90e2-0fbca1b66b86",
+      "email": "dr***2@gmail.com",
+      "userCreatedAt": "2026-09-04T02:03:17.5461Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "b8f055e3-3163-4e55-8f09-422666a05aac",
+      "email": "ja***t@me.com",
+      "userCreatedAt": "2026-09-04T00:54:28.224323Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "17c0f627-afeb-4c79-b0be-fcc11135786b",
+      "email": "k.***8@gmail.com",
+      "userCreatedAt": "2026-09-03T23:50:57.450544Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "b1e59d3b-7cc5-4196-a86c-1aea75454870",
+      "email": "ra***m@aexp.com",
+      "userCreatedAt": "2026-09-03T22:59:42.915363Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "1cc05b58-2e7d-4354-a352-29296e18d5b8",
+      "email": "l.***3@gmail.com",
+      "userCreatedAt": "2026-09-03T20:46:35.213926Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "546d4145-3ebb-42f0-8e16-044e32693f4e",
+      "email": "bp***3@bellsouth.net",
+      "userCreatedAt": "2026-09-03T20:11:23.279365Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "971ae1fd-5392-41ad-996d-6ea151d90232",
+      "email": "sc***9@hotmail.com",
+      "userCreatedAt": "2026-09-03T19:16:03.236523Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "043f069f-42ea-4283-a0ec-24f0468b9ee9",
+      "email": "dd***l@comcast.net",
+      "userCreatedAt": "2026-09-03T19:10:09.666712Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "7065bdd1-6f42-4c34-8b59-99eea2dd8eef",
+      "email": "d.***g@gmail.com",
+      "userCreatedAt": "2026-09-03T18:16:14.782629Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "463f6118-9954-4a16-b299-3c5f0257eb42",
+      "email": "z.***n@gmail.com",
+      "userCreatedAt": "2026-09-03T17:46:52.67553Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "a9247998-7181-4484-b1bc-6cd96d414ab1",
+      "email": "g.***3@gmail.com",
+      "userCreatedAt": "2026-09-03T16:59:35.196868Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "5ebe68f6-59ad-4aff-bb39-427c30cfc32c",
+      "email": "b.***1@gmail.com",
+      "userCreatedAt": "2026-09-03T16:50:09.958814Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "660ac864-700d-4927-80e2-ad775b9eb3b9",
+      "email": "s.***s@gmail.com",
+      "userCreatedAt": "2026-09-03T16:14:52.586346Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "1b4433ae-e39f-4166-980d-03a4f788d84b",
+      "email": "jh***0@jh.edu",
+      "userCreatedAt": "2026-09-03T16:03:09.828633Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "caa1aae4-c184-42f2-b9c2-59dc1378f7ff",
+      "email": "da***r@yahoo.com",
+      "userCreatedAt": "2026-09-03T15:56:09.928377Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "9cf37578-c5a7-4d0e-89e6-1be138ef0fe8",
+      "email": "ch***l@logan-aluminum.com",
+      "userCreatedAt": "2026-09-03T15:27:51.194046Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "47b31120-a338-4635-b9d2-819748461b1f",
+      "email": "ro***p@gmail.com",
+      "userCreatedAt": "2026-09-03T14:09:19.359187Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "41dc7bf5-2ce3-49bc-bdc4-530d8d2760b9",
+      "email": "ss***s@exactsciences.com",
+      "userCreatedAt": "2026-09-03T13:44:18.79007Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "068296ba-19f8-4afa-9a8d-286a6182ab26",
+      "email": "jv***l@stargate.net",
+      "userCreatedAt": "2026-09-03T13:11:01.739472Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "f071b9ef-4f01-48d6-8ac2-1dadf651dbb0",
+      "email": "am***4@yahoo.com",
+      "userCreatedAt": "2026-09-03T12:13:16.830001Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "c9c0f23e-046b-4187-9792-c68a08ff6cdd",
+      "email": "85***0@tmomail.net",
+      "userCreatedAt": "2026-09-03T11:56:16.535115Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "e2f75791-5869-4fdc-8106-a55741169c26",
+      "email": "sc***5@yahoo.com",
+      "userCreatedAt": "2026-09-03T11:31:53.940552Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "1981e7d4-8fb2-4ed7-aac7-80360859e31a",
+      "email": "mu***9@yahoo.com",
+      "userCreatedAt": "2026-09-03T10:58:24.464774Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "b0ff5f6b-754a-4ea3-be3d-33f253727698",
+      "email": "an***s@yahoo.com",
+      "userCreatedAt": "2026-09-03T09:57:52.669586Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "9f5bf2d7-8bb5-480b-9833-88ce6cf18a5b",
+      "email": "a7***6@gmail.com",
+      "userCreatedAt": "2026-09-03T04:06:50.478925Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "6febdcf8-dc0b-4dbc-940d-074cf943b617",
+      "email": "mk***k@exactsciences.com",
+      "userCreatedAt": "2026-09-03T04:01:03.356805Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "35734249-e6b7-49e0-a906-fe8651130b0f",
+      "email": "lu***3@gmail.com",
+      "userCreatedAt": "2026-09-03T03:53:41.352045Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "a3886310-f5a7-4692-8323-e55394266a37",
+      "email": "m.***2@gmail.com",
+      "userCreatedAt": "2026-09-03T02:21:41.037822Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "4cabc72a-90cc-490d-abe6-3c50e0f7dc1d",
+      "email": "ma***e@gmail.com",
+      "userCreatedAt": "2026-08-27T10:33:06.528905Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "62531857-fda0-4b4f-b804-4fda3af7cc9e",
+      "email": "al***3@zohomail.com.au",
+      "userCreatedAt": "2026-08-23T03:05:34.66765Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "15e50076-a5cd-49b3-9479-209259b0a44c",
+      "email": "ja***3@zohomail.com.au",
+      "userCreatedAt": "2026-08-23T02:06:50.714718Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "c4bbb18c-a55a-494b-ae55-e341db2e60cc",
+      "email": "ja***3@zohomail.com",
+      "userCreatedAt": "2026-08-23T02:04:42.615247Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "8a24a1a8-62b9-4dd4-8753-3336f2ab76d4",
+      "email": "al***3@zohomail.com.au",
+      "userCreatedAt": "2026-08-22T12:13:05.255883Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "9642829f-a564-4b04-a537-5febdb5f88ac",
+      "email": "al***e@zohomail.com.au",
+      "userCreatedAt": "2026-08-22T04:58:35.135839Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "0069e80a-ed41-4539-afc2-7ef33ee052f9",
+      "email": "al***3@gmail.com",
+      "userCreatedAt": "2026-08-22T04:18:05.705661Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "8dcdaf53-2a5e-4b50-b707-126d52324092",
+      "email": "ja***c@gmail.com",
+      "userCreatedAt": "2026-08-17T05:06:15.491152Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "2050704a-c36b-4a3a-b19f-0ced3aee6f81",
+      "email": "lu***e@provvypay.com",
+      "userCreatedAt": "2026-08-14T08:17:51.570782Z",
+      "status": "excluded",
+      "reason": "excluded_email"
+    },
+    {
+      "userId": "b475c0ab-ef8f-4212-8870-8b16bdf81b56",
+      "email": "co***3@gmail.com",
+      "userCreatedAt": "2026-08-10T23:16:48.788537Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "011377e1-4b26-4c7c-9b72-68e4e4169e08",
+      "email": "al***y@gmail.com",
+      "userCreatedAt": "2026-08-05T02:29:31.747305Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "afe8c3a1-8881-4348-ba44-effbb0909ab1",
+      "email": "al***e@gmail.com",
+      "userCreatedAt": "2026-08-02T10:11:14.164701Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "4f654261-697e-470d-84cc-d30e95fab945",
+      "email": "m.***9@gmail.com",
+      "userCreatedAt": "2026-07-27T19:45:41.118001Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "c99419b6-0de9-491d-8c8c-42f716eeedcd",
+      "email": "he***n@gmail.com",
+      "userCreatedAt": "2026-07-22T11:18:40.854384Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "df875392-8a77-40b0-9f93-046ea30f062d",
+      "email": "be***0@gmail.com",
+      "userCreatedAt": "2026-07-20T20:25:14.397773Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "93f420c4-021f-4c41-b991-ceb645fd39ee",
+      "email": "b.***4@gmail.com",
+      "userCreatedAt": "2026-07-11T12:28:33.279499Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "f18cf394-8f6d-4dc1-8540-f191be748ab3",
+      "email": "al***1@gmail.com",
+      "userCreatedAt": "2026-07-06T02:36:14.728686Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "a0759fcf-1ca1-4b6e-a5dd-0bf4137a95b7",
+      "email": "e.***2@gmail.com",
+      "userCreatedAt": "2026-07-05T03:23:46.866956Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "f15c2c35-9f30-4aa9-927e-c429607434b0",
+      "email": "ge***1@gmail.com",
+      "userCreatedAt": "2026-06-30T01:40:34.709061Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "4381ed2c-849b-4d64-aa8d-d177c675cdd6",
+      "email": "x.***9@gmail.com",
+      "userCreatedAt": "2026-06-29T13:19:24.745083Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "5f040702-8603-435d-a258-b93fa098b2ba",
+      "email": "ge***3@gmail.com",
+      "userCreatedAt": "2026-06-24T01:11:55.214227Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "27ed0fe3-8c05-471a-bf14-deff3e5a95e6",
+      "email": "sa***m@hub.com",
+      "userCreatedAt": "2026-06-24T01:06:45.091015Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "e3a7096c-087b-4afb-b4cd-d8837159e08d",
+      "email": "ja***e@hubspot.com",
+      "userCreatedAt": "2026-06-24T01:00:38.319727Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "3bcc6e0b-4454-4cd6-a366-459688069776",
+      "email": "un***1@gmail.com",
+      "userCreatedAt": "2026-06-23T08:25:31.939191Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "302cfb6f-81db-4f3a-b023-c4c02fc5835f",
+      "email": "og***2@gmail.com",
+      "userCreatedAt": "2026-06-23T00:55:37.338769Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "013c0b34-2dff-4f31-97cf-6bef60cfacbb",
+      "email": "i.***4@gmail.com",
+      "userCreatedAt": "2026-06-20T16:16:04.00048Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "630cb730-0cce-4688-bbfb-44ebf590c5f2",
+      "email": "vu***2@gmail.com",
+      "userCreatedAt": "2026-06-20T03:20:23.363291Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "3e9897ec-5ae3-4968-b753-3331c7fb4716",
+      "email": "al***1@gmail.com",
+      "userCreatedAt": "2026-06-19T09:27:11.526262Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "38da0435-c752-4c2d-9e1f-5eb8a08a159e",
+      "email": "al***0@gmail.com",
+      "userCreatedAt": "2026-06-19T06:25:51.866808Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "580055ed-c34a-497f-9a87-0a82891c38da",
+      "email": "al***9@gmail.com",
+      "userCreatedAt": "2026-06-19T06:24:12.273573Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "1be4f6a2-4eef-4ce1-b894-98107d958734",
+      "email": "al***8@gmail.com",
+      "userCreatedAt": "2026-06-19T05:56:43.033075Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "072ec7d0-946d-448f-a536-f8f9b2512b58",
+      "email": "al***7@gmail.com",
+      "userCreatedAt": "2026-06-19T01:17:22.949958Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "7aa8ce93-5fe1-4872-b5ab-f7caf30bcdfd",
+      "email": "al***6@gmail.com",
+      "userCreatedAt": "2026-06-19T00:39:16.375125Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "93fb3b75-5921-409c-a34c-5c4c8a2a2bb2",
+      "email": "al***2@gmail.com",
+      "userCreatedAt": "2026-06-18T11:44:58.328541Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "fe1a0c6a-ae3c-4c5a-92cc-e24d7592e4a4",
+      "email": "al***1@gmail.com",
+      "userCreatedAt": "2026-06-18T10:45:40.110237Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "5209d9c8-802e-4139-bbd0-7a3224ba9f86",
+      "email": "al***0@gmail.com",
+      "userCreatedAt": "2026-06-18T10:11:40.308641Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "8194f3f1-45a3-44a3-969e-4c067da511cb",
+      "email": "al***9@gmail.com",
+      "userCreatedAt": "2026-06-18T09:32:59.240424Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "972ea9f1-b7fd-4952-85e7-f9ade24e6504",
+      "email": "al***6@gmail.com",
+      "userCreatedAt": "2026-06-18T09:26:37.376244Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "30a8f159-07bb-4688-a9b5-22dd6dc33b1d",
+      "email": "al***5@gmail.com",
+      "userCreatedAt": "2026-06-18T07:06:49.419048Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "f5a74043-30fc-4a84-9df9-095cc5b89e67",
+      "email": "al***4@gmail.com",
+      "userCreatedAt": "2026-06-18T07:04:35.829585Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "091413e0-eb33-4601-8b23-1a38338e22b7",
+      "email": "al***3@gmail.com",
+      "userCreatedAt": "2026-06-18T03:39:54.377972Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "0d5c7673-9ef9-47ca-a1c4-22a0fb64469d",
+      "email": "al***2@gmail.com",
+      "userCreatedAt": "2026-06-18T02:23:49.78281Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "0a34f52e-4cf5-4767-b35d-4d7b843ba8f3",
+      "email": "al***1@gmail.com",
+      "userCreatedAt": "2026-06-17T14:13:27.209291Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "abee50f9-e4d2-43e2-b6b6-925747c79a2d",
+      "email": "al***0@gmail.com",
+      "userCreatedAt": "2026-06-17T13:29:14.415315Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "6a4401cc-5f24-4348-9213-b6d0a9d29ed3",
+      "email": "al***9@gmail.com",
+      "userCreatedAt": "2026-06-17T12:48:03.268084Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "0ae03c86-4415-45a6-8250-1e0671c7eb22",
+      "email": "al***8@gmail.com",
+      "userCreatedAt": "2026-06-17T12:04:10.928708Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "2dc13409-b040-4489-b499-8ed52c55b047",
+      "email": "al***7@gmail.com",
+      "userCreatedAt": "2026-06-17T12:03:18.781251Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "4b8eb2fd-5a23-4123-8ebf-3c2c46d6f496",
+      "email": "al***6@gmail.com",
+      "userCreatedAt": "2026-06-17T11:04:13.592308Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "902cac28-c549-4e37-a68a-ae64b1f98eae",
+      "email": "al***5@gmail.com",
+      "userCreatedAt": "2026-06-17T07:48:30.873947Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "5328efe7-58fd-49b6-804f-88d48b795d71",
+      "email": "al***4@gmail.com",
+      "userCreatedAt": "2026-06-17T01:21:32.149247Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "a42f6220-5e81-469d-a0f6-04eda97ace1d",
+      "email": "al***3@gmail.com",
+      "userCreatedAt": "2026-06-17T01:12:15.964101Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "2a94f9db-ca05-4dfb-bce7-aa122dbca2e1",
+      "email": "al***2@gmail.com",
+      "userCreatedAt": "2026-06-17T00:41:19.700305Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "587fc4c4-1463-483b-a0c4-ddb9881dc7af",
+      "email": "al***1@gmail.com",
+      "userCreatedAt": "2026-06-17T00:36:28.324453Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "f94c0efa-64cc-4713-89a7-f5dc840088d7",
+      "email": "al***0@gmail.com",
+      "userCreatedAt": "2026-06-17T00:32:47.834456Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "47b7e4b8-98e1-4467-97ff-7edf4812289c",
+      "email": "al***8@gmail.com",
+      "userCreatedAt": "2026-06-17T00:24:02.784153Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "2d755414-c849-46ea-b8a4-0cd903372a5d",
+      "email": "al***9@gmail.com",
+      "userCreatedAt": "2026-06-15T08:55:36.484557Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "98188bc6-b2b1-4efc-81f3-c0242f30828e",
+      "email": "al***7@gmail.com",
+      "userCreatedAt": "2026-06-13T02:02:53.970052Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "8af17c94-ca2e-4bb1-a21d-405e4bad3a2c",
+      "email": "al***5@gmail.com",
+      "userCreatedAt": "2026-06-12T02:13:57.646553Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "89050854-3fdb-4544-9f97-49e959c4894e",
+      "email": "al***4@gmail.com",
+      "userCreatedAt": "2026-06-09T05:36:02.998329Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "ab36bdc5-9227-44fa-af74-ddcaf4fb616b",
+      "email": "al***3@gmail.com",
+      "userCreatedAt": "2026-06-09T05:16:14.202017Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "7534d2ff-1416-42e9-a862-8e8cbf0365e1",
+      "email": "al***2@gmail.com",
+      "userCreatedAt": "2026-06-09T01:25:04.509592Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "b24e82d6-d647-4022-808e-973c18374b11",
+      "email": "al***1@gmail.com",
+      "userCreatedAt": "2026-06-09T00:54:57.760744Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "5313b206-386f-413a-b81c-79ec86edc748",
+      "email": "al***0@gmail.com",
+      "userCreatedAt": "2026-06-09T00:28:03.379316Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "dfe6b69e-7407-4cba-8506-23b14436b3f6",
+      "email": "al***9@gmail.com",
+      "userCreatedAt": "2026-06-08T13:34:22.648532Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "7a343a1b-4e57-43c3-93b6-f26695d4927d",
+      "email": "al***8@gmail.com",
+      "userCreatedAt": "2026-06-08T13:30:19.641522Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "1fb7e1bb-3c16-4b6a-bfd1-35adebd7fefd",
+      "email": "al***7@gmail.com",
+      "userCreatedAt": "2026-06-08T11:07:33.018741Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "70ea1b1c-0775-46b8-8554-2dc58a0e8339",
+      "email": "al***6@gmail.com",
+      "userCreatedAt": "2026-06-08T09:33:44.474123Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "e62e0c73-18cf-406f-8860-51345474f7b1",
+      "email": "al***5@gmail.com",
+      "userCreatedAt": "2026-06-08T09:09:15.818907Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "158f549e-3396-45cd-a287-90a19bc8a19e",
+      "email": "al***4@gmail.com",
+      "userCreatedAt": "2026-06-08T08:46:39.916296Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "e8cdcc3d-1378-4d40-8288-2cb3ac951130",
+      "email": "al***3@gmail.com",
+      "userCreatedAt": "2026-06-08T08:26:44.142012Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "d12d0655-0c59-4bd2-bc80-f7402445567f",
+      "email": "al***2@gmail.com",
+      "userCreatedAt": "2026-06-08T06:33:41.003996Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "e00f3dbb-7f4a-4149-8138-1372e0263dfb",
+      "email": "al***1@gmail.com",
+      "userCreatedAt": "2026-06-08T06:26:13.653974Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "b8d77443-73bb-4f46-99a7-5e0616ab43a1",
+      "email": "al***0@gmail.com",
+      "userCreatedAt": "2026-06-08T03:10:22.420301Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "7b321207-c9a0-483c-90f9-99a1cded4fd4",
+      "email": "al***9@gmail.com",
+      "userCreatedAt": "2026-06-08T02:27:25.256092Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "0d4010c7-8796-4bc7-ab14-bba6aaabf7a6",
+      "email": "al***8@gmail.com",
+      "userCreatedAt": "2026-06-08T01:49:09.027785Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "0e5d3082-1905-423d-94da-6a33ede4c1d1",
+      "email": "al***7@gmail.com",
+      "userCreatedAt": "2026-06-07T05:19:46.295053Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "a146e80b-69ec-4dcb-8934-9aa036005aaa",
+      "email": "al***6@gmail.com",
+      "userCreatedAt": "2026-06-07T04:49:20.690041Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "ed7666ea-b905-472b-a616-1ad3da1dd587",
+      "email": "al***2@gmail.com",
+      "userCreatedAt": "2026-06-06T09:32:15.05757Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "c5d1997d-a118-434d-a538-bb1ce246930b",
+      "email": "al***9@gmail.com",
+      "userCreatedAt": "2026-06-04T11:27:48.53285Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "5d75adb4-a5b8-4ca4-8808-bace88b5fe5a",
+      "email": "al***8@gmail.com",
+      "userCreatedAt": "2026-06-04T04:34:02.56955Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "850b9234-3334-483b-b1fb-638a7b306e7c",
+      "email": "al***7@gmail.com",
+      "userCreatedAt": "2026-06-04T04:00:27.248234Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "547f3426-ae69-4910-910b-4a4557cf30ae",
+      "email": "al***6@gmail.com",
+      "userCreatedAt": "2026-06-04T03:16:01.58862Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "a4598a2c-df46-4cf3-99c4-cdd28812d7c0",
+      "email": "al***4@gmail.com",
+      "userCreatedAt": "2026-06-04T02:15:47.872909Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "e0c6419a-c800-4c19-8f1e-e9db228e4471",
+      "email": "al***3@gmail.com",
+      "userCreatedAt": "2026-06-04T01:09:24.286027Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "573107f4-f18b-4f50-886c-d0887db72608",
+      "email": "al***2@gmail.com",
+      "userCreatedAt": "2026-06-03T12:01:21.370793Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "3bc7f63f-97d0-4012-9a84-977cdb0e3a99",
+      "email": "al***0@gmail.com",
+      "userCreatedAt": "2026-06-03T09:08:30.734078Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "e769ef67-1160-4352-9a05-684460347b1d",
+      "email": "al***9@gmail.com",
+      "userCreatedAt": "2026-06-03T07:56:24.698542Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "75351a57-37cd-4745-bfc5-c2aaeb5c46d4",
+      "email": "al***8@gmail.com",
+      "userCreatedAt": "2026-06-03T06:49:58.548627Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "302b592f-042e-4713-91ae-bb54208f98b4",
+      "email": "al***7@gmail.com",
+      "userCreatedAt": "2026-06-03T05:01:43.746077Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "3e1b8a02-e4a1-4639-8854-172d36c3f60c",
+      "email": "al***6@gmail.com",
+      "userCreatedAt": "2026-06-03T02:21:14.00943Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "6899b060-6413-4835-b2c5-8ade4a3cba78",
+      "email": "al***5@gmail.com",
+      "userCreatedAt": "2026-06-02T14:45:42.505893Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "07e8bca8-6bdc-488c-bcbb-56a9dc27991d",
+      "email": "al***4@gmail.com",
+      "userCreatedAt": "2026-06-02T04:33:58.426664Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "cef57a8f-9ec5-4c9e-898c-ff497424ce02",
+      "email": "al***3@gmail.com",
+      "userCreatedAt": "2026-06-01T14:32:57.407343Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "b7eeb9ce-dd9e-47bc-bc98-7ab6338c4647",
+      "email": "al***1@gmail.com",
+      "userCreatedAt": "2026-06-01T04:19:18.22281Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "38ff797c-4007-4fb4-9686-d638eef67021",
+      "email": "al***2@gmail.com",
+      "userCreatedAt": "2026-06-01T01:34:58.537656Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "285aa80d-55c2-4063-ba59-856ee768e634",
+      "email": "al***0@gmail.com",
+      "userCreatedAt": "2026-06-01T01:01:45.120335Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "27e8c168-47ef-4482-8422-1f73b3c3d3de",
+      "email": "al***9@gmail.com",
+      "userCreatedAt": "2026-05-31T12:01:50.852006Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "0476458f-d911-4c6b-a6c3-96e0f70e633c",
+      "email": "al***7@gmail.com",
+      "userCreatedAt": "2026-05-31T06:47:25.627512Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "e7e57f0d-8aac-4d33-95c6-418796768c1b",
+      "email": "al***8@gmail.com",
+      "userCreatedAt": "2026-05-31T04:31:31.076816Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "ac325ac5-9664-44f6-b27a-ccd8ece37d9f",
+      "email": "al***4@gmail.com",
+      "userCreatedAt": "2026-05-31T03:55:28.84202Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "d0588ff9-2f62-4e62-abcb-7eb2921e44d8",
+      "email": "al***3@gmail.com",
+      "userCreatedAt": "2026-05-31T03:21:19.609258Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "2b0f10f3-3f6f-4ac5-b90f-ceed67584d9f",
+      "email": "al***2@gmail.com",
+      "userCreatedAt": "2026-05-31T03:03:52.78928Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "061f8984-35ed-4674-9e09-6ff7d7ef015f",
+      "email": "al***1@gmail.com",
+      "userCreatedAt": "2026-05-31T02:18:46.587283Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "d43d3e92-da38-4c7c-8a7a-28cbd43717d9",
+      "email": "al***0@gmail.com",
+      "userCreatedAt": "2026-05-31T01:50:10.38354Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "1d8a6c65-c3ca-4b1a-bec6-406e6e0f2554",
+      "email": "al***9@gmail.com",
+      "userCreatedAt": "2026-05-30T13:56:10.859228Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "6d413586-7f7e-4aa9-a328-7d3124f246d6",
+      "email": "al***8@gmail.com",
+      "userCreatedAt": "2026-05-30T12:04:10.841216Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "02e0cf0f-dfb9-444d-9083-0fedc462b317",
+      "email": "al***7@gmail.com",
+      "userCreatedAt": "2026-05-30T10:29:03.724002Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "160ac75e-d004-4cf0-97c2-a447565f3f8b",
+      "email": "al***6@gmail.com",
+      "userCreatedAt": "2026-05-30T07:47:51.441604Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "72350d6d-1fd0-4cc4-b60c-d2459e082a4d",
+      "email": "al***5@gmail.com",
+      "userCreatedAt": "2026-05-30T06:55:48.613243Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "b22f3c8c-d786-4b96-b44b-c5e3d32205ba",
+      "email": "al***4@gmail.com",
+      "userCreatedAt": "2026-05-30T05:36:02.629699Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "af595cbd-8e1b-4a15-b7c4-4f319b879314",
+      "email": "al***3@gmail.com",
+      "userCreatedAt": "2026-05-30T05:12:01.697221Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "9345b4dc-18d5-42bf-a37c-ee31fd51f529",
+      "email": "al***2@gmail.com",
+      "userCreatedAt": "2026-05-30T03:56:27.016291Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "dfc55e98-a55e-4c68-a084-4f05ca615ec5",
+      "email": "al***1@gmail.com",
+      "userCreatedAt": "2026-05-30T03:49:51.616556Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "e4081411-7f29-4b28-a960-4f7ccbcf529d",
+      "email": "al***0@gmail.com",
+      "userCreatedAt": "2026-05-30T03:25:14.088491Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "ba15071d-788c-445f-b1f3-f047330c46a4",
+      "email": "al***9@gmail.com",
+      "userCreatedAt": "2026-05-30T02:51:20.054132Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "72180f8c-ce85-44a8-8806-ea300c0586ca",
+      "email": "al***8@gmail.com",
+      "userCreatedAt": "2026-05-29T08:10:29.275499Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "13b04491-2399-4f08-8ede-a5e9c7c09518",
+      "email": "al***7@gmail.com",
+      "userCreatedAt": "2026-05-29T03:36:25.292941Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "669b55bf-2cac-418e-b6d5-9042b84b99fe",
+      "email": "al***6@gmail.com",
+      "userCreatedAt": "2026-05-28T13:39:18.82681Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "874192c3-a3f9-4f3d-b0bc-8553bf6be4da",
+      "email": "al***5@gmail.com",
+      "userCreatedAt": "2026-05-28T08:17:07.503927Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "1e14a776-711b-4f10-8c78-3b8f8cf1cfa3",
+      "email": "al***3@gmail.com",
+      "userCreatedAt": "2026-05-28T05:11:34.417043Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "fc84b8f0-5805-4ded-bddd-8c493b360daf",
+      "email": "al***2@gmail.com",
+      "userCreatedAt": "2026-05-28T02:32:12.405334Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "787d74f5-f054-4c76-a2c0-76caf0064604",
+      "email": "al***1@gmail.com",
+      "userCreatedAt": "2026-05-27T13:03:22.152904Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "e31f2955-a05a-4927-92ea-3f4735a1e8ab",
+      "email": "al***0@gmail.com",
+      "userCreatedAt": "2026-05-27T10:36:06.279224Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "7a77f9ae-5c5a-48eb-bd9b-285534788387",
+      "email": "al***9@gmail.com",
+      "userCreatedAt": "2026-05-27T06:54:37.936461Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "fb40fd5e-f0ff-4ecf-9bfb-aff1269581f2",
+      "email": "al***8@gmail.com",
+      "userCreatedAt": "2026-05-27T03:05:03.237295Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "72873231-de36-4bb4-a337-7c6864c2562a",
+      "email": "al***7@gmail.com",
+      "userCreatedAt": "2026-05-27T01:17:36.047471Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "f301e6d2-6d03-4e3f-a976-3bc4a27243e9",
+      "email": "al***6@gmail.com",
+      "userCreatedAt": "2026-05-26T09:52:56.55944Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "bf8728b5-f715-4a35-9ecc-7d35f175a5c1",
+      "email": "al***5@gmail.com",
+      "userCreatedAt": "2026-05-26T04:36:41.25133Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "6031b890-1e25-427d-9a34-0fba84723b41",
+      "email": "al***4@gmail.com",
+      "userCreatedAt": "2026-05-26T03:31:54.660126Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "70c591a6-472c-446b-a69b-f21a6f8fe030",
+      "email": "al***3@gmail.com",
+      "userCreatedAt": "2026-05-25T14:17:39.151566Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "177710c1-a38d-4904-8bf0-2b935a1f140a",
+      "email": "al***2@gmail.com",
+      "userCreatedAt": "2026-05-25T09:36:11.091552Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "910b36bd-bb95-4c8d-9bce-0b06ad54efd9",
+      "email": "al***1@gmail.com",
+      "userCreatedAt": "2026-05-25T01:42:56.818124Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "d164ff66-99fa-4dc5-ad13-8239a4bdeb89",
+      "email": "al***0@gmail.com",
+      "userCreatedAt": "2026-05-23T05:38:33.544659Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "b7a67dc3-fa29-4e38-85d4-359e659a53f7",
+      "email": "al***9@gmail.com",
+      "userCreatedAt": "2026-05-23T05:03:11.84841Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "3b3f1ff0-8d47-456b-9902-02f5d58c7f4f",
+      "email": "al***8@gmail.com",
+      "userCreatedAt": "2026-05-23T03:50:04.680971Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "d1233397-1ba1-481e-958e-14b0317d2e70",
+      "email": "al***7@gmail.com",
+      "userCreatedAt": "2026-05-23T03:19:36.885668Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "24378a11-0930-438d-a562-0ca4c1f9e090",
+      "email": "al***6@gmail.com",
+      "userCreatedAt": "2026-05-23T02:51:46.108809Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "d2367161-9acd-4b79-899f-ca2333d7a81e",
+      "email": "al***5@gmail.com",
+      "userCreatedAt": "2026-05-23T01:11:46.521393Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "419a62b2-6c25-4852-860c-a21f0bb03273",
+      "email": "al***4@gmail.com",
+      "userCreatedAt": "2026-05-22T13:35:40.050885Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "064fcb0c-9f76-4e72-aea8-919b61e88e51",
+      "email": "al***3@gmail.com",
+      "userCreatedAt": "2026-05-22T06:42:33.855106Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "9730ebaf-56be-4206-8dc8-b0a6a7d89bae",
+      "email": "al***2@gmail.com",
+      "userCreatedAt": "2026-05-22T04:42:32.074095Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "5da69e35-862d-4c0f-8881-30f2d1476e4c",
+      "email": "al***1@gmail.com",
+      "userCreatedAt": "2026-05-22T03:10:34.325309Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "4d5e084d-b071-4e82-9c3a-2c9f0f968888",
+      "email": "al***0@gmail.com",
+      "userCreatedAt": "2026-05-22T01:46:15.292531Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "3c724a73-7dad-4c13-a63c-8edcf962aee3",
+      "email": "al***9@gmail.com",
+      "userCreatedAt": "2026-05-22T01:17:31.960934Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "856014cc-6cff-416a-a180-d01c1de9073c",
+      "email": "al***8@gmail.com",
+      "userCreatedAt": "2026-05-20T11:37:12.019977Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "e01a7f22-b4f6-4e21-8a47-b42e38657d40",
+      "email": "hu***c@gmail.com",
+      "userCreatedAt": "2026-05-19T11:01:58.100603Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "bd94f781-b2dd-442b-9719-f8ecd30280d4",
+      "email": "al***7@gmail.com",
+      "userCreatedAt": "2026-05-19T02:24:28.845233Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "8e13b4ac-4e77-4ad2-86e1-379a5b8a1522",
+      "email": "al***6@gmail.com",
+      "userCreatedAt": "2026-05-19T00:50:42.262577Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "68bee60d-b04a-4e7f-95e0-04e278aa64c0",
+      "email": "al***4@gmail.com",
+      "userCreatedAt": "2026-05-19T00:46:00.844214Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "0e6b78d3-dad9-4e29-80b9-ccdfb96a3fd6",
+      "email": "al***5@gmail.com",
+      "userCreatedAt": "2026-05-18T03:57:59.618843Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "1fd15ee0-7bee-4ffa-8cb7-e0b200d0c1f3",
+      "email": "h*@provvypay.com",
+      "userCreatedAt": "2026-05-08T02:23:05.868124Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "db2b5687-ebcd-483b-ac3b-804905b0664b",
+      "email": "al***a@email.com",
+      "userCreatedAt": "2026-04-12T09:29:05.641653Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "42b6b8d1-d9d1-4da7-8b46-8a88e78a517b",
+      "email": "al***a@google.com",
+      "userCreatedAt": "2026-04-12T07:18:34.939222Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "a3a40071-9e6b-4d5b-a357-fc60a4890674",
+      "email": "al***a@yahoo.com",
+      "userCreatedAt": "2026-04-12T04:46:05.050319Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "c3ef2956-7734-42ae-900b-97e7c1df97ad",
+      "email": "ja***3@gmail.com",
+      "userCreatedAt": "2026-04-12T04:19:05.547401Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "599efa37-e6d0-45a5-b0cf-ce16e95d2660",
+      "email": "al***c@gmail.com",
+      "userCreatedAt": "2026-03-26T07:10:08.259149Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "b35d2a31-57fa-468b-8207-42bff4c52a6c",
+      "email": "al***a@provvypay.com",
+      "userCreatedAt": "2026-02-21T07:24:43.867813Z",
+      "status": "excluded",
+      "reason": "excluded_email"
+    },
+    {
+      "userId": "a24d8a1a-52e1-4e09-8eca-a8d872e9f8e4",
+      "email": "da***e@evolvh3r.com",
+      "userCreatedAt": "2026-02-21T06:57:36.335741Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "4d7df781-111c-414d-b679-2e6d96ea6533",
+      "email": "be***b@gmail.com",
+      "userCreatedAt": "2026-01-31T09:12:36.123525Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "cd472da6-48ec-41db-aa76-e3afcad407a9",
+      "email": "be***a@gmail.com",
+      "userCreatedAt": "2026-01-31T04:49:14.887674Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "1daedda6-4a1f-4d32-bb29-226119dd7578",
+      "email": "be***a@gmail.com",
+      "userCreatedAt": "2026-01-31T03:53:43.042496Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "93179205-4634-44a9-9305-cb86bd3d67ec",
+      "email": "be***3@gmail.com",
+      "userCreatedAt": "2026-01-31T03:41:48.059633Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "af5ae94e-2879-495f-8310-c776a0e4d5b8",
+      "email": "be***t@provvypay.com",
+      "userCreatedAt": "2026-01-31T03:37:26.161519Z",
+      "status": "eligible"
+    },
+    {
+      "userId": "1bc6a6b2-4bde-43a6-b06c-0165492ad56c",
+      "email": "he***o@provvypay.com",
+      "userCreatedAt": "2026-01-21T03:41:50.830758Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "e806194d-14e6-4e63-95ce-9f13f92889d7",
+      "email": "ja***7@gmail.com",
+      "userCreatedAt": "2026-01-20T08:53:32.836156Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    },
+    {
+      "userId": "ea9b4e7d-57a7-4ee6-924c-e3ccba38e5ae",
+      "email": "al***3@gmail.com",
+      "userCreatedAt": "2025-12-09T02:43:30.353667Z",
+      "status": "excluded",
+      "reason": "verified_email"
+    }
+  ],
+  "generatedAt": "2026-09-14T14:53:28.758Z"
+}

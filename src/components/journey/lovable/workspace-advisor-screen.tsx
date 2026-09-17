@@ -7,6 +7,11 @@ import { isAdvisorChatEnabledClient } from '@/lib/advisor/advisor-chat-config';
 import { FLAGSHIP_ADVISOR_PAYMENT } from '@/lib/advisor/payment-advisor';
 import { PAYMENT_ADVISOR_DEMO_INTENTS } from '@/lib/advisor/payment-advisor-intents';
 import { WorkspaceAdvisorChatPanel } from '@/components/journey/lovable/workspace-advisor-chat-panel';
+import { OnboardingReadinessPanel } from '@/components/business-passport/onboarding-readiness-panel';
+import { EarlyPaymentIncentiveCard } from '@/components/commercial-incentive/early-payment-incentive-card';
+import { selectPassportOffering } from '@/lib/business-passport/select-offering';
+import type { AdvisorOfferingRef } from '@/lib/business-passport/types';
+import type { PaymentAdvisorResponse } from '@/lib/advisor/payment-advisor-types';
 import { createClient } from '@/lib/supabase/client';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { useCommercialReadinessOptional } from '@/hooks/use-commercial-readiness';
@@ -45,6 +50,7 @@ export function WorkspaceAdvisorScreen() {
   const [advisorAnswer, setAdvisorAnswer] = useState<string | null>(null);
   const [advisorLoading, setAdvisorLoading] = useState(false);
   const [advisorError, setAdvisorError] = useState<string | null>(null);
+  const [passportOffering, setPassportOffering] = useState<AdvisorOfferingRef | null>(null);
 
   useEffect(() => {
     const local = restoreJourneyAssessment();
@@ -117,6 +123,7 @@ export function WorkspaceAdvisorScreen() {
     setAdvisorLoading(true);
     setAdvisorError(null);
     setAdvisorAnswer(null);
+    setPassportOffering(null);
 
     try {
       const response = await fetch('/api/advisor/ask', {
@@ -136,9 +143,8 @@ export function WorkspaceAdvisorScreen() {
           },
         }),
       });
-      const payload = (await response.json()) as {
+      const payload = (await response.json()) as PaymentAdvisorResponse & {
         ok?: boolean;
-        answer?: string;
         error?: string;
       };
 
@@ -153,6 +159,12 @@ export function WorkspaceAdvisorScreen() {
       }
 
       setAdvisorAnswer(payload.answer ?? 'No answer returned.');
+      setPassportOffering(
+        selectPassportOffering({
+          scenarioOffering: payload.scenarioComparison?.scenarioOffering ?? null,
+          alternatives: payload.alternatives ?? [],
+        })
+      );
     } catch {
       setAdvisorError('Unable to reach Provvy payment intelligence.');
     } finally {
@@ -237,6 +249,8 @@ export function WorkspaceAdvisorScreen() {
         ) : null}
       </section>
 
+      <EarlyPaymentIncentiveCard />
+
       {advisorChatEnabled ? (
         <WorkspaceAdvisorChatPanel />
       ) : (
@@ -274,6 +288,12 @@ export function WorkspaceAdvisorScreen() {
             <pre className="mt-4 whitespace-pre-wrap rounded-xl border border-border bg-muted/40 p-4 text-[13px] leading-relaxed text-foreground">
               {advisorAnswer}
             </pre>
+          ) : null}
+          {passportOffering ? (
+            <OnboardingReadinessPanel
+              offeringId={passportOffering.offeringId}
+              providerName={passportOffering.providerName}
+            />
           ) : null}
         </section>
       )}

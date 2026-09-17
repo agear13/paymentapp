@@ -37,6 +37,8 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
+import { EarlyPaymentIncentiveCard } from '@/components/commercial-incentive/early-payment-incentive-card';
+import { OnchainCommitmentCard } from '@/components/xlayer/onchain-commitment-card';
 import { AgreementIntelligenceParticipantDetail } from '@/components/journey/lovable/agreement-intelligence-participant-detail';
 import { AgreementChangeRequestReview } from '@/components/agreements/agreement-change-request-review';
 import { ParticipantCoordinationSummary } from '@/components/journey/lovable/agreement-intelligence-participant-status';
@@ -755,6 +757,17 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
                     ))}
                   </ul>
                 </div>
+              ) : null}
+
+              {extraction && installed?.id && agreement?.id ? (
+                <EarlyPaymentIncentiveCard
+                  workflowId={installed.id}
+                  agreementId={agreement.id}
+                />
+              ) : null}
+
+              {extraction && agreement?.id ? (
+                <OnchainCommitmentCard agreementId={agreement.id} />
               ) : null}
 
               {lifecycleStatus === 'EXTRACTION_FAILED' && (

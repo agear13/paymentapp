@@ -9,6 +9,8 @@ import {
   sourceAgreementHref,
 } from '@/lib/commercial-os/commercial-workspace-collection';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
+import { EarlyPaymentIncentiveCard } from '@/components/commercial-incentive/early-payment-incentive-card';
+import { OnchainCommitmentCard } from '@/components/xlayer/onchain-commitment-card';
 
 type LinkedAgreement = {
   id: string;
@@ -102,6 +104,8 @@ export function CommercialWorkspaceAgreementPanel() {
           </Link>
         ) : null}
       </div>
+      {linked?.id ? <EarlyPaymentIncentiveCard agreementId={linked.id} /> : null}
+      {linked?.id ? <OnchainCommitmentCard agreementId={linked.id} /> : null}
     </div>
   );
 }

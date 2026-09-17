@@ -28,6 +28,14 @@ jest.mock('next/link', () => ({
 
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 
+jest.mock('@/components/commercial-incentive/early-payment-incentive-card', () => ({
+  EarlyPaymentIncentiveCard: () => null,
+}));
+
+jest.mock('@/components/xlayer/onchain-commitment-card', () => ({
+  OnchainCommitmentCard: () => null,
+}));
+
 jest.mock('@/hooks/use-deployed-workflows', () => {
   const installed = {
     id: 'wf-ai',
