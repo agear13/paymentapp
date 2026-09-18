@@ -3,6 +3,8 @@
 import './lovable-journey.css';
 import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark';
 import { LandingBusinessFlows } from '@/components/journey/lovable/landing-business-flows';
+import { LandingHeroGlobe } from '@/components/journey/lovable/landing-hero-globe';
+import { LandingInfrastructureLayer } from '@/components/journey/lovable/landing-infrastructure-layer';
 import { LandingPaymentSearch } from '@/components/journey/lovable/landing-payment-search';
 import { CALENDLY_CONSULTATION_URL } from '@/lib/config/calendly-consultation-url';
 import { useState } from 'react';
@@ -190,40 +192,47 @@ function Nav({ dark, onToggleDark }: { dark: boolean; onToggleDark: () => void }
 
 function Hero() {
   return (
-    <section id="compare" className="relative px-6 pt-10 pb-12 sm:pt-14 sm:pb-16">
+    <section id="compare" className="relative overflow-x-hidden px-6 pt-10 pb-12 sm:pt-14 sm:pb-16">
       <div
         className="pointer-events-none absolute inset-x-0 top-0 h-[420px]"
         style={{ background: 'var(--gradient-hero)' }}
       />
-      <div className="relative mx-auto max-w-5xl text-center animate-fade-up">
-        <h1 className="text-balance text-[1.85rem] font-semibold tracking-[-0.03em] sm:text-4xl md:text-5xl">
-          <span className="text-gradient">The Skyscanner for payments.</span>
-        </h1>
-        <p className="mx-auto mt-5 max-w-2xl text-balance text-[15px] text-ink-soft sm:mt-6 sm:text-base">
-          Compare payment routes, understand the trade-offs and get a recommendation built around
-          your business.
-        </p>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-          <a
-            href="#landing-search-heading"
-            className="inline-flex items-center gap-1.5 rounded-xl bg-foreground px-4 py-2.5 text-[14px] font-medium text-background"
-          >
-            Compare routes <ArrowRight className="h-4 w-4" />
-          </a>
-          <a
-            href="#how-it-works"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-4 py-2.5 text-[14px] font-medium text-foreground hover:bg-accent"
-          >
-            See how it works
-          </a>
+      <div className="relative isolate">
+        <LandingHeroGlobe />
+        <div className="relative z-10 mx-auto max-w-5xl text-center animate-fade-up">
+          <h1 className="text-balance text-[1.85rem] font-semibold tracking-[-0.03em] sm:text-4xl md:text-5xl">
+            <span className="text-gradient">The Skyscanner for payments.</span>
+          </h1>
+          <p className="mx-auto mt-5 max-w-2xl text-balance text-[15px] text-ink-soft sm:mt-6 sm:text-base">
+            Compare payment routes, understand the trade-offs and get a recommendation built around
+            your business.
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <a
+              href="#landing-search-heading"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-foreground px-4 py-2.5 text-[14px] font-medium text-background"
+            >
+              Compare routes <ArrowRight className="h-4 w-4" />
+            </a>
+            <a
+              href="#how-it-works"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-background px-4 py-2.5 text-[14px] font-medium text-foreground hover:bg-accent"
+            >
+              See how it works
+            </a>
+          </div>
         </div>
       </div>
 
-      <div className="relative mx-auto mt-8 max-w-5xl animate-fade-up sm:mt-10">
+      <div className="relative z-10 mx-auto mt-8 max-w-5xl animate-fade-up sm:mt-10">
         <LandingBusinessFlows />
       </div>
 
-      <div className="relative mx-auto mt-8 max-w-5xl animate-fade-up sm:mt-10">
+      <div className="relative z-10 mx-auto mt-8 max-w-5xl animate-fade-up sm:mt-10">
+        <LandingInfrastructureLayer />
+      </div>
+
+      <div className="relative z-10 mx-auto mt-8 max-w-5xl animate-fade-up sm:mt-10">
         <LandingPaymentSearch />
       </div>
     </section>

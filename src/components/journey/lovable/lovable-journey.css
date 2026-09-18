@@ -198,6 +198,120 @@ html.dark .lovable-journey option,
 .lovable-journey .animate-float { animation: lovable-float-slow 6s ease-in-out infinite; }
 .lovable-journey .animate-pulse-glow { animation: lovable-pulse-glow 4s ease-in-out infinite; }
 
+@keyframes landing-globe-spin {
+  from { transform: rotate(-10deg); }
+  to { transform: rotate(10deg); }
+}
+@keyframes landing-globe-drift {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(-8px, 6px, 0); }
+}
+@keyframes landing-globe-orbit {
+  from { transform: rotate(-18deg); }
+  to { transform: rotate(342deg); }
+}
+@keyframes landing-globe-node {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+.lovable-journey .landing-hero-globe {
+  opacity: 0.26;
+  -webkit-mask-image: radial-gradient(ellipse 78% 72% at 82% 38%, #000 36%, rgba(0, 0, 0, 0.45) 58%, transparent 76%);
+  mask-image: radial-gradient(ellipse 78% 72% at 82% 38%, #000 36%, rgba(0, 0, 0, 0.45) 58%, transparent 76%);
+}
+html.dark .lovable-journey .landing-hero-globe,
+.lovable-journey.dark .landing-hero-globe {
+  opacity: 0.9;
+}
+.lovable-journey .landing-hero-globe__frame {
+  position: absolute;
+  top: 46%;
+  right: -18%;
+  width: min(22rem, 86vw);
+  aspect-ratio: 1;
+  transform: translateY(-62%);
+}
+.lovable-journey .landing-hero-globe__spin,
+.lovable-journey .landing-hero-globe__drift,
+.lovable-journey .landing-hero-globe__orbit {
+  transform-box: view-box;
+  transform-origin: 256px 256px;
+}
+.lovable-journey .landing-hero-globe__spin {
+  animation: landing-globe-spin 48s ease-in-out infinite alternate;
+}
+.lovable-journey .landing-hero-globe__drift {
+  animation: landing-globe-drift 28s ease-in-out infinite;
+}
+.lovable-journey .landing-hero-globe__orbit {
+  animation: landing-globe-orbit 72s linear infinite;
+}
+.lovable-journey .landing-hero-globe__orbit--slow {
+  animation-duration: 110s;
+  animation-direction: reverse;
+}
+.lovable-journey .landing-hero-globe__node {
+  animation: landing-globe-node 7.5s ease-in-out infinite;
+}
+.lovable-journey .landing-hero-globe__node:nth-child(2n) { animation-delay: -2.4s; }
+.lovable-journey .landing-hero-globe__node:nth-child(3n) { animation-delay: -4.1s; }
+
+@media (min-width: 640px) {
+  .lovable-journey .landing-hero-globe__frame {
+    right: -10%;
+    width: min(32rem, 62vw);
+  }
+}
+@media (min-width: 1024px) {
+  .lovable-journey .landing-hero-globe__frame {
+    right: -6%;
+    width: min(40rem, 52vw);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lovable-journey .landing-hero-globe__spin,
+  .lovable-journey .landing-hero-globe__drift,
+  .lovable-journey .landing-hero-globe__orbit,
+  .lovable-journey .landing-hero-globe__node {
+    animation: none;
+  }
+}
+
+@keyframes landing-infra-breathe {
+  0%, 100% { opacity: 0.28; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.06); }
+}
+
+.lovable-journey .landing-infra-hub__glow {
+  position: absolute;
+  inset: -18%;
+  border-radius: 999px;
+  background: radial-gradient(circle, oklch(0.58 0.2 293 / 0.28), transparent 68%);
+  animation: landing-infra-breathe 5.6s ease-in-out infinite;
+}
+.lovable-journey .landing-infra-path {
+  stroke-linecap: round;
+}
+.lovable-journey .landing-infra-desktop-only {
+  display: none;
+}
+@media (min-width: 1024px) {
+  .lovable-journey .landing-infra-desktop-only {
+    display: unset;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lovable-journey .landing-infra-hub__glow {
+    animation: none;
+  }
+  .lovable-journey .landing-infra-dot {
+    display: none;
+  }
+}
+
 /* Compact Provvy orb in the landing Advisor panel */
 .lovable-journey .landing-advisor-orb {
   --orb-intensity: 0.36;

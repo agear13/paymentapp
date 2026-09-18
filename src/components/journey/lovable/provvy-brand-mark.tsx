@@ -11,7 +11,7 @@ export function ProvvyBrandMark({ href = '/journey', wordmark = 'Provvy' }: Prov
   if (href) {
     return (
       <Link href={href} className="flex items-center gap-2">
-        <ProvvypayLogoMark href={undefined} showWordmark={false} size="sm" />
+        <ProvvypayLogoMark href="" showWordmark={false} size="sm" />
         <span className="text-[15px] font-semibold tracking-tight">{wordmark}</span>
       </Link>
     );
@@ -19,7 +19,7 @@ export function ProvvyBrandMark({ href = '/journey', wordmark = 'Provvy' }: Prov
 
   return (
     <div className="flex items-center gap-2">
-      <ProvvypayLogoMark href={undefined} showWordmark={false} size="sm" />
+      <ProvvypayLogoMark href="" showWordmark={false} size="sm" />
       <span className="text-[15px] font-semibold tracking-tight">{wordmark}</span>
     </div>
   );

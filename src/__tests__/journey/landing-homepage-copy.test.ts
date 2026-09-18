@@ -21,6 +21,8 @@ describe('homepage narrative and control principles', () => {
   const advisorUi = read('components/journey/lovable/landing-advisor.tsx');
   const businessFlows = read('lib/journey/landing-business-flows.ts');
   const businessFlowsUi = read('components/journey/lovable/landing-business-flows.tsx');
+  const infrastructure = read('lib/journey/landing-infrastructure-layer.ts');
+  const infrastructureUi = read('components/journey/lovable/landing-infrastructure-layer.tsx');
   const feed = read('lib/journey/payment-intelligence-feed.ts');
   const rank = read('lib/journey/payment-intelligence-rank.ts');
   const labels = read('lib/journey/landing-result-labels.ts');
@@ -43,14 +45,25 @@ describe('homepage narrative and control principles', () => {
     expect(search).not.toContain('label="Origin"');
     expect(search).not.toContain('label="Destination"');
     expect(search).not.toContain('Transaction type');
-    expect(landing).toContain('LandingPaymentSearch');
+    expect(landing).toContain('LandingHeroGlobe');
     expect(landing).toContain('LandingBusinessFlows');
+    expect(landing).toContain('LandingInfrastructureLayer');
+    expect(landing).toContain('LandingPaymentSearch');
+    expect(landing.indexOf('<LandingHeroGlobe')).toBeLessThan(
+      landing.indexOf('The Skyscanner for payments.')
+    );
+    expect(landing.indexOf('<LandingHeroGlobe')).toBeLessThan(
+      landing.indexOf('<LandingBusinessFlows')
+    );
     expect(landing).toContain('LandingPaymentIntelligence');
     expect(landing).toContain('LandingPaymentIntelligenceSubscribe');
     expect(landing.indexOf('<LandingBusinessFlows')).toBeGreaterThan(
       landing.indexOf('See how it works')
     );
     expect(landing.indexOf('<LandingBusinessFlows')).toBeLessThan(
+      landing.indexOf('<LandingInfrastructureLayer')
+    );
+    expect(landing.indexOf('<LandingInfrastructureLayer')).toBeLessThan(
       landing.lastIndexOf('<LandingPaymentSearch')
     );
     expect(landing.lastIndexOf('<LandingPaymentSearch')).toBeLessThan(
@@ -189,6 +202,27 @@ describe('homepage narrative and control principles', () => {
     expect(`${businessFlows}\n${businessFlowsUi}`).not.toMatch(/revolutionary/i);
     expect(advisorUi).toContain("onClick={() => setOpen(true)}");
     expect(advisorUi).not.toContain('LandingBusinessFlows');
+  });
+
+  it('places Provvy above existing payment infrastructure without replacement claims', () => {
+    expect(infrastructure).toContain('One intelligence layer');
+    expect(infrastructure).toContain('Your existing payment infrastructure.');
+    expect(infrastructure).toContain('Connected by Provvy.');
+    expect(infrastructure).toContain('Understand → Recommend → Coordinate');
+    expect(infrastructure).toContain('Stripe');
+    expect(infrastructure).toContain('Wise');
+    expect(infrastructure).toContain('Airwallex');
+    expect(infrastructure).toContain('MetaMask');
+    expect(infrastructure).toContain('HashPack');
+    expect(infrastructure).toContain('Hedera');
+    expect(infrastructure).toContain('Cregis');
+    expect(infrastructure).toContain('Xero');
+    expect(infrastructure).toContain("ctaHref: COMMERCIAL_OS_ROUTES.connected");
+    expect(infrastructureUi).toContain('LandingInfrastructureLayer');
+    expect(`${infrastructure}\n${infrastructureUi}`).not.toMatch(/QuickBooks/);
+    expect(`${infrastructure}\n${infrastructureUi}`).not.toMatch(/replaces your payment/i);
+    expect(`${infrastructure}\n${infrastructureUi}`).not.toMatch(/another payment rail/i);
+    expect(advisorUi).not.toContain('LandingInfrastructureLayer');
   });
 
   it('keeps workflow and pricing anchors used by the rest of the product', () => {
