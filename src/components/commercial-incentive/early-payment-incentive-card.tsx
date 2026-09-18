@@ -94,7 +94,15 @@ export function EarlyPaymentIncentiveCard({
   if (decision?.status === 'dismissed') return null;
 
   const economics = decision?.economics ?? recommendation?.economics;
-  const standardLabel = decision?.sourceDueLabel ?? recommendation?.sourceDueLabel;
+  const extractedDue =
+    view.originalDueLabels[0] ||
+    recommendation?.delayedTerms[0]?.dueCondition ||
+    decision?.sourceDueLabel ||
+    recommendation?.sourceDueLabel;
+  const standardLabel = extractedDue || 'Net 30';
+  const additionLabel = `Pay within ${
+    decision?.acceleratedDays ?? recommendation?.acceleratedDays
+  } days → ${decision?.incentivePercent ?? recommendation?.incentivePercent}% discount`;
   const milestoneMoney = moneyLabel(economics?.milestoneAmount ?? null, economics?.currency ?? null);
   const discountMoney = moneyLabel(
     economics?.milestoneDiscountAmount ?? null,
@@ -113,11 +121,11 @@ export function EarlyPaymentIncentiveCard({
       data-testid="early-payment-incentive-card"
     >
       <div className="text-[11px] font-medium uppercase tracking-wider text-accent-foreground">
-        {approved ? 'Provvy-approved incentive' : 'Commercial opportunity identified'}
+        {approved ? 'Early-payment incentive approved' : 'Commercial opportunity identified'}
       </div>
       <p className="mt-2 text-[15px] font-semibold text-foreground">
         {approved
-          ? 'You approved an early-payment incentive.'
+          ? "You approved Provvy's proposed early-payment incentive."
           : 'I found an opportunity in this agreement.'}
       </p>
       <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">
@@ -129,7 +137,7 @@ export function EarlyPaymentIncentiveCard({
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-border bg-secondary/10 p-3">
           <div className="text-[11px] font-medium uppercase tracking-wide text-ink-soft">
-            Original agreement term
+            Original agreement
           </div>
           <p className="mt-1 text-[14px] font-medium text-foreground">{standardLabel}</p>
         </div>
@@ -138,28 +146,45 @@ export function EarlyPaymentIncentiveCard({
             {approved ? 'Approved addition' : 'Example incentive'}
           </div>
           <p className="mt-1 text-[14px] font-medium text-foreground">
-            {decision?.label ?? recommendation?.label}
+            {approved ? additionLabel : decision?.label ?? recommendation?.label}
           </p>
         </div>
       </div>
 
+      {approved ? (
+        <p className="mt-4 text-[13px]" data-testid="incentive-supplier-status">
+          <span className="text-[11px] font-medium uppercase tracking-wide text-ink-soft">
+            Status
+          </span>
+          <span className="mt-1 block font-medium text-foreground">
+            Awaiting supplier acceptance
+          </span>
+        </p>
+      ) : null}
+
       {economics?.amountsReliable && milestoneMoney && discountMoney && earlyMoney ? (
         <div className="mt-4 rounded-xl border border-border bg-background p-3 text-[13px]">
-          <p className="font-medium text-foreground">{milestoneMoney} milestone</p>
+          <p className="font-medium text-foreground">Milestone 1</p>
+          <p className="mt-1 text-ink-soft">
+            Standard terms: {standardLabel}
+          </p>
           <ul className="mt-2 space-y-1 text-ink-soft">
-            <li>Standard: {milestoneMoney}</li>
-            <li>Early payment: {earlyMoney}</li>
+            <li>Standard amount: {milestoneMoney}</li>
+            <li>
+              {approved ? 'Approved early-payment option' : 'Proposed early-payment option'}:{' '}
+              {additionLabel}. Payable if accepted and condition is met: {earlyMoney}
+            </li>
+            <li>Early-payment amount: {earlyMoney}</li>
             <li>Potential saving: {discountMoney}</li>
             <li>
-              Supplier is paid {economics.daysEarlier} days earlier than {standardLabel}
+              Acceleration: {economics.daysEarlier} days earlier than {standardLabel}
             </li>
           </ul>
           {economics.milestoneCount > 1 && totalMoney ? (
             <p className="mt-3 text-[12px] text-ink-soft">
-              If applied to each of {economics.milestoneCount} milestones, the illustrative total
-              discount is {totalMoney} — only if the buyer actually pays within{' '}
-              {decision?.acceleratedDays ?? recommendation?.acceleratedDays} days each time. Not
-              guaranteed savings.
+              If the same option is accepted on each of {economics.milestoneCount} milestones, the
+              illustrative total discount is {totalMoney}. It is not automatically active and is not
+              a payment.
             </p>
           ) : null}
         </div>

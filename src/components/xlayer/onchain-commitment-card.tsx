@@ -241,6 +241,7 @@ export function OnchainCommitmentCard({
               {details.incentive.incentivePercent}% incentive
             </li>
             <li>Human approved: Yes</li>
+            <li>Status: Awaiting supplier acceptance</li>
           </ul>
         </div>
       ) : null}

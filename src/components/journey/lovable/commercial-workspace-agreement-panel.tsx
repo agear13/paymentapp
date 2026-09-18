@@ -10,13 +10,16 @@ import {
 } from '@/lib/commercial-os/commercial-workspace-collection';
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { EarlyPaymentIncentiveCard } from '@/components/commercial-incentive/early-payment-incentive-card';
+import { AgreementPaymentScheduleCard } from '@/components/commercial-os/agreement-payment-schedule-card';
 import { OnchainCommitmentCard } from '@/components/xlayer/onchain-commitment-card';
+import type { AgreementPaymentScheduleView } from '@/lib/commercial-os/payment-schedule-presentation';
 
 type LinkedAgreement = {
   id: string;
   title: string;
   href: string;
   extractionStatus?: string;
+  paymentSchedule?: AgreementPaymentScheduleView | null;
 };
 
 export function CommercialWorkspaceAgreementPanel() {
@@ -104,8 +107,19 @@ export function CommercialWorkspaceAgreementPanel() {
           </Link>
         ) : null}
       </div>
+      {linked?.paymentSchedule ? (
+        <AgreementPaymentScheduleCard schedule={linked.paymentSchedule} />
+      ) : null}
       {linked?.id ? <EarlyPaymentIncentiveCard agreementId={linked.id} /> : null}
-      {linked?.id ? <OnchainCommitmentCard agreementId={linked.id} /> : null}
+      {linked?.id ? (
+        <div className="space-y-2">
+          <p className="text-[12px] text-ink-soft">
+            Next: register this commercial commitment on X Layer. That is not a payment and does not
+            mean the supplier has accepted the incentive.
+          </p>
+          <OnchainCommitmentCard agreementId={linked.id} />
+        </div>
+      ) : null}
     </div>
   );
 }

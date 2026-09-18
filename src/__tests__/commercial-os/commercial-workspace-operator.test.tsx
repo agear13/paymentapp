@@ -179,6 +179,25 @@ describe('Commercial Workspace operator surface', () => {
                   id: 'saturday-beach',
                   title: 'Saturday Beach Event',
                   href: '/workspace/workflows/agreement-intelligence/saturday-beach',
+                  paymentSchedule: {
+                    milestoneCount: 4,
+                    totalAmount: 100_000,
+                    currency: 'AUD',
+                    equalMilestoneAmount: 25_000,
+                    next: {
+                      index: 1,
+                      label: 'Batch 1 delivery',
+                      amount: 25_000,
+                      dueLabel: 'Net 30 from invoice date',
+                    },
+                    remainingCount: 3,
+                    remainingAmount: 75_000,
+                    items: [1, 2, 3, 4].map((batch) => ({
+                      label: `Batch ${batch} delivery`,
+                      amount: 25_000,
+                      dueLabel: 'Net 30 from invoice date',
+                    })),
+                  },
                 }
               : null,
           }),
@@ -274,5 +293,17 @@ describe('Commercial Workspace operator surface', () => {
       'href',
       '/workspace/workflows/agreement-intelligence/saturday-beach'
     );
+    expect(await screen.findByTestId('agreement-payment-schedule')).toHaveTextContent(
+      '4 milestones × A$25,000'
+    );
+    expect(screen.getByTestId('agreement-payment-schedule')).toHaveTextContent(
+      'Total commitment: A$100,000'
+    );
+    expect(screen.getByTestId('agreement-payment-schedule')).toHaveTextContent('Next obligation');
+    expect(screen.getByTestId('agreement-payment-schedule')).toHaveTextContent('A$75,000');
+    expect(screen.getByTestId('agreement-payment-schedule')).toHaveTextContent(
+      'Net 30 from invoice date'
+    );
+    expect(screen.getByText(/register this commercial commitment on X Layer/i)).toBeInTheDocument();
   });
 });

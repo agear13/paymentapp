@@ -38,7 +38,9 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { EarlyPaymentIncentiveCard } from '@/components/commercial-incentive/early-payment-incentive-card';
+import { AgreementPaymentScheduleCard } from '@/components/commercial-os/agreement-payment-schedule-card';
 import { OnchainCommitmentCard } from '@/components/xlayer/onchain-commitment-card';
+import { agreementPaymentScheduleFromTerms } from '@/lib/commercial-os/payment-schedule-presentation';
 import { AgreementIntelligenceParticipantDetail } from '@/components/journey/lovable/agreement-intelligence-participant-detail';
 import { AgreementChangeRequestReview } from '@/components/agreements/agreement-change-request-review';
 import { ParticipantCoordinationSummary } from '@/components/journey/lovable/agreement-intelligence-participant-status';
@@ -139,6 +141,18 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
   const operational = context?.operationalSummary;
   const agreement = context?.agreement;
   const extraction = agreement?.extractionResult;
+  const paymentSchedule = extraction
+    ? agreementPaymentScheduleFromTerms(
+        (extraction.paymentTerms ?? []).map((term) => ({
+          description: term.description?.value?.trim() || null,
+          amount: term.amount?.value ?? null,
+          currency: term.currency?.value?.trim() || null,
+          dueCondition: term.dueCondition?.value?.trim() || null,
+        })),
+        extraction.projectValue?.value,
+        extraction.currency?.value
+      )
+    : null;
   const lifecycleStatus = context?.lifecycleStatus ?? installed.lifecycleStatus ?? 'AWAITING_INPUT';
   const statusLabel = WORKFLOW_LIFECYCLE_LABELS[lifecycleStatus] ?? lifecycleStatus;
   const workspaceHandoff = agreementWorkspaceHandoff(agreement);
@@ -723,39 +737,9 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
                 </div>
               )}
 
-              {extraction && (extraction.paymentTerms?.length ?? 0) > 0 ? (
-                <div
-                  className="rounded-xl border border-border bg-secondary/10 p-4"
-                  data-testid="hub-project-cashflow"
-                >
-                  <p className="text-[12px] font-semibold uppercase tracking-wide text-ink-soft">
-                    Client payment schedule
-                  </p>
-                  {extraction.counterparty.value || extraction.projectName.value ? (
-                    <p className="mt-1 text-[13px] text-ink-soft">
-                      {[extraction.counterparty.value, extraction.projectName.value]
-                        .filter(Boolean)
-                        .join(' → ')}
-                    </p>
-                  ) : null}
-                  <ul className="mt-3 space-y-2">
-                    {extraction.paymentTerms.map((term, index) => (
-                      <li key={`${term.description.value ?? 'term'}-${index}`} className="text-[14px]">
-                        <span className="font-medium">
-                          {term.description.value?.trim() || `Payment ${index + 1}`}
-                        </span>
-                        {term.amount.value != null ? (
-                          <span className="ml-2 font-semibold">
-                            {term.currency.value?.trim() || 'AUD'}{' '}
-                            {term.amount.value.toLocaleString('en-AU', { maximumFractionDigits: 0 })}
-                          </span>
-                        ) : null}
-                        {term.dueCondition.value ? (
-                          <p className="text-[12px] text-ink-soft">{term.dueCondition.value}</p>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
+              {paymentSchedule ? (
+                <div data-testid="hub-project-cashflow">
+                  <AgreementPaymentScheduleCard schedule={paymentSchedule} />
                 </div>
               ) : null}
 
@@ -767,7 +751,13 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
               ) : null}
 
               {extraction && agreement?.id ? (
-                <OnchainCommitmentCard agreementId={agreement.id} />
+                <div className="space-y-2">
+                  <p className="text-[12px] text-ink-soft">
+                    Next: register this commercial commitment on X Layer. That is not a payment and
+                    does not mean the supplier has accepted the incentive.
+                  </p>
+                  <OnchainCommitmentCard agreementId={agreement.id} />
+                </div>
               ) : null}
 
               {lifecycleStatus === 'EXTRACTION_FAILED' && (

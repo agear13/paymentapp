@@ -2,7 +2,12 @@ import 'server-only';
 
 import { prisma } from '@/lib/server/prisma';
 import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
+import type { ExtractionResult } from '@/lib/ai-extractor/extraction-types';
 import { sourceAgreementHref } from '@/lib/commercial-os/commercial-workspace-collection';
+import {
+  agreementPaymentScheduleFromTerms,
+  type AgreementPaymentScheduleView,
+} from '@/lib/commercial-os/payment-schedule-presentation';
 
 export type SourceAgreementLookup = {
   id: string;
@@ -10,7 +15,24 @@ export type SourceAgreementLookup = {
   href: string;
   extractionStatus: string;
   bootstrappedAt: string | null;
+  paymentSchedule: AgreementPaymentScheduleView | null;
 };
+
+function paymentScheduleFromExtraction(value: unknown): AgreementPaymentScheduleView | null {
+  if (!value || typeof value !== 'object') return null;
+  const extraction = value as ExtractionResult;
+  const terms = (extraction.paymentTerms ?? []).map((term) => ({
+    description: term.description?.value?.trim() || null,
+    amount: term.amount?.value ?? null,
+    currency: term.currency?.value?.trim() || null,
+    dueCondition: term.dueCondition?.value?.trim() || null,
+  }));
+  return agreementPaymentScheduleFromTerms(
+    terms,
+    extraction.projectValue?.value,
+    extraction.currency?.value
+  );
+}
 
 /**
  * Org-scoped agreement linked to a user-scoped pilot deal.
@@ -39,6 +61,7 @@ export async function findSourceAgreementForWorkspace(
       original_filename: true,
       extraction_status: true,
       bootstrapped_at: true,
+      extraction_result: true,
     },
   });
   if (!row) return null;
@@ -52,5 +75,6 @@ export async function findSourceAgreementForWorkspace(
     href: sourceAgreementHref(row.id),
     extractionStatus: row.extraction_status,
     bootstrappedAt: row.bootstrapped_at?.toISOString() ?? null,
+    paymentSchedule: paymentScheduleFromExtraction(row.extraction_result),
   };
 }
