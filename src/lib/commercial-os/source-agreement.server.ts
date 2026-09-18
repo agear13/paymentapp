@@ -5,7 +5,7 @@ import { getOrganizationForAuthenticatedUser } from '@/lib/auth/get-org';
 import type { ExtractionResult } from '@/lib/ai-extractor/extraction-types';
 import { sourceAgreementHref } from '@/lib/commercial-os/commercial-workspace-collection';
 import {
-  agreementPaymentScheduleFromTerms,
+  agreementPaymentScheduleFromExtraction,
   type AgreementPaymentScheduleView,
 } from '@/lib/commercial-os/payment-schedule-presentation';
 
@@ -20,18 +20,7 @@ export type SourceAgreementLookup = {
 
 function paymentScheduleFromExtraction(value: unknown): AgreementPaymentScheduleView | null {
   if (!value || typeof value !== 'object') return null;
-  const extraction = value as ExtractionResult;
-  const terms = (extraction.paymentTerms ?? []).map((term) => ({
-    description: term.description?.value?.trim() || null,
-    amount: term.amount?.value ?? null,
-    currency: term.currency?.value?.trim() || null,
-    dueCondition: term.dueCondition?.value?.trim() || null,
-  }));
-  return agreementPaymentScheduleFromTerms(
-    terms,
-    extraction.projectValue?.value,
-    extraction.currency?.value
-  );
+  return agreementPaymentScheduleFromExtraction(value as ExtractionResult);
 }
 
 /**

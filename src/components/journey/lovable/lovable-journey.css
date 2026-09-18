@@ -187,6 +187,14 @@ html.dark .lovable-journey option,
 }
 
 .lovable-journey .animate-fade-up { animation: lovable-fade-up 0.6s ease-out both; }
+
+.lovable-journey .landing-business-flows-scroller {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.lovable-journey .landing-business-flows-scroller::-webkit-scrollbar {
+  display: none;
+}
 .lovable-journey .animate-float { animation: lovable-float-slow 6s ease-in-out infinite; }
 .lovable-journey .animate-pulse-glow { animation: lovable-pulse-glow 4s ease-in-out infinite; }
 

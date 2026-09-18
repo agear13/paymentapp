@@ -40,7 +40,7 @@ import { toast } from 'sonner';
 import { EarlyPaymentIncentiveCard } from '@/components/commercial-incentive/early-payment-incentive-card';
 import { AgreementPaymentScheduleCard } from '@/components/commercial-os/agreement-payment-schedule-card';
 import { OnchainCommitmentCard } from '@/components/xlayer/onchain-commitment-card';
-import { agreementPaymentScheduleFromTerms } from '@/lib/commercial-os/payment-schedule-presentation';
+import { agreementPaymentScheduleFromExtraction } from '@/lib/commercial-os/payment-schedule-presentation';
 import { AgreementIntelligenceParticipantDetail } from '@/components/journey/lovable/agreement-intelligence-participant-detail';
 import { AgreementChangeRequestReview } from '@/components/agreements/agreement-change-request-review';
 import { ParticipantCoordinationSummary } from '@/components/journey/lovable/agreement-intelligence-participant-status';
@@ -141,18 +141,7 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
   const operational = context?.operationalSummary;
   const agreement = context?.agreement;
   const extraction = agreement?.extractionResult;
-  const paymentSchedule = extraction
-    ? agreementPaymentScheduleFromTerms(
-        (extraction.paymentTerms ?? []).map((term) => ({
-          description: term.description?.value?.trim() || null,
-          amount: term.amount?.value ?? null,
-          currency: term.currency?.value?.trim() || null,
-          dueCondition: term.dueCondition?.value?.trim() || null,
-        })),
-        extraction.projectValue?.value,
-        extraction.currency?.value
-      )
-    : null;
+  const paymentSchedule = agreementPaymentScheduleFromExtraction(extraction);
   const lifecycleStatus = context?.lifecycleStatus ?? installed.lifecycleStatus ?? 'AWAITING_INPUT';
   const statusLabel = WORKFLOW_LIFECYCLE_LABELS[lifecycleStatus] ?? lifecycleStatus;
   const workspaceHandoff = agreementWorkspaceHandoff(agreement);

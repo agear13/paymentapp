@@ -3,6 +3,9 @@
  * Does not invent amounts, dates, or a new obligation model.
  */
 
+import type { ExtractionResult } from '@/lib/ai-extractor/extraction-types';
+import { collectCanonicalPaymentTerms } from '@/lib/commercial-incentive/canonical-payment-terms';
+
 export type ExtractedPaymentTermSlice = {
   description: string | null;
   amount: number | null;
@@ -89,6 +92,23 @@ export function agreementPaymentScheduleFromTerms(
     remainingAmount,
     items,
   };
+}
+
+export function agreementPaymentScheduleFromExtraction(
+  extraction: ExtractionResult | null | undefined
+): AgreementPaymentScheduleView | null {
+  if (!extraction) return null;
+  const terms = collectCanonicalPaymentTerms(extraction).map((term) => ({
+    description: term.description,
+    amount: term.amount,
+    currency: term.currency,
+    dueCondition: term.dueText,
+  }));
+  return agreementPaymentScheduleFromTerms(
+    terms,
+    extraction.projectValue?.value,
+    extraction.currency?.value
+  );
 }
 
 export function formatScheduleMoney(

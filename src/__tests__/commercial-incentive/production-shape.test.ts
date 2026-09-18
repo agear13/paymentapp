@@ -1,9 +1,12 @@
 import { recommendEarlyPaymentIncentive } from '@/lib/commercial-incentive/recommend';
 import { originalDueLabelsFromExtraction } from '@/lib/commercial-incentive/canonical-payment-terms';
 import { daysEarlier, incentiveDiscountAmount } from '@/lib/commercial-incentive/economics';
+import { agreementPaymentScheduleFromExtraction } from '@/lib/commercial-os/payment-schedule-presentation';
 import { field, testParty } from '@/lib/ai-extractor/test-helpers/party-fixture';
 import {
   abcRetailAcmeSupplyProductionExtraction,
+  abcRetailCollapsedPaymentTermExtraction,
+  abcRetailSequenceAmountExtraction,
   incentiveExtraction,
 } from '@/__tests__/commercial-incentive/extraction-fixture';
 
@@ -35,6 +38,47 @@ describe('production extraction shape → commercial incentive', () => {
     expect(daysEarlier(30, 7)).toBe(23);
     expect(JSON.stringify(result)).toBe(before);
     expect(result.parties[0]?.notes.value).toMatch(/No early-payment discount included/);
+  });
+
+  it('does not collapse four compensation milestones to the single paymentTerms row', () => {
+    const result = abcRetailCollapsedPaymentTermExtraction();
+    expect(result.paymentTerms).toHaveLength(1);
+    expect(result.paymentTerms[0]?.amount.value).toBe(25_000);
+    expect(result.parties[0]?.compensationTerms).toHaveLength(4);
+
+    const schedule = agreementPaymentScheduleFromExtraction(result);
+    expect(schedule?.milestoneCount).toBe(4);
+    expect(schedule?.equalMilestoneAmount).toBe(25_000);
+    expect(schedule?.totalAmount).toBe(100_000);
+
+    const recommendation = recommendEarlyPaymentIncentive(result);
+    expect(recommendation?.economics.milestoneCount).toBe(4);
+    expect(recommendation?.economics.milestoneAmount).toBe(25_000);
+    expect(recommendation?.economics.earlyPaymentAmount).toBe(24_500);
+    expect(recommendation?.economics.milestoneDiscountAmount).toBe(500);
+    expect(recommendation?.economics.daysEarlier).toBe(23);
+    expect(recommendation?.economics.totalIllustrativeDiscount).toBe(2_000);
+  });
+
+  it('does not treat sequence-index amount 1 as A$1 when four A$25,000 terms exist', () => {
+    const result = abcRetailSequenceAmountExtraction();
+    expect(result.parties[0]?.compensationTerms?.[0]?.amount.value).toBe(1);
+    const before = JSON.stringify(result);
+
+    const schedule = agreementPaymentScheduleFromExtraction(result);
+    expect(schedule?.milestoneCount).toBe(4);
+    expect(schedule?.equalMilestoneAmount).toBe(25_000);
+    expect(schedule?.totalAmount).toBe(100_000);
+
+    const recommendation = recommendEarlyPaymentIncentive(result);
+    expect(recommendation?.economics.milestoneAmount).not.toBe(1);
+    expect(recommendation?.economics.milestoneDiscountAmount).not.toBe(0.02);
+    expect(recommendation?.economics.milestoneAmount).toBe(25_000);
+    expect(recommendation?.economics.earlyPaymentAmount).toBe(24_500);
+    expect(recommendation?.economics.milestoneDiscountAmount).toBe(500);
+    expect(recommendation?.economics.daysEarlier).toBe(23);
+    expect(recommendation?.economics.totalIllustrativeDiscount).toBe(2_000);
+    expect(JSON.stringify(result)).toBe(before);
   });
 
   it('returns a recommendation for Net 30 on paymentTerms.dueCondition', () => {

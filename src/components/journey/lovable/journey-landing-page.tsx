@@ -2,6 +2,7 @@
 
 import './lovable-journey.css';
 import { ProvvyBrandMark } from '@/components/journey/lovable/provvy-brand-mark';
+import { LandingBusinessFlows } from '@/components/journey/lovable/landing-business-flows';
 import { LandingPaymentSearch } from '@/components/journey/lovable/landing-payment-search';
 import { CALENDLY_CONSULTATION_URL } from '@/lib/config/calendly-consultation-url';
 import { useState } from 'react';
@@ -218,7 +219,11 @@ function Hero() {
         </div>
       </div>
 
-      <div className="relative mx-auto mt-10 max-w-5xl animate-fade-up sm:mt-12">
+      <div className="relative mx-auto mt-8 max-w-5xl animate-fade-up sm:mt-10">
+        <LandingBusinessFlows />
+      </div>
+
+      <div className="relative mx-auto mt-8 max-w-5xl animate-fade-up sm:mt-10">
         <LandingPaymentSearch />
       </div>
     </section>

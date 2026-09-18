@@ -1,9 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 import {
+  agreementPaymentScheduleFromExtraction,
   agreementPaymentScheduleFromTerms,
   formatScheduleMoney,
 } from '@/lib/commercial-os/payment-schedule-presentation';
+import { abcRetailCollapsedPaymentTermExtraction } from '@/__tests__/commercial-incentive/extraction-fixture';
 
 const CARD = [
   path.join(process.cwd(), 'components/commercial-os/agreement-payment-schedule-card.tsx'),
@@ -76,5 +78,16 @@ describe('agreement payment schedule presentation', () => {
     expect(source).toContain('Next obligation');
     expect(source).toContain('Remaining');
     expect(source).not.toContain('sendErc20Payment');
+  });
+
+  it('keeps four extracted compensation milestones when paymentTerms has only one row', () => {
+    const schedule = agreementPaymentScheduleFromExtraction(
+      abcRetailCollapsedPaymentTermExtraction()
+    );
+    expect(schedule?.milestoneCount).toBe(4);
+    expect(schedule?.equalMilestoneAmount).toBe(25_000);
+    expect(schedule?.totalAmount).toBe(100_000);
+    expect(schedule?.remainingCount).toBe(3);
+    expect(schedule?.remainingAmount).toBe(75_000);
   });
 });

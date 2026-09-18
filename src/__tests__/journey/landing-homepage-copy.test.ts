@@ -19,6 +19,8 @@ describe('homepage narrative and control principles', () => {
   const authorise = read('components/journey/lovable/landing-authorise-review.tsx');
   const advisor = read('lib/journey/landing-advisor.ts');
   const advisorUi = read('components/journey/lovable/landing-advisor.tsx');
+  const businessFlows = read('lib/journey/landing-business-flows.ts');
+  const businessFlowsUi = read('components/journey/lovable/landing-business-flows.tsx');
   const feed = read('lib/journey/payment-intelligence-feed.ts');
   const rank = read('lib/journey/payment-intelligence-rank.ts');
   const labels = read('lib/journey/landing-result-labels.ts');
@@ -42,8 +44,15 @@ describe('homepage narrative and control principles', () => {
     expect(search).not.toContain('label="Destination"');
     expect(search).not.toContain('Transaction type');
     expect(landing).toContain('LandingPaymentSearch');
+    expect(landing).toContain('LandingBusinessFlows');
     expect(landing).toContain('LandingPaymentIntelligence');
     expect(landing).toContain('LandingPaymentIntelligenceSubscribe');
+    expect(landing.indexOf('<LandingBusinessFlows')).toBeGreaterThan(
+      landing.indexOf('See how it works')
+    );
+    expect(landing.indexOf('<LandingBusinessFlows')).toBeLessThan(
+      landing.lastIndexOf('<LandingPaymentSearch')
+    );
     expect(landing.lastIndexOf('<LandingPaymentSearch')).toBeLessThan(
       landing.indexOf('<LandingPaymentIntelligence')
     );
@@ -153,6 +162,33 @@ describe('homepage narrative and control principles', () => {
     expect(authorise).toContain('Provvy recommends. You authorise.');
     expect(results).toContain('You approve every payment.');
     expect(feed).not.toMatch(/live transaction/i);
+  });
+
+  it('places a restrained business-flow proof strip between the hero CTAs and search', () => {
+    expect(businessFlows).toContain('Built around real business flows');
+    expect(businessFlows).toContain(
+      'Different businesses. Different payment flows. One coordination layer.'
+    );
+    expect(businessFlows).toContain(
+      "We've worked with businesses across communities, events, consumer brands and Web3"
+    );
+    expect(businessFlows).toContain('The Collective');
+    expect(businessFlows).toContain('Partner payments');
+    expect(businessFlows).toContain('Weso');
+    expect(businessFlows).toContain('Referral management');
+    expect(businessFlows).toContain('Thirsty Turtl');
+    expect(businessFlows).toContain('Affiliate & creator programs');
+    expect(businessFlows).toContain('EvolvH34');
+    expect(businessFlows).toContain('Web3 payment reconciliation');
+    expect(businessFlows).toContain("ctaHref: '#workflow-library'");
+    expect(businessFlows).toContain("ctaLabel: 'Explore workflows'");
+    expect(businessFlowsUi).toContain('LANDING_BUSINESS_FLOW_COPY.ctaLabel');
+    expect(`${businessFlows}\n${businessFlowsUi}`).not.toMatch(/trusted by/i);
+    expect(`${businessFlows}\n${businessFlowsUi}`).not.toMatch(/powered \d/i);
+    expect(`${businessFlows}\n${businessFlowsUi}`).not.toMatch(/game-changing/i);
+    expect(`${businessFlows}\n${businessFlowsUi}`).not.toMatch(/revolutionary/i);
+    expect(advisorUi).toContain("onClick={() => setOpen(true)}");
+    expect(advisorUi).not.toContain('LandingBusinessFlows');
   });
 
   it('keeps workflow and pricing anchors used by the rest of the product', () => {

@@ -32,6 +32,21 @@ export function net30FourMilestones(): ExtractionResult {
   });
 }
 
+function fourMilestones(amount: number, label: (index: number) => string) {
+  return [1, 2, 3, 4].map((index) => ({
+    id: `ms-${index}`,
+    type: 'milestone' as const,
+    label: field(label(index)),
+    amount: field(amount === -1 ? index : amount),
+    percentage: field(null, 'absent'),
+    trigger: field('Within 30 days of invoice date'),
+    deadline: field(null, 'absent'),
+    revenueBasis: field(null, 'absent'),
+    sequenceIndex: index,
+    confidence: 'high' as const,
+  }));
+}
+
 /** Runtime shape shown in Agreement Intelligence for the ABC Retail / Acme Supply demo. */
 export function abcRetailAcmeSupplyProductionExtraction(): ExtractionResult {
   return incentiveExtraction({
@@ -51,19 +66,48 @@ export function abcRetailAcmeSupplyProductionExtraction(): ExtractionResult {
         notes: field(
           "Payment by bank transfer to supplier's Indonesian bank account. No early-payment discount included."
         ),
-        compensationTerms: [1, 2, 3, 4].map((index) => ({
-          id: `ms-${index}`,
-          type: 'milestone' as const,
-          label: field(`Milestone ${index}`),
-          amount: field(25_000),
-          percentage: field(null, 'absent'),
-          trigger: field('Within 30 days of invoice date'),
-          deadline: field(null, 'absent'),
-          revenueBasis: field(null, 'absent'),
-          sequenceIndex: index,
-          confidence: 'high' as const,
-        })),
+        compensationTerms: fourMilestones(25_000, (index) => `Milestone ${index}`),
       }),
     ],
   });
+}
+
+/**
+ * Production dual-write: review modal shows four compensation milestones,
+ * while paymentTerms is collapsed to a single A$25,000 row.
+ */
+export function abcRetailCollapsedPaymentTermExtraction(): ExtractionResult {
+  return {
+    ...abcRetailAcmeSupplyProductionExtraction(),
+    paymentTerms: [
+      {
+        description: field('Milestone payment'),
+        amount: field(25_000),
+        currency: field('AUD'),
+        dueCondition: field('Within 30 days of invoice date'),
+      },
+    ],
+  };
+}
+
+/** Amount field holds sequence indexes; money lives on the label. */
+export function abcRetailSequenceAmountExtraction(): ExtractionResult {
+  const result = abcRetailAcmeSupplyProductionExtraction();
+  return {
+    ...result,
+    paymentTerms: [
+      {
+        description: field('Milestone 1'),
+        amount: field(1),
+        currency: field('AUD'),
+        dueCondition: field('Within 30 days of invoice date'),
+      },
+    ],
+    parties: [
+      {
+        ...result.parties[0],
+        compensationTerms: fourMilestones(-1, (index) => `A$25,000 milestone ${index}`),
+      },
+    ],
+  };
 }
