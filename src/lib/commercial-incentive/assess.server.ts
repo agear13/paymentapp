@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { ExtractionResult } from '@/lib/ai-extractor/extraction-types';
 import { prisma } from '@/lib/server/prisma';
+import { originalDueLabelsFromExtraction } from '@/lib/commercial-incentive/canonical-payment-terms';
 import { buildIncentiveDecisionRecord } from '@/lib/commercial-incentive/decision';
 import { EARLY_PAYMENT_INCENTIVE_DISCLAIMER } from '@/lib/commercial-incentive/policy';
 import { recommendEarlyPaymentIncentive } from '@/lib/commercial-incentive/recommend';
@@ -11,13 +12,6 @@ import {
 } from '@/lib/commercial-incentive/store.server';
 import type { EarlyPaymentIncentiveView } from '@/lib/commercial-incentive/types';
 import { AGREEMENT_INTELLIGENCE_SLUG } from '@/lib/workflows/agreement-intelligence/participant-coordination';
-
-function originalDueLabels(result: ExtractionResult | null): string[] {
-  if (!result) return [];
-  return (result.paymentTerms ?? [])
-    .map((term) => term.dueCondition.value?.trim() || term.description.value?.trim() || '')
-    .filter(Boolean);
-}
 
 async function loadCurrentAgreement(input: {
   organizationId: string;
@@ -85,7 +79,7 @@ export async function getEarlyPaymentIncentiveView(input: {
     agreementId,
     workflowId,
     hasExtraction: Boolean(extraction),
-    originalDueLabels: originalDueLabels(extraction),
+    originalDueLabels: originalDueLabelsFromExtraction(extraction),
     recommendation,
     decision,
     disclaimer: EARLY_PAYMENT_INCENTIVE_DISCLAIMER,

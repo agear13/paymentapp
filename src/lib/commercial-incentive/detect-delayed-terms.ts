@@ -1,14 +1,28 @@
 const DELAYED_PATTERNS: Array<{ re: RegExp; group: number }> = [
   { re: /\bnet\s*[- ]?(\d{1,3})\b/i, group: 1 },
   {
+    re: /\bwithin\s+(\d{1,3})\s*days?\s+(?:of|after|from)\s+(?:the\s+)?(?:invoice|delivery|milestone|batch)(?:\s+date)?\b/i,
+    group: 1,
+  },
+  {
+    re: /\b(\d{1,3})\s*days?\s+(?:of|from|after)\s+(?:the\s+)?(?:invoice|delivery)(?:\s+date)?\b/i,
+    group: 1,
+  },
+  {
     re: /\b(\d{1,3})\s*days?\s+after\s+(?:each\s+)?(?:delivery|invoice|milestone|batch|instalment|installment)\b/i,
     group: 1,
   },
-  { re: /\b(?:due|paid|payment)\s+(?:within\s+|in\s+)?(\d{1,3})\s*days\b/i, group: 1 },
+  {
+    re: /\b(?:payable|due|paid|payment)\s+(?:within\s+|in\s+)?(\d{1,3})\s*days\b/i,
+    group: 1,
+  },
 ];
 
 const EXISTING_EARLY_DISCOUNT_RE =
   /\bearly[ -]?pay|\bprompt[ -]?pay|\b(\d+(?:\.\d+)?)\s*%\s*(?:off|discount).{0,40}\b(\d{1,3})\s*days|\bwithin\s*(\d{1,3})\s*days.{0,40}\b(\d+(?:\.\d+)?)\s*%/i;
+
+const NO_EXISTING_INCENTIVE_RE =
+  /\bno\s+(?:early[ -]?pay(?:ment)?|prompt[ -]?pay(?:ment)?)\s+(?:discount|incentive)s?\b(?:\s+included)?/gi;
 
 export function combineTermText(
   description: string | null | undefined,
@@ -33,5 +47,9 @@ export function parseDelayedPaymentDays(text: string | null | undefined): number
 }
 
 export function textAlreadyHasEarlyPaymentDiscount(text: string | null | undefined): boolean {
-  return Boolean(text?.trim() && EXISTING_EARLY_DISCOUNT_RE.test(text));
+  const value = text?.trim();
+  if (!value) return false;
+  const withoutNegation = value.replace(NO_EXISTING_INCENTIVE_RE, ' ').replace(/\s+/g, ' ').trim();
+  if (!withoutNegation) return false;
+  return EXISTING_EARLY_DISCOUNT_RE.test(withoutNegation);
 }

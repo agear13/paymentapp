@@ -94,12 +94,11 @@ export function EarlyPaymentIncentiveCard({
   if (decision?.status === 'dismissed') return null;
 
   const economics = decision?.economics ?? recommendation?.economics;
-  const extractedDue =
-    view.originalDueLabels[0] ||
-    recommendation?.delayedTerms[0]?.dueCondition ||
+  const standardLabel =
     decision?.sourceDueLabel ||
-    recommendation?.sourceDueLabel;
-  const standardLabel = extractedDue || 'Net 30';
+    recommendation?.sourceDueLabel ||
+    view.originalDueLabels[0] ||
+    'Net 30';
   const additionLabel = `Pay within ${
     decision?.acceleratedDays ?? recommendation?.acceleratedDays
   } days → ${decision?.incentivePercent ?? recommendation?.incentivePercent}% discount`;
@@ -121,64 +120,53 @@ export function EarlyPaymentIncentiveCard({
       data-testid="early-payment-incentive-card"
     >
       <div className="text-[11px] font-medium uppercase tracking-wider text-accent-foreground">
-        {approved ? 'Early-payment incentive approved' : 'Commercial opportunity identified'}
+        {approved ? 'Provvy-approved incentive' : 'Commercial opportunity identified'}
       </div>
       <p className="mt-2 text-[15px] font-semibold text-foreground">
         {approved
-          ? "You approved Provvy's proposed early-payment incentive."
-          : 'I found an opportunity in this agreement.'}
+          ? `${decision?.incentivePercent ?? recommendation?.incentivePercent}% discount if paid within ${
+              decision?.acceleratedDays ?? recommendation?.acceleratedDays
+            } days`
+          : "Here's your agreement. I found an opportunity."}
       </p>
       <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">
-        Source agreement → AI extracted terms → Provvy recommendation
-        {approved ? ' → human approval' : ''}. This is not a term extracted from the agreement
-        {approved ? ', and it is not supplier acceptance' : ''}.
+        {approved
+          ? "You approved Provvy's proposed early-payment incentive. This is not a term extracted from the agreement, and it is not supplier acceptance."
+          : `Your supplier is currently on ${standardLabel} payment terms. If you want to accelerate supplier payment, you could offer an early-payment incentive. This is a Provvy recommendation, not a term extracted from the agreement.`}
       </p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <div className="rounded-xl border border-border bg-secondary/10 p-3">
           <div className="text-[11px] font-medium uppercase tracking-wide text-ink-soft">
-            Original agreement
+            Source agreement
           </div>
           <p className="mt-1 text-[14px] font-medium text-foreground">{standardLabel}</p>
         </div>
         <div className="rounded-xl border border-primary/20 bg-accent p-3">
           <div className="text-[11px] font-medium uppercase tracking-wide text-ink-soft">
-            {approved ? 'Approved addition' : 'Example incentive'}
+            {approved ? 'Provvy-approved incentive' : 'Provvy recommendation'}
           </div>
-          <p className="mt-1 text-[14px] font-medium text-foreground">
-            {approved ? additionLabel : decision?.label ?? recommendation?.label}
-          </p>
+          <p className="mt-1 text-[14px] font-medium text-foreground">{additionLabel}</p>
         </div>
       </div>
 
-      {approved ? (
-        <p className="mt-4 text-[13px]" data-testid="incentive-supplier-status">
-          <span className="text-[11px] font-medium uppercase tracking-wide text-ink-soft">
-            Status
-          </span>
-          <span className="mt-1 block font-medium text-foreground">
-            Awaiting supplier acceptance
-          </span>
-        </p>
-      ) : null}
+      <p className="mt-4 text-[13px]" data-testid="incentive-supplier-status">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-ink-soft">
+          Status
+        </span>
+        <span className="mt-1 block font-medium text-foreground">
+          {approved ? 'Awaiting supplier acceptance' : 'Recommendation — awaiting your approval'}
+        </span>
+      </p>
 
       {economics?.amountsReliable && milestoneMoney && discountMoney && earlyMoney ? (
         <div className="mt-4 rounded-xl border border-border bg-background p-3 text-[13px]">
-          <p className="font-medium text-foreground">Milestone 1</p>
-          <p className="mt-1 text-ink-soft">
-            Standard terms: {standardLabel}
-          </p>
+          <p className="font-medium text-foreground">For a {milestoneMoney} milestone</p>
           <ul className="mt-2 space-y-1 text-ink-soft">
-            <li>Standard amount: {milestoneMoney}</li>
-            <li>
-              {approved ? 'Approved early-payment option' : 'Proposed early-payment option'}:{' '}
-              {additionLabel}. Payable if accepted and condition is met: {earlyMoney}
-            </li>
-            <li>Early-payment amount: {earlyMoney}</li>
+            <li>Standard payment: {milestoneMoney}</li>
+            <li>Early payment: {earlyMoney}</li>
             <li>Potential saving: {discountMoney}</li>
-            <li>
-              Acceleration: {economics.daysEarlier} days earlier than {standardLabel}
-            </li>
+            <li>Supplier paid {economics.daysEarlier} days earlier.</li>
           </ul>
           {economics.milestoneCount > 1 && totalMoney ? (
             <p className="mt-3 text-[12px] text-ink-soft">

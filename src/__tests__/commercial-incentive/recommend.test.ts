@@ -40,6 +40,21 @@ describe('commercial incentive recommendation', () => {
     expect(recommendEarlyPaymentIncentive(result)?.economics.daysEarlier).toBe(53);
   });
 
+  it('produces an opportunity for Net 45', () => {
+    const result = incentiveExtraction({
+      paymentTerms: [
+        {
+          description: field('Delivery payment'),
+          amount: field(25_000),
+          currency: field('AUD'),
+          dueCondition: field('Net 45'),
+        },
+      ],
+    });
+    expect(recommendEarlyPaymentIncentive(result)?.standardDays).toBe(45);
+    expect(recommendEarlyPaymentIncentive(result)?.economics.daysEarlier).toBe(38);
+  });
+
   it('does not recommend when there is no delayed-payment condition', () => {
     const result = incentiveExtraction({
       paymentTerms: [

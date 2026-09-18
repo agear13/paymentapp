@@ -20,24 +20,23 @@ if (!CARD) {
 describe('early-payment incentive presentation', () => {
   const source = fs.readFileSync(CARD, 'utf8');
 
-  it('keeps original Net 30 separate from the approved addition', () => {
-    expect(source).toContain('Original agreement');
-    expect(source).toContain('Approved addition');
+  it('keeps original Net 30 separate from the Provvy recommendation', () => {
+    expect(source).toContain('Source agreement');
+    expect(source).toContain('Provvy recommendation');
     expect(source).toContain('Pay within ${');
+    expect(source).toContain('Recommendation — awaiting your approval');
     expect(source).toContain('Awaiting supplier acceptance');
     expect(source).not.toMatch(/supplier accepted/i);
     expect(source).not.toMatch(/payment sent/i);
     expect(source).toContain('not supplier acceptance');
+    expect(source).not.toContain('Approved addition');
   });
 
-  it('attaches the option to milestone 1 without executing payment', () => {
-    expect(source).toContain('Milestone 1');
-    expect(source).toContain('Standard amount');
-    expect(source).toContain('Early-payment amount');
-    expect(source).toContain('Payable if accepted and condition is met');
+  it('shows milestone economics without executing payment', () => {
+    expect(source).toContain('Standard payment');
+    expect(source).toContain('Early payment');
     expect(source).toContain('Potential saving');
-    expect(source).toContain('Acceleration');
-    expect(source).toContain('view.originalDueLabels[0]');
+    expect(source).toContain('Supplier paid');
     expect(source).not.toContain('sendErc20Payment');
     expect(source).not.toContain('createTransfer');
   });
