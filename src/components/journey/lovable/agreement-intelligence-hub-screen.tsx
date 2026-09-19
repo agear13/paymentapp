@@ -39,8 +39,12 @@ import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { EarlyPaymentIncentiveCard } from '@/components/commercial-incentive/early-payment-incentive-card';
 import { AgreementPaymentScheduleCard } from '@/components/commercial-os/agreement-payment-schedule-card';
+import { CommitmentFulfillmentCard } from '@/components/commercial-os/commitment-fulfillment-card';
 import { OnchainCommitmentCard } from '@/components/xlayer/onchain-commitment-card';
+import { commitmentRouteContextFromSchedule } from '@/lib/commercial-os/commitment-route-context';
+import { hubObligationMetricPresentation } from '@/lib/commercial-os/hub-obligation-metric';
 import { agreementPaymentScheduleFromExtraction } from '@/lib/commercial-os/payment-schedule-presentation';
+import type { EarlyPaymentIncentiveView } from '@/lib/commercial-incentive/types';
 import { AgreementIntelligenceParticipantDetail } from '@/components/journey/lovable/agreement-intelligence-participant-detail';
 import { AgreementChangeRequestReview } from '@/components/agreements/agreement-change-request-review';
 import { ParticipantCoordinationSummary } from '@/components/journey/lovable/agreement-intelligence-participant-status';
@@ -57,6 +61,7 @@ function MetricCard({ label, value }: { label: string; value: React.ReactNode })
 
 export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: string }) {
   const router = useRouter();
+  const [incentiveApproved, setIncentiveApproved] = React.useState(false);
   const { getBySlug, loading: workflowsLoading } = useDeployedWorkflows();
   const template = getWorkflowBySlug('agreement-intelligence');
   const installed = getBySlug('agreement-intelligence');
@@ -142,6 +147,10 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
   const agreement = context?.agreement;
   const extraction = agreement?.extractionResult;
   const paymentSchedule = agreementPaymentScheduleFromExtraction(extraction);
+  const obligationMetric = hubObligationMetricPresentation({
+    partyObligationCount: hub?.obligationCount ?? 0,
+    paymentSchedule,
+  });
   const lifecycleStatus = context?.lifecycleStatus ?? installed.lifecycleStatus ?? 'AWAITING_INPUT';
   const statusLabel = WORKFLOW_LIFECYCLE_LABELS[lifecycleStatus] ?? lifecycleStatus;
   const workspaceHandoff = agreementWorkspaceHandoff(agreement);
@@ -695,7 +704,7 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <MetricCard label="Participants" value={hub.participantCount} />
-                <MetricCard label="Obligations identified" value={hub.obligationCount} />
+                <MetricCard label={obligationMetric.label} value={obligationMetric.value} />
                 <MetricCard label="Revenue shares" value={hub.revenueShareCount} />
                 <MetricCard
                   label="Project payment trigger"
@@ -736,6 +745,15 @@ export function AgreementIntelligenceHubScreen({ agreementId }: { agreementId: s
                 <EarlyPaymentIncentiveCard
                   workflowId={installed.id}
                   agreementId={agreement.id}
+                  onViewChange={(view: EarlyPaymentIncentiveView | null) =>
+                    setIncentiveApproved(view?.decision?.status === 'approved')
+                  }
+                />
+              ) : null}
+
+              {incentiveApproved ? (
+                <CommitmentFulfillmentCard
+                  payment={commitmentRouteContextFromSchedule(paymentSchedule)}
                 />
               ) : null}
 

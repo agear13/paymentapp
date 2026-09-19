@@ -11,8 +11,11 @@ import {
 import { COMMERCIAL_OS_ROUTES } from '@/lib/journey/commercial-os-routes';
 import { EarlyPaymentIncentiveCard } from '@/components/commercial-incentive/early-payment-incentive-card';
 import { AgreementPaymentScheduleCard } from '@/components/commercial-os/agreement-payment-schedule-card';
+import { CommitmentFulfillmentCard } from '@/components/commercial-os/commitment-fulfillment-card';
 import { OnchainCommitmentCard } from '@/components/xlayer/onchain-commitment-card';
+import { commitmentRouteContextFromSchedule } from '@/lib/commercial-os/commitment-route-context';
 import type { AgreementPaymentScheduleView } from '@/lib/commercial-os/payment-schedule-presentation';
+import type { EarlyPaymentIncentiveView } from '@/lib/commercial-incentive/types';
 
 type LinkedAgreement = {
   id: string;
@@ -26,6 +29,7 @@ export function CommercialWorkspaceAgreementPanel() {
   const { deal } = useProjectWorkspace();
   const [linked, setLinked] = React.useState<LinkedAgreement | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [incentiveApproved, setIncentiveApproved] = React.useState(false);
 
   React.useEffect(() => {
     if (!deal) return;
@@ -110,7 +114,19 @@ export function CommercialWorkspaceAgreementPanel() {
       {linked?.paymentSchedule ? (
         <AgreementPaymentScheduleCard schedule={linked.paymentSchedule} />
       ) : null}
-      {linked?.id ? <EarlyPaymentIncentiveCard agreementId={linked.id} /> : null}
+      {linked?.id ? (
+        <EarlyPaymentIncentiveCard
+          agreementId={linked.id}
+          onViewChange={(view: EarlyPaymentIncentiveView | null) =>
+            setIncentiveApproved(view?.decision?.status === 'approved')
+          }
+        />
+      ) : null}
+      {incentiveApproved ? (
+        <CommitmentFulfillmentCard
+          payment={commitmentRouteContextFromSchedule(linked?.paymentSchedule)}
+        />
+      ) : null}
       {linked?.id ? (
         <div className="space-y-2">
           <p className="text-[12px] text-ink-soft">

@@ -15,9 +15,11 @@ function moneyLabel(amount: number | null, currency: string | null): string | nu
 export function EarlyPaymentIncentiveCard({
   workflowId,
   agreementId,
+  onViewChange,
 }: {
   workflowId?: string | null;
   agreementId?: string | null;
+  onViewChange?: (view: EarlyPaymentIncentiveView | null) => void;
 }) {
   const [view, setView] = useState<EarlyPaymentIncentiveView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +56,10 @@ export function EarlyPaymentIncentiveCard({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    onViewChange?.(view);
+  }, [onViewChange, view]);
 
   async function decide(action: 'approve' | 'dismiss') {
     if (!view?.recommendation || saving) return;
