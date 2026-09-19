@@ -12,6 +12,7 @@ import {
   isOnboardingComplete,
 } from '@/lib/deal-network-demo/participant-onboarding';
 import { formatCurrency } from '@/lib/formatters/format-currency';
+import { derivePayoutDetailsOrganiserStatus } from '@/lib/participant-portal/participant-workspace-onboarding';
 import type {
   PortalObligationSnapshot,
   SettlementExplanation,
@@ -64,12 +65,15 @@ function extractedBlockingReason(participant: DemoParticipant): string | null {
 
 export function deriveParticipantSettlementExplanation(
   participant: DemoParticipant,
-  obligations: PortalObligationSnapshot[]
+  obligations: PortalObligationSnapshot[],
+  options?: { currentAgreementObligations?: PortalObligationSnapshot[] }
 ): SettlementExplanation {
   const workflow = deriveParticipantOperationalWorkflow(participant);
   const settlementWorkflow = deriveParticipantSettlementWorkflowState(participant);
-  const obligationReason = obligationBlockingReason(obligations);
+  const settlementObligations = options?.currentAgreementObligations ?? obligations;
+  const obligationReason = obligationBlockingReason(settlementObligations);
   const extractedReason = extractedBlockingReason(participant);
+  const payoutDetailsStatus = derivePayoutDetailsOrganiserStatus(participant);
 
   let statusLabel = settlementWorkflow.label;
   let blockingReason: string | null = null;
@@ -81,6 +85,12 @@ export function deriveParticipantSettlementExplanation(
     blockingReason = 'Your commercial agreement has not been accepted yet.';
     nextStep = 'Review and accept the agreement sent by the organiser.';
     isBlocked = true;
+  } else if (payoutDetailsStatus === 'Submitted') {
+    statusLabel = 'Payout details submitted';
+    blockingReason = null;
+    nextStep =
+      'Payout details submitted — your organiser is verifying them. No further action is required from you right now.';
+    isBlocked = false;
   } else if (participant.payoutSettlementStatus === 'Paid' || workflow.stage === 'PAID') {
     statusLabel = 'Payment released';
     blockingReason = null;
@@ -114,14 +124,14 @@ export function deriveParticipantSettlementExplanation(
     }
   }
 
-  const currency = obligations[0]?.currency ?? 'AUD';
-  const earned = obligations
+  const currency = settlementObligations[0]?.currency ?? obligations[0]?.currency ?? 'AUD';
+  const earned = settlementObligations
     .filter((row) => row.status.toUpperCase() !== 'REVERSED')
     .reduce((sum, row) => sum + row.amountOwed, 0);
-  const available = obligations
+  const available = settlementObligations
     .filter((row) => row.status.toUpperCase() === 'AVAILABLE_FOR_PAYOUT')
     .reduce((sum, row) => sum + row.amountOwed, 0);
-  const paid = obligations
+  const paid = settlementObligations
     .filter((row) => row.status.toUpperCase() === 'PAID')
     .reduce((sum, row) => sum + row.amountOwed, 0);
   const pending = Math.max(0, earned - available - paid);
@@ -133,6 +143,9 @@ export function deriveParticipantSettlementExplanation(
   );
   const payoutDetailsRequired =
     hasApprovedAgreement(participant) &&
+    payoutDetailsStatus !== 'Submitted' &&
+    payoutDetailsStatus !== 'Verified' &&
+    payoutDetailsStatus !== 'Not required' &&
     !onboardingComplete &&
     participant.payoutVerificationConfirmed !== true &&
     earned > 0;

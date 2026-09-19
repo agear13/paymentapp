@@ -112,6 +112,8 @@ describe('deriveParticipantWorkspaceOnboarding', () => {
     expect(onboarding.step).toBe('payout_submitted');
     expect(derivePayoutDetailsOrganiserStatus(participant)).toBe('Submitted');
     expect(deriveAgreementOrganiserStatus(participant)).toBe('Approved');
+    expect(onboarding.nextRequiredAction).toBeNull();
+    expect(onboarding.nextRequiredAction ?? '').not.toMatch(/review and approve your agreement/i);
   });
 });
 

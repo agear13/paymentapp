@@ -82,6 +82,52 @@ describe('organisation agreement presentation', () => {
     expect(presentation.branding.logoUrl).toBe('https://cdn.example.com/weso.png');
   });
 
+  it('does not leak a stale Hospitality affiliate title into the current commercial agreement', () => {
+    const hospitalitySnapshot = createAgreementVersion({
+      participant: participant(),
+      branding: {
+        organizationName: 'Hospitality',
+        legalName: 'Hospitality',
+        logoUrl: null,
+        logoSource: null,
+      },
+    });
+    expect(hospitalitySnapshot.title).toBe('Hospitality Affiliate Agreement');
+    const commercial = attachAgreementVersion(
+      participant({
+        extractedObligations: {
+          serviceCategories: [],
+          deliverables: [],
+          operationalObligations: [],
+          compensationTerms: [
+            {
+              id: 'ms-1',
+              type: 'milestone',
+              label: 'Milestone 1',
+              amount: 1,
+              percentage: null,
+              trigger: 'Payable within 30 days of invoice',
+              confidence: 'high',
+            },
+          ],
+          commercialDependencies: [],
+          fixedObligations: [],
+          revenueShareObligations: [],
+          conditionalPayments: [],
+          settlementEvents: [],
+        },
+      }),
+      hospitalitySnapshot
+    );
+    const presentation = resolveAgreementPresentation(commercial, null, {
+      projectName: 'Commercial Supply Agreement — ABC Retail Pty Ltd / Acme Supply Indonesia',
+    });
+    expect(presentation.title).toBe(
+      'Commercial Supply Agreement — ABC Retail Pty Ltd / Acme Supply Indonesia'
+    );
+    expect(presentation.title).not.toBe('Hospitality Affiliate Agreement');
+  });
+
   it('does not mutate a historical agreement snapshot when the organisation logo later changes', () => {
     const first = createAgreementVersion({
       participant: participant(),

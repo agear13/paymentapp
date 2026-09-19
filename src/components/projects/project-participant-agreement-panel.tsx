@@ -63,6 +63,7 @@ import {
   resolveAgreementPresentation,
   type ResolvedAgreementPresentation,
 } from '@/lib/agreements/agreement-presentation';
+import { sanitizeParticipantFacingCommercialText } from '@/lib/participant-portal/participant-current-agreement';
 
 function roleAmountsFromDeal(deal: RecentDeal) {
   return {
@@ -383,7 +384,11 @@ export function ProjectParticipantAgreementPanel({
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-wide">Organisation</p>
             <p className="font-medium">
-              {presentation.branding.legalName || presentation.branding.organizationName || deal.partner}
+              {participant.extractedObligations?.compensationTerms?.length && deal.partner?.trim()
+                ? deal.partner.trim()
+                : presentation.branding.legalName ||
+                  presentation.branding.organizationName ||
+                  deal.partner}
             </p>
           </div>
           <div>
@@ -410,10 +415,12 @@ export function ProjectParticipantAgreementPanel({
           ) : null}
         </div>
 
-        {participant.roleDetails?.trim() ? (
+        {sanitizeParticipantFacingCommercialText(participant.roleDetails) ? (
           <div className="rounded-md border p-3 bg-background">
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Scope</p>
-            <p className="text-sm whitespace-pre-wrap">{participant.roleDetails.trim()}</p>
+            <p className="text-sm whitespace-pre-wrap">
+              {sanitizeParticipantFacingCommercialText(participant.roleDetails)}
+            </p>
           </div>
         ) : null}
 

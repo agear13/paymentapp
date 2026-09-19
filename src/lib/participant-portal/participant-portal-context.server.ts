@@ -31,6 +31,7 @@ async function loadObligations(participantDbId: string): Promise<PortalObligatio
     currency: row.currency,
     dueDate: row.due_date?.toISOString() ?? null,
     explanation: row.calculation_explanation,
+    dealId: row.deal_id,
   }));
 }
 

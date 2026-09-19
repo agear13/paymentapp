@@ -55,7 +55,72 @@ function EarningsMetrics({ workspace }: { workspace: ParticipantCommercialWorksp
     ['current_earnings', 'pending_settlement', 'paid_to_date'].includes(m.field)
   );
   if (earningsMetrics.length === 0) return null;
-  return <CommercialMetricsGrid metrics={earningsMetrics} title="Earnings" />;
+  return <CommercialMetricsGrid metrics={earningsMetrics} title="This agreement" />;
+}
+
+function RelationshipHistoryCard({
+  workspace,
+}: {
+  workspace: ParticipantCommercialWorkspaceModel;
+}) {
+  const history = workspace.relationshipEarnings;
+  if (!history.totalLabel && !history.thisAgreementLabel) return null;
+  return (
+    <div className="rounded-lg border bg-background p-4 space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Your Provvy history
+      </p>
+      {history.totalLabel ? (
+        <div>
+          <p className="text-xs text-muted-foreground">Total relationship earnings</p>
+          <p className="text-lg font-semibold tabular-nums">{history.totalLabel}</p>
+        </div>
+      ) : null}
+      {history.thisAgreementLabel ? (
+        <div>
+          <p className="text-xs text-muted-foreground">This agreement</p>
+          <p className="text-sm font-medium tabular-nums">{history.thisAgreementLabel}</p>
+        </div>
+      ) : null}
+      {history.previousActivityLabel ? (
+        <div>
+          <p className="text-xs text-muted-foreground">Previous activity</p>
+          <p className="text-sm font-medium tabular-nums">{history.previousActivityLabel}</p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CurrentAgreementSummary({
+  workspace,
+}: {
+  workspace: ParticipantCommercialWorkspaceModel;
+}) {
+  if (!workspace.currentAgreementPayoutLabel && !workspace.currentAgreementTotalLabel) {
+    return null;
+  }
+  return (
+    <div className="rounded-lg border bg-background p-4 space-y-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Your agreement
+      </p>
+      {workspace.currentAgreementPayoutLabel ? (
+        <div>
+          <p className="text-xs text-muted-foreground">Your payout</p>
+          <p className="text-2xl font-semibold tabular-nums">
+            {workspace.currentAgreementPayoutLabel}
+          </p>
+        </div>
+      ) : null}
+      {workspace.currentAgreementTotalLabel ? (
+        <div>
+          <p className="text-xs text-muted-foreground">Total agreement value</p>
+          <p className="text-sm font-medium tabular-nums">{workspace.currentAgreementTotalLabel}</p>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function OverviewSection({ workspace }: { workspace: ParticipantCommercialWorkspaceModel }) {
@@ -63,7 +128,9 @@ function OverviewSection({ workspace }: { workspace: ParticipantCommercialWorksp
     <div className="space-y-6">
       <CommercialLifecycleCard steps={workspace.lifecycleSteps} />
       <CommercialIntelligence explanation={workspace.intelligence} />
+      <CurrentAgreementSummary workspace={workspace} />
       <EarningsMetrics workspace={workspace} />
+      <RelationshipHistoryCard workspace={workspace} />
       <CommercialPerformanceCard
         metrics={workspace.performance.metrics}
         hasRecordedActivity={workspace.performance.hasRecordedActivity}
@@ -102,7 +169,9 @@ function PaymentsSection({ workspace }: { workspace: ParticipantCommercialWorksp
   return (
     <div className="space-y-6">
       <SettlementExplanationCard settlement={workspace.settlement} />
+      <CurrentAgreementSummary workspace={workspace} />
       <EarningsMetrics workspace={workspace} />
+      <RelationshipHistoryCard workspace={workspace} />
       <PaymentTimeline items={workspace.paymentTimeline} />
     </div>
   );
@@ -208,12 +277,18 @@ export function ParticipantCommercialWorkspaceView({
         <section className="space-y-4">
           <div>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-              {workspace.participantName}
+              {workspace.projectName}
             </h1>
-            <p className="text-base sm:text-lg text-muted-foreground mt-1">
-              {workspace.participantRole}
-            </p>
-            <p className="text-sm text-muted-foreground">{workspace.participantSubtitle}</p>
+            {workspace.contractingParty ? (
+              <p className="text-base sm:text-lg text-muted-foreground mt-1">
+                {workspace.contractingParty} → {workspace.participantName}
+              </p>
+            ) : (
+              <p className="text-base sm:text-lg text-muted-foreground mt-1">
+                {workspace.participantName}
+              </p>
+            )}
+            <p className="text-sm text-muted-foreground">Your role · {workspace.participantRole}</p>
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3">

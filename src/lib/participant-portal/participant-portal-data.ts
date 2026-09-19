@@ -21,6 +21,18 @@ import { deriveParticipantCommercialPerformance } from '@/lib/participant-portal
 import { deriveParticipantSettlementExplanation } from '@/lib/participant-portal/participant-settlement-explanation';
 import { deriveParticipantCommercialState } from '@/lib/participant-portal/participant-workspace-state';
 import { deriveParticipantWorkflowBadges } from '@/lib/commercial/workflows/derive-participant-workflows';
+import { formatScheduleMoney } from '@/lib/commercial-os/payment-schedule-presentation';
+import {
+  containsInternalExtractionMetadata,
+  currentAgreementScheduleFromParticipant,
+  deriveParticipantRelationshipEarnings,
+  formatDisplayableExtractedAmount,
+  partitionPortalObligations,
+  resolveParticipantAgreementTitle,
+  resolveParticipantContractingParty,
+  resolveParticipantFacingRole,
+  sanitizeParticipantFacingCommercialText,
+} from '@/lib/participant-portal/participant-current-agreement';
 import type {
   ParticipantCommercialWorkspaceModel,
   ParticipantPortalContext,
@@ -68,7 +80,8 @@ function deriveAgreementStatus(participant: DemoParticipant): {
 
 function deriveCommercialSections(
   participant: DemoParticipant,
-  currency: string
+  currency: string,
+  deal?: RecentDeal
 ): PortalCommercialSection[] {
   const sections: PortalCommercialSection[] = [];
   const profile = participant.compensationProfile;
@@ -150,25 +163,48 @@ function deriveCommercialSections(
   }
 
   const extracted = participant.extractedObligations;
+  const schedule = deal ? currentAgreementScheduleFromParticipant(participant, deal) : null;
   if (extracted?.compensationTerms?.length) {
-    for (const term of extracted.compensationTerms) {
-      if (term.type === 'milestone' || term.trigger?.toLowerCase().includes('milestone')) {
-        sections.push({
-          kind: 'milestone',
-          label: term.label,
-          amount: term.amount != null ? formatCurrency(term.amount, currency) : null,
-          trigger: term.trigger,
-        });
-      }
+    const siblingCount = extracted.compensationTerms.length;
+    const milestoneTerms = extracted.compensationTerms.filter(
+      (term) => term.type === 'milestone' || term.trigger?.toLowerCase().includes('milestone')
+    );
+    for (const [index, term] of milestoneTerms.entries()) {
+      const label = sanitizeParticipantFacingCommercialText(term.label) ?? term.label;
+      const scheduled = schedule?.items[index];
+      sections.push({
+        kind: 'milestone',
+        label,
+        amount:
+          scheduled?.amount != null
+            ? formatCurrency(scheduled.amount, currency)
+            : formatDisplayableExtractedAmount(
+                term.amount,
+                siblingCount,
+                term.label,
+                schedule?.equalMilestoneAmount ?? null,
+                currency
+              ),
+        trigger:
+          sanitizeParticipantFacingCommercialText(scheduled?.dueLabel ?? term.trigger) ??
+          term.trigger,
+      });
     }
   }
 
   if (extracted?.conditionalPayments?.length) {
+    const siblingCount = extracted.conditionalPayments.length;
     for (const cp of extracted.conditionalPayments) {
       sections.push({
         kind: 'milestone',
-        label: cp.trigger,
-        amount: cp.amount != null ? formatCurrency(cp.amount, currency) : null,
+        label: sanitizeParticipantFacingCommercialText(cp.trigger) ?? cp.trigger,
+        amount: formatDisplayableExtractedAmount(
+          cp.amount,
+          siblingCount,
+          cp.trigger,
+          null,
+          currency
+        ),
         trigger: 'Conditional payment',
       });
     }
@@ -177,37 +213,81 @@ function deriveCommercialSections(
   return sections;
 }
 
+function visibleCommercialLines(values: Array<string | null | undefined>): string[] {
+  return values
+    .map((value) => sanitizeParticipantFacingCommercialText(value))
+    .filter((value): value is string => Boolean(value))
+    .filter((value) => !containsInternalExtractionMetadata(value));
+}
+
 function deriveAgreementSection(participant: DemoParticipant, deal: RecentDeal): PortalAgreementSection {
   const extracted = participant.extractedObligations;
   const summary = buildAgreementSummaryData(participant, deal);
+  const schedule = currentAgreementScheduleFromParticipant(participant, deal);
+  const siblingCount = extracted?.settlementEvents?.length ?? 0;
 
-  const deliverables =
-    extracted?.deliverables?.map((d) => d.description).filter(Boolean) ??
-    (participant.roleDetails?.trim() ? [participant.roleDetails.trim()] : []);
+  const deliverables = visibleCommercialLines(
+    extracted?.deliverables?.map((d) => d.description) ??
+      (participant.roleDetails?.trim() ? [participant.roleDetails.trim()] : [])
+  );
 
-  const commercialObligations =
-    extracted?.operationalObligations?.map((o) => o.description).filter(Boolean) ??
-    (summary.obligationsSummary ? [summary.obligationsSummary] : []);
+  const commercialObligations = visibleCommercialLines(
+    extracted?.operationalObligations?.map((o) => o.description) ??
+      (summary.obligationsSummary ? [summary.obligationsSummary] : [])
+  );
 
   const paymentEvents =
-    extracted?.settlementEvents?.map((e) => {
-      const parts = [e.type.replace(/_/g, ' ')];
-      if (e.amount != null) parts.push(formatCurrency(e.amount, DEFAULT_WORKSPACE_CURRENCY));
-      if (e.percentage != null) parts.push(`${e.percentage}%`);
-      if (e.trigger) parts.push(`— ${e.trigger}`);
-      return parts.join(' ');
-    }) ?? (summary.paymentSchedule !== 'Per commercial agreement terms' ? [summary.paymentSchedule] : []);
+    schedule?.items.length
+      ? schedule.items.map((item, index) => {
+          const amount = item.amount != null ? formatCurrency(item.amount, deal.projectValueCurrency ?? DEFAULT_WORKSPACE_CURRENCY) : '';
+          return [`${item.label || `Milestone ${index + 1}`}`, amount, item.dueLabel ? `— ${item.dueLabel}` : '']
+            .filter(Boolean)
+            .join(' ');
+        })
+      : visibleCommercialLines(
+          extracted?.settlementEvents?.map((e) => {
+            const parts = [e.type.replace(/_/g, ' ')];
+            const amount = formatDisplayableExtractedAmount(
+              e.amount,
+              siblingCount,
+              e.trigger,
+              schedule?.equalMilestoneAmount ?? null,
+              deal.projectValueCurrency ?? DEFAULT_WORKSPACE_CURRENCY
+            );
+            if (amount) parts.push(amount);
+            if (e.percentage != null) parts.push(`${e.percentage}%`);
+            if (e.trigger) parts.push(`— ${e.trigger}`);
+            return parts.join(' ');
+          }) ??
+            (summary.paymentSchedule !== 'Per commercial agreement terms'
+              ? [summary.paymentSchedule]
+              : [])
+        );
 
-  const settlementRules =
-    extracted?.settlementEvents
-      ?.filter((e) => e.trigger)
-      .map((e) => e.trigger as string) ?? [];
+  const settlementRules = visibleCommercialLines(
+    extracted?.settlementEvents?.filter((e) => e.trigger).map((e) => e.trigger as string) ??
+      schedule?.items.map((item) => item.dueLabel).filter(Boolean) ??
+      []
+  );
 
-  const conditionalPayments =
+  const conditionalPayments = visibleCommercialLines(
     extracted?.conditionalPayments?.map((cp) => {
-      const amt = cp.amount != null ? formatCurrency(cp.amount, DEFAULT_WORKSPACE_CURRENCY) : '';
+      const amt = formatDisplayableExtractedAmount(
+        cp.amount,
+        extracted.conditionalPayments.length,
+        cp.trigger,
+        null,
+        deal.projectValueCurrency ?? DEFAULT_WORKSPACE_CURRENCY
+      );
       return [cp.trigger, amt].filter(Boolean).join(' — ');
-    }) ?? [];
+    }) ?? []
+  );
+
+  const termsStatements = visibleCommercialLines([
+    participant.participantNotes,
+    participant.roleDetails,
+    extracted?.settlementEvents?.find((event) => event.trigger?.trim())?.trigger,
+  ]);
 
   return {
     deliverables,
@@ -215,6 +295,7 @@ function deriveAgreementSection(participant: DemoParticipant, deal: RecentDeal):
     paymentEvents,
     settlementRules,
     conditionalPayments,
+    termsStatements,
   };
 }
 
@@ -228,24 +309,48 @@ function obligationTimelineStatus(status: string): CommercialStepStatus {
 
 function derivePaymentTimeline(
   participant: DemoParticipant,
+  deal: RecentDeal,
   currency: string,
   context: ParticipantPortalContext
 ): PortalPaymentTimelineItem[] {
   const items: PortalPaymentTimelineItem[] = [];
   const extracted = participant.extractedObligations;
+  const schedule = currentAgreementScheduleFromParticipant(participant, deal);
+  const { currentDeal } = partitionPortalObligations(context.obligations, deal.id);
 
-  for (const [i, ob] of context.obligations.entries()) {
-    items.push({
-      id: `obligation-${ob.id}`,
-      dateLabel: formatPortalDate(ob.dueDate) ?? 'Per agreement',
-      title: ob.explanation.split('.')[0] || 'Commercial payment',
-      status: obligationTimelineStatus(ob.status),
-      detail: formatCurrency(ob.amountOwed, ob.currency || currency),
+  if (schedule?.items.length) {
+    return schedule.items.map((item, index) => {
+      const amountLabel =
+        item.amount != null ? formatScheduleMoney(item.amount, currency) : null;
+      const title = [item.label || `Milestone ${index + 1}`, amountLabel]
+        .filter(Boolean)
+        .join(' — ');
+      return {
+        id: `schedule-${index + 1}`,
+        dateLabel: item.dueLabel ?? 'Per agreement',
+        title,
+        status: 'pending' as const,
+        detail: item.dueLabel ?? undefined,
+      };
     });
-    void i;
   }
 
-  if (participant.payoutDueDate && context.obligations.length === 0) {
+  const hasDealScopedRows = context.obligations.some((row) => Boolean(row.dealId?.trim()));
+  const timelineObligations = hasDealScopedRows ? currentDeal : context.obligations;
+
+  if (timelineObligations.length > 0) {
+    for (const ob of timelineObligations) {
+      items.push({
+        id: `obligation-${ob.id}`,
+        dateLabel: formatPortalDate(ob.dueDate) ?? 'Per agreement',
+        title: ob.explanation.split('.')[0] || 'Commercial payment',
+        status: obligationTimelineStatus(ob.status),
+        detail: formatCurrency(ob.amountOwed, ob.currency || currency),
+      });
+    }
+  }
+
+  if (participant.payoutDueDate && items.length === 0) {
     items.push({
       id: 'fixed-due',
       dateLabel: formatPortalDate(participant.payoutDueDate) ?? participant.payoutDueDate,
@@ -254,32 +359,38 @@ function derivePaymentTimeline(
     });
   }
 
-  if (extracted?.settlementEvents?.length) {
+  if (extracted?.settlementEvents?.length && items.length === 0) {
+    const siblingCount = extracted.settlementEvents.length;
     for (const [i, event] of extracted.settlementEvents.entries()) {
-      if (context.obligations.some((o) => o.explanation.includes(event.type))) continue;
       items.push({
         id: `settlement-${i}`,
         dateLabel: event.trigger ?? 'Per agreement',
         title: event.type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
         status: 'pending',
         detail:
-          event.amount != null
-            ? formatCurrency(event.amount, currency)
-            : event.percentage != null
-              ? `${event.percentage}%`
-              : undefined,
+          formatDisplayableExtractedAmount(
+            event.amount,
+            siblingCount,
+            event.trigger,
+            null,
+            currency
+          ) ??
+          (event.percentage != null ? `${event.percentage}%` : undefined),
       });
     }
   }
 
   if (items.length === 0 && participant.payoutCondition?.trim()) {
-    items.push({
-      id: 'payout-condition',
-      dateLabel: 'TBC',
-      title: participant.payoutCondition.trim(),
-      status: 'waiting',
-      detail: 'Payment timing will become available once the organiser finalises settlement.',
-    });
+    const title = sanitizeParticipantFacingCommercialText(participant.payoutCondition);
+    if (title) {
+      items.push({
+        id: 'payout-condition',
+        dateLabel: 'TBC',
+        title,
+        status: 'waiting',
+        detail: 'Payment timing will become available once the organiser finalises settlement.',
+      });
+    }
   }
 
   return items;
@@ -293,29 +404,64 @@ export function deriveParticipantCommercialWorkspace(
 ): ParticipantCommercialWorkspaceModel {
   const agreementMeta = deriveAgreementStatus(participant);
   const agreement = deriveAgreementSection(participant, deal);
+  const schedule = currentAgreementScheduleFromParticipant(participant, deal);
+  const { currentDeal } = partitionPortalObligations(context.obligations, deal.id);
+  const thisAgreementPayout = schedule?.equalMilestoneAmount ?? schedule?.items[0]?.amount ?? null;
+  const thisAgreementTotal = schedule?.totalAmount ?? (deal.value > 0 ? deal.value : null);
+  const scopedToSchedule = schedule != null;
   const performance = deriveParticipantCommercialPerformance(
     participant,
     context.obligations,
     context.attributionActivity,
-    context.attributionActivity?.currency ?? currency
+    context.attributionActivity?.currency ?? currency,
+    scopedToSchedule
+      ? {
+          currentAgreementObligations: currentDeal,
+          currentAgreementPayout: thisAgreementPayout,
+        }
+      : undefined
   );
-  const settlement = deriveParticipantSettlementExplanation(participant, context.obligations);
+  const settlement = deriveParticipantSettlementExplanation(
+    participant,
+    context.obligations,
+    scopedToSchedule ? { currentAgreementObligations: currentDeal } : undefined
+  );
   const commercialState = deriveParticipantCommercialState(participant);
   const workflowStatus = deriveParticipantWorkflowBadges(participant);
+  const relationship = deriveParticipantRelationshipEarnings(
+    context.obligations,
+    deal.id,
+    thisAgreementPayout,
+    context.attributionActivity?.currency ?? currency
+  );
 
   return {
     participantName: participant.name?.trim() || 'Participant',
-    participantRole: participant.role,
+    participantRole: resolveParticipantFacingRole(participant),
     participantSubtitle: 'Commercial Participant',
-    projectName: deal.dealName,
+    projectName: resolveParticipantAgreementTitle(deal, participant),
+    contractingParty: resolveParticipantContractingParty(deal, participant),
     agreementStatus: agreementMeta.status,
     agreementStatusLabel: agreementMeta.label,
     lifecycleSteps: deriveParticipantCommercialLifecycleSteps(participant, agreement),
-    commercialSections: deriveCommercialSections(participant, currency),
+    commercialSections: deriveCommercialSections(participant, currency, deal),
     agreement,
     performance,
+    relationshipEarnings: {
+      totalLabel: relationship.totalLabel,
+      thisAgreementLabel: relationship.thisAgreementLabel,
+      previousActivityLabel: relationship.previousActivityLabel,
+    },
+    currentAgreementPayoutLabel:
+      thisAgreementPayout != null
+        ? formatCurrency(thisAgreementPayout, context.attributionActivity?.currency ?? currency)
+        : null,
+    currentAgreementTotalLabel:
+      thisAgreementTotal != null
+        ? formatCurrency(thisAgreementTotal, context.attributionActivity?.currency ?? currency)
+        : null,
     settlement,
-    paymentTimeline: derivePaymentTimeline(participant, currency, context),
+    paymentTimeline: derivePaymentTimeline(participant, deal, currency, context),
     intelligence: deriveParticipantPortalIntelligence(
       participant,
       deal,

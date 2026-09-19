@@ -215,9 +215,12 @@ export function mapSinglePartyToParticipant(
   const withCompensation = profile
     ? applyCompensationProfileToParticipant(built, profile)
     : built;
-  return extractedObligations
-    ? { ...withCompensation, extractedObligations }
-    : withCompensation;
+  const extractedRole = party.role.trim();
+  return {
+    ...withCompensation,
+    ...(extractedObligations ? { extractedObligations } : {}),
+    ...(extractedRole ? { roleLabel: extractedRole } : {}),
+  };
 }
 
 /**
@@ -231,6 +234,7 @@ export function mergeExtractedCompensationIntoExistingParticipant(
   const base: DemoParticipant = {
     ...existing,
     participantNotes: built.participantNotes,
+    roleLabel: built.roleLabel ?? existing.roleLabel,
   };
   if (built.compensationProfile) {
     return applyCompensationProfileToParticipant(

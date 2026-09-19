@@ -95,9 +95,10 @@ export function ReviewPartyCard({
 
   const financialMilestones = party.milestones.filter((m) => m.category === 'financial');
   const performanceMilestones = party.milestones.filter((m) => m.category === 'performance');
-  const hasFinancialObligations =
-    showFixedField ||
-    showRevenueField ||
+  const hasExtractedFixedAmount = party.fixedAmount != null && party.fixedAmount > 0;
+  const hasFinancialObligationLines =
+    (showFixedField && hasExtractedFixedAmount) ||
+    (showRevenueField && party.revenueSharePct != null) ||
     financialMilestones.length > 0;
   const hasPerformanceObligations =
     party.deliverables.length > 0 ||
@@ -297,7 +298,7 @@ export function ReviewPartyCard({
             onChange={(e) =>
               onChange({ ...party, fixedAmount: e.target.value ? Number(e.target.value) : null })
             }
-            placeholder="Enter converted amount"
+            placeholder="Not specified"
             className={cn(
               'h-8 text-sm',
               (extractedCurrency && party.fixedAmount === null) || compensationWarnings.some((w) => w.kind === 'fixed_payout_missing_amount' || w.kind === 'hybrid_incomplete')
@@ -313,6 +314,10 @@ export function ReviewPartyCard({
               </span>
             </p>
           )}
+          {!hasExtractedFixedAmount &&
+          !(extractedCurrency && originalParty && originalParty.fixedAmount.value != null) ? (
+            <p className="text-xs text-muted-foreground">Fixed payout: Not specified</p>
+          ) : null}
         </div>
       )}
 
@@ -347,7 +352,7 @@ export function ReviewPartyCard({
         </p>
       )}
 
-      {hasFinancialObligations ? (
+      {hasFinancialObligationLines ? (
         <div className="space-y-2 rounded-md border bg-background/60 p-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Financial Obligations

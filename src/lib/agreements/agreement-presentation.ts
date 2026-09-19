@@ -307,8 +307,19 @@ export function resolveAgreementPresentation(
 ): ResolvedAgreementPresentation {
   const snapshot = currentAgreementVersion(participant);
   if (snapshot) {
+    const projectName = options?.projectName?.trim() || '';
+    const extractedCompensation = Boolean(
+      participant.extractedObligations?.compensationTerms?.length
+    );
+    const title =
+      extractedCompensation &&
+      projectName &&
+      !/affiliate agreement$/i.test(projectName) &&
+      /affiliate agreement$/i.test(snapshot.title)
+        ? projectName
+        : snapshot.title;
     return {
-      title: snapshot.title,
+      title,
       versionId: snapshot.versionId,
       versionNumber: snapshot.versionNumber,
       branding: snapshot.branding,

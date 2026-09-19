@@ -24,6 +24,7 @@ function workspaceModel(
     participantRole: 'Producer',
     participantSubtitle: 'Saturday Beach Event',
     projectName: 'Saturday Beach Event',
+    contractingParty: null,
     agreementStatus: 'approved',
     agreementStatusLabel: 'Approved',
     lifecycleSteps: [],
@@ -34,12 +35,20 @@ function workspaceModel(
       paymentEvents: [],
       settlementRules: [],
       conditionalPayments: [],
+      termsStatements: [],
     },
     performance: {
       supportedFields: [],
       metrics: [],
       hasRecordedActivity: false,
     },
+    relationshipEarnings: {
+      totalLabel: null,
+      thisAgreementLabel: null,
+      previousActivityLabel: null,
+    },
+    currentAgreementPayoutLabel: null,
+    currentAgreementTotalLabel: null,
     settlement: {
       statusLabel: 'Pending',
       blockingReason: null,

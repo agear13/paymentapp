@@ -62,6 +62,8 @@ export type PortalObligationSnapshot = {
   currency: string;
   dueDate: string | null;
   explanation: string;
+  /** Present when loaded from persisted obligations. Used to scope current vs historical. */
+  dealId?: string | null;
 };
 
 export type PortalAttributionActivity = {
@@ -114,6 +116,7 @@ export type PortalAgreementSection = {
   paymentEvents: string[];
   settlementRules: string[];
   conditionalPayments: string[];
+  termsStatements?: string[];
 };
 
 export type PortalPaymentTimelineItem = {
@@ -134,17 +137,27 @@ export type WorkflowStatusLabels = {
   accounting: string;
 };
 
+export type ParticipantRelationshipEarningsView = {
+  totalLabel: string | null;
+  thisAgreementLabel: string | null;
+  previousActivityLabel: string | null;
+};
+
 export type ParticipantCommercialWorkspaceModel = {
   participantName: string;
   participantRole: string;
   participantSubtitle: string;
   projectName: string;
+  contractingParty: string | null;
   agreementStatus: PortalAgreementStatus;
   agreementStatusLabel: string;
   lifecycleSteps: CommercialLifecycleStep[];
   commercialSections: PortalCommercialSection[];
   agreement: PortalAgreementSection;
   performance: ParticipantCommercialPerformance;
+  relationshipEarnings: ParticipantRelationshipEarningsView;
+  currentAgreementPayoutLabel: string | null;
+  currentAgreementTotalLabel: string | null;
   settlement: SettlementExplanation;
   paymentTimeline: PortalPaymentTimelineItem[];
   intelligence: string | null;

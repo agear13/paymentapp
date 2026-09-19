@@ -35,7 +35,8 @@ export function AgreementOverview({ agreement }: Props) {
     agreement.commercialObligations.length > 0 ||
     agreement.paymentEvents.length > 0 ||
     agreement.settlementRules.length > 0 ||
-    agreement.conditionalPayments.length > 0;
+    agreement.conditionalPayments.length > 0 ||
+    (agreement.termsStatements?.length ?? 0) > 0;
 
   return (
     <Card>
@@ -49,6 +50,7 @@ export function AgreementOverview({ agreement }: Props) {
           </p>
         ) : (
           <>
+            <AgreementList title="Agreement terms" items={agreement.termsStatements ?? []} />
             <AgreementList title="Deliverables" items={agreement.deliverables} />
             <AgreementList title="Commercial obligations" items={agreement.commercialObligations} />
             <AgreementList title="Payment events" items={agreement.paymentEvents} />

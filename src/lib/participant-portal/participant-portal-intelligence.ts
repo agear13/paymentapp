@@ -8,6 +8,7 @@ import type { DemoParticipant } from '@/components/deal-network-demo/invite-part
 import type { RecentDeal } from '@/lib/data/mock-deal-network';
 import { deriveParticipantCommercialLifecycle } from '@/lib/commercial/participant-commercial-lifecycle';
 import { hasApprovedAgreement } from '@/lib/operations/primitives/participant-earnings-primitives';
+import { sanitizeParticipantFacingCommercialText } from '@/lib/participant-portal/participant-current-agreement';
 import type {
   ParticipantCommercialPerformance,
   SettlementExplanation,
@@ -69,7 +70,8 @@ export function deriveParticipantPortalIntelligence(
   }
 
   if (participant.payoutCondition?.trim() && parts.length === 0) {
-    parts.push(participant.payoutCondition.trim());
+    const sanitized = sanitizeParticipantFacingCommercialText(participant.payoutCondition);
+    if (sanitized) parts.push(sanitized);
   }
 
   if (participant.extractedObligations?.settlementEvents?.length && parts.length <= 1) {
@@ -85,5 +87,9 @@ export function deriveParticipantPortalIntelligence(
       : null;
   }
 
-  return parts.join(' ');
+  const visible = hasApprovedAgreement(participant)
+    ? parts.filter((part) => !/review and (approve|accept)/i.test(part))
+    : parts;
+
+  return visible.join(' ');
 }

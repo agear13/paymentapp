@@ -88,14 +88,24 @@ export function deriveParticipantCommercialPerformance(
   participant: DemoParticipant,
   obligations: PortalObligationSnapshot[],
   attributionActivity: PortalAttributionActivity | null,
-  currency: string
+  currency: string,
+  options?: {
+    currentAgreementObligations?: PortalObligationSnapshot[];
+    currentAgreementPayout?: number | null;
+  }
 ): ParticipantCommercialPerformance {
   const supportedFields = earningsModelFields(participant);
-  const paidToDate = sumByStatus(obligations, PAID_STATUSES);
-  const pendingSettlement = sumByStatus(obligations, PENDING_SETTLEMENT_STATUSES);
-  const currentEarnings = obligations
+  const agreementScoped = options?.currentAgreementObligations;
+  const scopedObligations = agreementScoped ?? obligations;
+  const paidToDate = sumByStatus(scopedObligations, PAID_STATUSES);
+  const pendingSettlement = sumByStatus(scopedObligations, PENDING_SETTLEMENT_STATUSES);
+  const recordedCurrent = scopedObligations
     .filter((o) => o.status.toUpperCase() !== 'REVERSED')
     .reduce((sum, o) => sum + o.amountOwed, 0);
+  const currentEarnings =
+    options?.currentAgreementPayout != null && options.currentAgreementPayout > 0
+      ? options.currentAgreementPayout
+      : recordedCurrent;
 
   const pct =
     participant.compensationProfile?.percentage ??
@@ -112,6 +122,12 @@ export function deriveParticipantCommercialPerformance(
   const avgOrder = orders > 0 ? attributedSales / orders : null;
 
   const emptyActivity = 'No commercial activity has been recorded yet.';
+  const scopedToAgreement = agreementScoped != null;
+  const hasAgreementPayout =
+    options?.currentAgreementPayout != null && options.currentAgreementPayout > 0;
+  const showAgreementEarnings = scopedToAgreement
+    ? hasAgreementPayout || scopedObligations.length > 0
+    : obligations.length > 0;
 
   const metrics: CommercialMetricValue[] = [];
 
@@ -119,17 +135,47 @@ export function deriveParticipantCommercialPerformance(
     switch (field) {
       case 'current_earnings':
         metrics.push(
-          metricOrEmpty(field, 'Current Earnings', obligations.length ? currentEarnings : null, currency, emptyActivity)
+          metricOrEmpty(
+            field,
+            'Current Earnings',
+            showAgreementEarnings ? currentEarnings : null,
+            currency,
+            emptyActivity
+          )
         );
         break;
       case 'pending_settlement':
         metrics.push(
-          metricOrEmpty(field, 'Pending Settlement', obligations.length ? pendingSettlement : null, currency, emptyActivity)
+          metricOrEmpty(
+            field,
+            'Pending Settlement',
+            scopedToAgreement
+              ? scopedObligations.length
+                ? pendingSettlement
+                : null
+              : obligations.length
+                ? pendingSettlement
+                : null,
+            currency,
+            emptyActivity
+          )
         );
         break;
       case 'paid_to_date':
         metrics.push(
-          metricOrEmpty(field, 'Paid To Date', obligations.length ? paidToDate : null, currency, emptyActivity)
+          metricOrEmpty(
+            field,
+            'Paid To Date',
+            scopedToAgreement
+              ? scopedObligations.length
+                ? paidToDate
+                : null
+              : obligations.length
+                ? paidToDate
+                : null,
+            currency,
+            emptyActivity
+          )
         );
         break;
       case 'revenue_generated':

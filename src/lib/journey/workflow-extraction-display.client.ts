@@ -20,6 +20,7 @@ import {
   type SettlementScheduleLine,
 } from '@/lib/ai-extractor/settlement-schedule';
 import { resolveWorkflowAgreementCurrency } from '@/lib/journey/workflow-agreement-currency.client';
+import { calibratedCompensationAmountsForParty } from '@/lib/commercial-os/compensation-amount-presentation';
 
 export type WorkflowJourneyStage =
   | 'agreement'
@@ -711,19 +712,20 @@ function buildRevenueShareSettlementDisplay(
 function formatPartyEntitlementLabel(
   party: ExtractedParty,
   formatMoney: (amount: number) => string,
+  result: ExtractionResult,
 ): string | null {
-  const terms = party.compensationTerms ?? [];
-  const fixedTerm = terms.find((term) => term.type === 'fixed_fee' && term.amount.value != null);
-  if (fixedTerm?.amount.value != null) {
-    return `${formatMoney(fixedTerm.amount.value)} fixed fee`;
+  const displayed = calibratedCompensationAmountsForParty(party, result);
+  const fixedTerm = displayed.find((row) => row.term.type === 'fixed_fee' && row.amount != null);
+  if (fixedTerm?.amount != null) {
+    return `${formatMoney(fixedTerm.amount)} fixed fee`;
   }
   if (hasFixedFeeAmount(party) && party.fixedAmount.value != null) {
     return `${formatMoney(party.fixedAmount.value)} fixed fee`;
   }
-  const instalments = terms.filter((term) => term.type === 'instalment' && term.amount.value != null);
+  const instalments = displayed.filter((row) => row.term.type === 'instalment' && row.amount != null);
   if (instalments.length > 0) {
     return instalments
-      .map((term) => `${formatMoney(term.amount.value!)} ${term.label.value?.trim() || 'instalment'}`)
+      .map((row) => `${formatMoney(row.amount!)} ${row.term.label.value?.trim() || 'instalment'}`)
       .join('; ');
   }
   if (hasRevenueSharePct(party) && party.revenueSharePct.value != null) {
@@ -761,20 +763,21 @@ function buildPartyLinkedPaymentTermRows(
 function buildPartyCompensationTimingRows(
   party: ExtractedParty,
   formatMoney: (amount: number) => string,
+  result: ExtractionResult,
 ): WorkflowPaymentScheduleRow[] {
-  const terms = party.compensationTerms ?? [];
+  const displayed = calibratedCompensationAmountsForParty(party, result);
   const rows: WorkflowPaymentScheduleRow[] = [];
-  for (const [index, term] of terms.entries()) {
+  for (const [index, row] of displayed.entries()) {
+    const term = row.term;
     const trigger = term.trigger.value?.trim() || term.deadline.value?.trim() || null;
     if (!trigger) continue;
-    const amount = term.amount.value;
     const percentage = term.percentage.value;
     rows.push({
       key: `${party.id}-term-${term.id}`,
       title: term.label.value?.trim() || (term.type === 'fixed_fee' ? 'Fixed fee' : 'Payment'),
       amountLabel:
-        amount != null
-          ? formatMoney(amount)
+        row.amount != null
+          ? formatMoney(row.amount)
           : percentage != null
             ? `${percentage}%`
             : null,
@@ -833,7 +836,7 @@ export function buildExtractionReviewSettlementGroups(
 
   for (const party of result.parties) {
     const partyName = party.name.value?.trim() || 'Unnamed participant';
-    const entitlementLabel = formatPartyEntitlementLabel(party, formatMoney);
+    const entitlementLabel = formatPartyEntitlementLabel(party, formatMoney, result);
 
     if (partyIsRevenueShareOnly(party)) {
       const revenueShare = buildRevenueShareSettlementDisplay(party, result);
@@ -860,7 +863,7 @@ export function buildExtractionReviewSettlementGroups(
       continue;
     }
 
-    const compensationRows = buildPartyCompensationTimingRows(party, formatMoney);
+    const compensationRows = buildPartyCompensationTimingRows(party, formatMoney, result);
     if (compensationRows.length > 0) {
       groups.push({
         key: party.id,

@@ -28,6 +28,7 @@ function workspaceModel(): ParticipantCommercialWorkspaceModel {
     participantRole: 'Promoter',
     participantSubtitle: 'Summer Festival',
     projectName: 'Summer Festival',
+    contractingParty: null,
     agreementStatus: 'approved',
     agreementStatusLabel: 'Approved',
     lifecycleSteps: [],
@@ -38,12 +39,20 @@ function workspaceModel(): ParticipantCommercialWorkspaceModel {
       paymentEvents: [],
       settlementRules: [],
       conditionalPayments: [],
+      termsStatements: [],
     },
     performance: {
       supportedFields: [],
       metrics: [],
       hasRecordedActivity: false,
     },
+    relationshipEarnings: {
+      totalLabel: null,
+      thisAgreementLabel: null,
+      previousActivityLabel: null,
+    },
+    currentAgreementPayoutLabel: null,
+    currentAgreementTotalLabel: null,
     settlement: {
       statusLabel: 'Pending',
       blockingReason: null,
