@@ -10,9 +10,13 @@ import { CREATE_INVOICE_INPUT_CLS } from '@/components/journey/lovable/create-in
 export function InvoiceCreationMethodToggle({
   method,
   onChange,
+  manualLabel = 'Create manually',
+  conversationLabel = 'Paste conversation',
 }: {
   method: 'manual' | 'conversation';
   onChange: (method: 'manual' | 'conversation') => void;
+  manualLabel?: string;
+  conversationLabel?: string;
 }) {
   return (
     <div className="space-y-2">
@@ -36,7 +40,7 @@ export function InvoiceCreationMethodToggle({
             : 'text-ink-soft hover:text-foreground'
         }`}
       >
-        Create manually
+        {manualLabel}
       </button>
       <button
         type="button"
@@ -50,7 +54,7 @@ export function InvoiceCreationMethodToggle({
             : 'text-ink-soft hover:text-foreground'
         }`}
       >
-        Paste conversation
+        {conversationLabel}
       </button>
     </div>
     </div>
@@ -63,12 +67,14 @@ export function ConversationInvoicePastePanel({
   onGenerate,
   generating,
   error,
+  placeholder = `Client: Can you invoice us $5,000 for the event production work?\n\nYou: Yes — I'll send the invoice this week.`,
 }: {
   conversationText: string;
   onConversationTextChange: (value: string) => void;
   onGenerate: () => void;
   generating: boolean;
   error: string | null;
+  placeholder?: string;
 }) {
   const count = conversationText.length;
   const overLimit = count > CONVERSATION_INVOICE_MAX_CHARS;
@@ -93,7 +99,7 @@ export function ConversationInvoicePastePanel({
       <textarea
         value={conversationText}
         onChange={(e) => onConversationTextChange(e.target.value)}
-        placeholder={`Client: Can you invoice us $5,000 for the event production work?\n\nYou: Yes — I'll send the invoice this week.`}
+        placeholder={placeholder}
         rows={12}
         className={`${CREATE_INVOICE_INPUT_CLS} mt-0 min-h-[220px] resize-y`}
         disabled={generating}

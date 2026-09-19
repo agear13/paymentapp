@@ -1,5 +1,6 @@
 export { JourneyLandingPage } from '@/components/journey/lovable/journey-landing-page';
 export { ReferralManagementLandingPage } from '@/components/journey/lovable/referral-management-landing-page';
+export { InvoiceAcquisitionPage } from '@/components/journey/lovable/invoice-acquisition-page';
 export { AssessmentLayout } from '@/components/journey/lovable/assessment-layout';
 export { AssessmentObjectiveScreen } from '@/components/journey/lovable/assessment-objective-screen';
 export { AssessmentBusinessScreen } from '@/components/journey/lovable/assessment-business-screen';
